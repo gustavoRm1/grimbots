@@ -1828,13 +1828,11 @@ def task_process_broadcast_campaign(campaign_id: int):
             if days_since_last_contact > 0:
                 q = q.filter(BotUser.last_interaction <= contact_limit)
             
-            # Filtrar blacklist
-            blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+            # Filtrar blacklist usando subquery (performance em escala)
+            blacklist_subquery = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
                 bot_id=bot_id
-            ).all()
-            blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
-            if blacklist_ids:
-                q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+            )
+            q = q.filter(~BotUser.telegram_user_id.in_(blacklist_subquery))
             
             # Filtros de segmento (usando subqueries para performance em escala)
             if target_audience == 'all_users':
@@ -1894,7 +1892,13 @@ def task_process_broadcast_campaign(campaign_id: int):
                 ).distinct()
                 q = q.filter(BotUser.telegram_user_id.in_(remarketing_subquery))
             
+            # ✅ CONSISTÊNCIA DE PAGINAÇÃO: ORDER BY obrigatório
+            q = q.order_by(BotUser.id)
+            
             # Loop principal de envio
+            processed_in_batch = 0  # ✅ CHECKPOINT INCREMENTAL: Contador de progresso
+            CHECKPOINT_INTERVAL = 20  # ✅ Commit a cada 20 leads
+            
             while offset < total_targets and not bot_is_dead:
                 batch = q.offset(offset).limit(batch_size).all()
                 if not batch:
@@ -1905,30 +1909,36 @@ def task_process_broadcast_campaign(campaign_id: int):
                         # Validar chat_id
                         if not lead.telegram_user_id:
                             skipped_count += 1
+                            processed_in_batch += 1
                             continue
                         
                         try:
                             chat_int = int(str(lead.telegram_user_id))
                             if chat_int == 0:
                                 skipped_count += 1
+                                processed_in_batch += 1
                                 continue
                         except:
                             skipped_count += 1
+                            processed_in_batch += 1
                             continue
                         
                         # Verificar se já enviou (Redis)
                         if redis_conn.sismember(sent_set_key, str(lead.telegram_user_id)):
                             skipped_count += 1
+                            processed_in_batch += 1
                             continue
                         
                         # Verificar blacklist (Redis)
                         if redis_conn.sismember(blacklist_key, str(lead.telegram_user_id)):
                             skipped_count += 1
+                            processed_in_batch += 1
                             continue
                         
                         # Verificar opt-out
                         if getattr(lead, 'opt_out', False) or getattr(lead, 'unsubscribed', False):
                             skipped_count += 1
+                            processed_in_batch += 1
                             continue
                         
                         # ✅ MONTAR MENSAGEM PERSONALIZADA
@@ -1953,6 +1963,7 @@ def task_process_broadcast_campaign(campaign_id: int):
                         # ✅ MARATHON LOOP DE RETRY (com FloodWait e Network handling)
                         lead_sent = False
                         flood_wait_happened = False
+                        floodwait_attempts = 0  # ✅ Contador de FloodWait consecutivos
                         
                         for attempt in range(3):
                             try:
@@ -1972,8 +1983,15 @@ def task_process_broadcast_campaign(campaign_id: int):
                                     # 🌊 FLOODWAIT HANDLING: Erro 429 com retry_after explícito
                                     if error_code == 429:
                                         retry_after = result.get('retry_after')
+                                        floodwait_attempts += 1
+                                        
+                                        # ✅ QUEBRA DE CICLO: Se já tentou 3x com FloodWait, desistir do lead
+                                        if floodwait_attempts >= 3:
+                                            logger.error(f"❌ [FLOODWAIT] Lead {lead.telegram_user_id} esgotou 3 tentativas de FloodWait. Contabilizando falha.")
+                                            break  # Sai do for attempt, lead será marcado como falha
+                                        
                                         if retry_after:
-                                            logger.warning(f"⏸️ [FLOODWAIT] Telegram pediu espera de {retry_after}s (tentativa {attempt + 1}/3)")
+                                            logger.warning(f"⏸️ [FLOODWAIT] Telegram pediu espera de {retry_after}s (tentativa {floodwait_attempts}/3)")
                                             time.sleep(retry_after)
                                             flood_wait_happened = True
                                             # NÃO contar como tentativa usada - tentar mesmo lead novamente
@@ -2051,7 +2069,8 @@ def task_process_broadcast_campaign(campaign_id: int):
                                     if attempt == 2:
                                         logger.error(f"❌ [MARATHON] Esgotadas 3 tentativas para {lead.telegram_user_id}")
                         
-                        # Delay entre leads (se não houve FloodWait)
+                        # ✅ CHECKPOINT INCREMENTAL: Atualizar dashboard a cada 20 leads
+                        processed_in_batch += 1
                         if not lead_sent and not bot_is_dead:
                             failed_count += 1
                         
@@ -2062,8 +2081,16 @@ def task_process_broadcast_campaign(campaign_id: int):
                         if not flood_wait_happened:
                             time.sleep(rate_limit_delay)
                         
+                        # ✅ Commit incremental a cada 20 leads ou último do batch
+                        if processed_in_batch >= CHECKPOINT_INTERVAL or lead == batch[-1]:
+                            campaign.total_sent = sent_count
+                            campaign.total_failed = failed_count
+                            db.session.commit()
+                            processed_in_batch = 0  # Reset contador
+                            
                     except Exception as lead_error:
                         failed_count += 1
+                        processed_in_batch += 1
                         logger.error(f"❌ [MARATHON] Erro processando lead {lead.id}: {lead_error}")
                         continue
                 
