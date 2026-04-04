@@ -71,17 +71,6 @@ fi
 
 source venv/bin/activate
 
-echo "🚫 Encerrando Gunicorn..."
-if pgrep -f "gunicorn.*wsgi:app" >/dev/null; then
-  pgrep -f "gunicorn.*wsgi:app" | xargs -r kill -9
-fi
-pkill -9 -f gunicorn 2>/dev/null || true
-sleep 1
-
-echo "🚫 Removendo arquivo PID stale..."
-rm -f grimbots.pid
-rm -f logs/gunicorn.pid
-
 echo "🚫 Verificando porta 5000..."
 if lsof -ti:5000 >/dev/null 2>&1; then
   echo "   ⚠️  Porta 5000 em uso, liberando..."
@@ -100,20 +89,6 @@ python -c "from app import app; print('✅ App OK')" || {
   exit 1
 }
 
-echo "🚀 Iniciando Gunicorn (1 worker eventlet)..."
-EVENTLET_NO_GREENDNS=yes nohup gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:app > logs/gunicorn.log 2>&1 &
-GUNICORN_PID=$!
-sleep 3
-
-# Verificar se Gunicorn iniciou
-if ps -p $GUNICORN_PID > /dev/null 2>&1; then
-  echo "✅ Gunicorn iniciado (PID: $GUNICORN_PID)"
-else
-  echo "❌ ERRO: Gunicorn não iniciou! Verifique logs/gunicorn.log"
-  tail -50 logs/gunicorn.log
-  exit 1
-fi
-
 echo "⚙️ Iniciando workers RQ..."
 
 # WORKERS DE INFRA (Gateway/Webhooks)
@@ -130,4 +105,4 @@ nohup python3 start_rq_worker.py marathon > logs/rq-marathon-2.log 2>&1 &
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-3.log 2>&1 &
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-4.log 2>&1 &
 
-echo "✅ Aplicação reiniciada com sucesso."
+echo "✅ Workers RQ reiniciados com sucesso."
