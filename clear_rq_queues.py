@@ -31,7 +31,7 @@ def clear_rq_queues():
         keys_to_delete = []
         
         # Filas principais
-        queues = ['tasks', 'gateway', 'webhook', 'default']
+        queues = ['tasks', 'marathon', 'gateway', 'webhook', 'default']
         for queue in queues:
             keys_to_delete.append(f'rq:queue:{queue}')
             print(f"📋 Fila encontrada: {queue}")

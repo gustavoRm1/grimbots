@@ -157,8 +157,8 @@ connect_args = (
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
-    'pool_size': 20,  # ✅ Pool maior para múltiplos usuários simultâneos
-    'max_overflow': 10,  # ✅ Permitir até 30 conexões totais (20 + 10)
+    'pool_size': 30,  # ✅ Pool expandido para 8 workers RQ + Gunicorn
+    'max_overflow': 15,  # ✅ Permitir até 45 conexões totais (30 + 15)
     'connect_args': connect_args
 }
 
@@ -4301,7 +4301,7 @@ def general_remarketing():
             }), 202
         
         # ✅ ENVIO IMEDIATO: Master Pre-Allocation + Fan-Out
-        from tasks_async import task_queue, task_process_broadcast_campaign
+        from tasks_async import marathon_queue, task_process_broadcast_campaign
         from models import RemarketingCampaign
         import json
         
@@ -4361,7 +4361,7 @@ def general_remarketing():
         job_ids = []
         for bot, campaign, eligible_count in campaigns_created:
             try:
-                job = task_queue.enqueue(
+                job = marathon_queue.enqueue(
                     task_process_broadcast_campaign,
                     campaign_id=campaign.id,  # ✅ Passar ID da campanha já criada
                     job_timeout='12h',  # ✅ Timeout estendido para campanhas massivas
@@ -14928,6 +14928,7 @@ def health_check():
         
         queues = {
             'tasks': Queue('tasks', connection=redis_conn),
+            'marathon': Queue('marathon', connection=redis_conn),
             'gateway': Queue('gateway', connection=redis_conn),
             'webhook': Queue('webhook', connection=redis_conn)
         }

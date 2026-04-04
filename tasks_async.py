@@ -24,15 +24,17 @@ try:
     # RQ serializa jobs como bytes comprimidos, não strings
     redis_conn = get_redis_connection(decode_responses=False)
     
-    # ✅ QI 200: 3 FILAS SEPARADAS
-    task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente)
+    # ✅ QI 200: 4 FILAS SEPARADAS (incluindo marathon para remarketing massivo)
+    task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente - /start, tracking)
+    marathon_queue = Queue('marathon', connection=redis_conn)  # Remarketing massivo (batch)
     gateway_queue = Queue('gateway', connection=redis_conn)  # Gateway/PIX/Reconciliadores
     webhook_queue = Queue('webhook', connection=redis_conn)  # Webhooks
-    logger.info("✅ 3 Filas RQ inicializadas com connection pool: tasks, gateway, webhook")
+    logger.info("✅ 4 Filas RQ inicializadas: tasks, marathon, gateway, webhook")
 except Exception as e:
     logger.error(f"❌ Erro ao conectar Redis para RQ: {e}")
     redis_conn = None
     task_queue = None
+    marathon_queue = None
     gateway_queue = None
     webhook_queue = None
 

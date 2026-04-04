@@ -93,8 +93,8 @@ def execute_scheduled_campaigns(campaigns_data):
                 campaign.started_at = get_brazil_time()
                 db.session.commit()
                 
-                # Enfileirar no worker (processamento assíncrono)
-                job = task_queue.enqueue(
+                # Enfileirar no worker (processamento assíncrono) - FILA MARATHON
+                job = marathon_queue.enqueue(
                     task_process_broadcast_campaign,
                     campaign_data=campaign_data,
                     bot_ids=[campaign.bot_id],  # Campanha individual agendada

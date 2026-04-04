@@ -115,11 +115,19 @@ else
 fi
 
 echo "⚙️ Iniciando workers RQ..."
+
+# WORKERS DE INFRA (Gateway/Webhooks)
 nohup python3 start_rq_worker.py gateway > logs/rq-gateway.log 2>&1 &
+nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
+
+# VIA EXPRESSA (Alta Prioridade: /start, Tracking) - 2 Workers
 nohup python3 start_rq_worker.py tasks > logs/rq-tasks-1.log 2>&1 &
 nohup python3 start_rq_worker.py tasks > logs/rq-tasks-2.log 2>&1 &
-nohup python3 start_rq_worker.py tasks > logs/rq-tasks-3.log 2>&1 &
-nohup python3 start_rq_worker.py tasks > logs/rq-tasks-4.log 2>&1 &
-nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
+
+# TREM DE CARGA (Remarketing Massivo) - 4 Workers
+nohup python3 start_rq_worker.py marathon > logs/rq-marathon-1.log 2>&1 &
+nohup python3 start_rq_worker.py marathon > logs/rq-marathon-2.log 2>&1 &
+nohup python3 start_rq_worker.py marathon > logs/rq-marathon-3.log 2>&1 &
+nohup python3 start_rq_worker.py marathon > logs/rq-marathon-4.log 2>&1 &
 
 echo "✅ Aplicação reiniciada com sucesso."
