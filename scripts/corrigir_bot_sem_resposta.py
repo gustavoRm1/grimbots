@@ -54,7 +54,8 @@ def corrigir_bot(bot_id=None, bot_username=None):
         
         # 2. Parar o bot se estiver rodando incorretamente
         from app import bot_manager
-        if bot.id in bot_manager.active_bots:
+        bot_data = bot_manager.bot_state.get_bot_data(bot.id)
+        if bot_data and bot_data.get('status') == 'running':
             print("🛑 Parando bot antes de reiniciar...")
             try:
                 bot_manager.stop_bot(bot.id)
@@ -92,16 +93,22 @@ def corrigir_bot(bot_id=None, bot_username=None):
             print("   ✅ Bot reiniciado com sucesso!")
             print()
             
-            # 5. Verificar se está rodando
-            print("🔍 Verificando se o bot está rodando...")
-            if bot.id in bot_manager.active_bots:
-                status = bot_manager.active_bots[bot.id]
-                print(f"   ✅ Bot está em active_bots")
-                print(f"   • Status: {status.get('status')}")
-                print(f"   • Started at: {status.get('started_at')}")
-            else:
-                print(f"   ❌ Bot ainda não está em active_bots")
-                print(f"   ⚠️ Pode levar alguns segundos para inicializar")
+            # 5. Verificar status no Redis
+            print("2️⃣ STATUS NO REDIS:")
+            # Tentar acessar a instância global do BotManager
+            try:
+                from app import bot_manager
+                bot_data = bot_manager.bot_state.get_bot_data(bot.id)
+                if bot_data and bot_data.get('status') == 'running':
+                    print(f"   • ✅ Bot está ativo no Redis")
+                    print(f"   • Status: {bot_data.get('status')}")
+                    print(f"   • Started at: {bot_data.get('started_at')}")
+                else:
+                    print(f"   • ❌ Bot NÃO está ativo no Redis (não está rodando)")
+            except Exception as e:
+                print(f"   • ⚠️ Não foi possível verificar status no Redis: {e}")
+                print(f"   • Isso é normal se o script não estiver rodando no mesmo processo do app")
+            print()
             
         except Exception as e:
             print(f"   ❌ Erro ao reiniciar bot: {e}")

@@ -53,20 +53,20 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             print(f"   • last_error: {bot.last_error[:200]}")
         print()
         
-        # 2. Verificar se está em active_bots
-        print("2️⃣ STATUS NO BOTMANAGER:")
+        # 2. Verificar status no Redis
+        print("2️⃣ STATUS NO REDIS:")
         # Tentar acessar a instância global do BotManager
         try:
             from app import bot_manager
-            if bot.id in bot_manager.active_bots:
-                status = bot_manager.active_bots[bot.id]
-                print(f"   • ✅ Bot está em active_bots")
-                print(f"   • Status: {status.get('status')}")
-                print(f"   • Started at: {status.get('started_at')}")
+            bot_data = bot_manager.bot_state.get_bot_data(bot.id)
+            if bot_data and bot_data.get('status') == 'running':
+                print(f"   • ✅ Bot está ativo no Redis")
+                print(f"   • Status: {bot_data.get('status')}")
+                print(f"   • Started at: {bot_data.get('started_at')}")
             else:
-                print(f"   • ❌ Bot NÃO está em active_bots (não está rodando)")
+                print(f"   • ❌ Bot NÃO está ativo no Redis (não está rodando)")
         except Exception as e:
-            print(f"   • ⚠️ Não foi possível verificar active_bots: {e}")
+            print(f"   • ⚠️ Não foi possível verificar status no Redis: {e}")
             print(f"   • Isso é normal se o script não estiver rodando no mesmo processo do app")
         print()
         
@@ -169,9 +169,10 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
         
         try:
             from app import bot_manager
-            if bot.id not in bot_manager.active_bots:
-                problemas.append("Bot não está em active_bots (não iniciado pelo BotManager)")
-                solucoes.append("Reinicie o bot - ele será adicionado ao active_bots")
+            bot_data = bot_manager.bot_state.get_bot_data(bot.id)
+            if not bot_data or bot_data.get('status') != 'running':
+                problemas.append("Bot não está ativo no Redis (não iniciado pelo BotManager)")
+                solucoes.append("Reinicie o bot - ele será adicionado ao Redis")
         except:
             pass  # Se não conseguir acessar bot_manager, pular esta verificação
         

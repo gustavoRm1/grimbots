@@ -8472,6 +8472,10 @@ def restart_all_active_bots():
             restarted_count = 0
             failed_count = 0
             
+            # ✅ OTIMIZAÇÃO REDIS: Buscar todos os bots ativos de uma vez (fora do loop)
+            active_bots_map = bot_manager.bot_state.get_all_active_bots()
+            active_bot_ids = {int(k) for k in active_bots_map.keys() if str(k).isdigit()}
+            
             commit_required = False
             for bot in active_bots:
                 try:
@@ -8482,8 +8486,8 @@ def restart_all_active_bots():
                         failed_count += 1
                         continue
                     
-                    # Verificar se bot já está ativo no bot_manager
-                    if bot.id in bot_manager.active_bots:
+                    # ✅ INTERSEÇÃO REDIS: Verificar se bot já está ativo no Redis
+                    if bot.id in active_bot_ids:
                         logger.info(f"♻️ Bot {bot.id} (@{bot.username}) já está ativo, pulando...")
                         continue
                     
@@ -10022,15 +10026,14 @@ def send_chat_media(bot_id, telegram_user_id):
             file.save(temp_file.name)
             temp_file_path = temp_file.name
         
-        # Buscar token do bot
-        with bot_manager._bots_lock:
-            bot_data = bot_manager.active_bots.get(bot_id)
-            if not bot_data:
-                return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
-            
-            token = bot_data.get('token')
-            if not token:
-                return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
+        # Buscar token do bot via Redis (sem lock, sem active_bots)
+        bot_data = bot_manager.bot_state.get_bot_data(bot_id)
+        if not bot_data:
+            return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
+        
+        token = bot_data.get('token')
+        if not token:
+            return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
         
         # Enviar arquivo via Telegram API
         result = bot_manager.send_telegram_file(
@@ -10087,15 +10090,14 @@ def get_chat_media(bot_id, file_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     try:
-        # Buscar token do bot
-        with bot_manager._bots_lock:
-            bot_data = bot_manager.active_bots.get(bot_id)
-            if not bot_data:
-                return jsonify({'error': 'Bot não está ativo'}), 400
-            
-            token = bot_data.get('token')
-            if not token:
-                return jsonify({'error': 'Token não encontrado'}), 400
+        # Buscar token do bot via Redis (sem lock, sem active_bots)
+        bot_data = bot_manager.bot_state.get_bot_data(bot_id)
+        if not bot_data:
+            return jsonify({'error': 'Bot não está ativo'}), 400
+        
+        token = bot_data.get('token')
+        if not token:
+            return jsonify({'error': 'Token não encontrado'}), 400
         
         # Obter file_path do Telegram usando file_id
         get_file_url = f"https://api.telegram.org/bot{token}/getFile"
