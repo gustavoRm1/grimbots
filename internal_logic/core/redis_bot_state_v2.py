@@ -290,6 +290,36 @@ class NamespacedRedisBotState:
         lock_name = self.AUTOSTART_LOCK_PREFIX.format(bot_id=bot_id)
         return self.redis.release_lock(lock_name)
     
+    def is_autostart_locked(self, bot_id: int) -> bool:
+        """
+        Verifica se existe um lock de auto-start ativo para o bot.
+        
+        Args:
+            bot_id: ID do bot
+            
+        Returns:
+            True se lock existe (outro worker está iniciando), False se não
+        """
+        try:
+            lock_name = self.AUTOSTART_LOCK_PREFIX.format(bot_id=bot_id)
+            # Verificar se a chave de lock existe no Redis
+            return self.redis.exists(lock_name)
+        except Exception as e:
+            logger.error(f"❌ Erro ao verificar lock de autostart do bot {bot_id}: {e}")
+            return False
+    
+    def heartbeat(self, bot_id: int) -> bool:
+        """
+        Atualiza heartbeat de um bot (método público - alias para _update_heartbeat).
+        
+        Args:
+            bot_id: ID do bot
+            
+        Returns:
+            True se atualizado com sucesso
+        """
+        return self._update_heartbeat(bot_id)
+    
     # ========================================================================
     # SCHEDULER JOBS (Downsell/Upsell)
     # ========================================================================

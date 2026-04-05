@@ -3,6 +3,11 @@ WSGI Entry Point
 Para produção com Gunicorn
 """
 
+# 🚨 MONKEY PATCH DEVE SER A PRIMEIRA COISA EXECUTADA
+import eventlet
+eventlet.monkey_patch(all=True)
+print("✅ Eventlet monkey patch aplicado no WSGI")
+
 import os
 import time
 from app import app, socketio
