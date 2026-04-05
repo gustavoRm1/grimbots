@@ -440,14 +440,10 @@ class BotManager:
     def __init__(self, socketio, scheduler=None):
         self.socketio = socketio
         self.scheduler = scheduler
-        # ✅ REDIS BRAIN: Estado centralizado em Redis (não mais em memória)
+        # ✅ REDIS BRAIN: Estado centralizado em Redis (100% - RAM removido)
         self.bot_state = redis_bot_state
-        self.active_bots: Dict[int, Dict[str, Any]] = {}  # ✅ DEPRECATED: Mantido para compatibilidade
         self.bot_threads: Dict[int, threading.Thread] = {}
         self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
-        
-        # ✅ THREAD SAFETY: Lock para acesso concorrente (legacy, Redis é thread-safe)
-        self._bots_lock = threading.RLock()  # RLock permite re-entrada na mesma thread
         
         # ✅ CACHE DE RATE LIMITING (em memória)
         self.rate_limit_cache = {}  # {user_key: timestamp}
@@ -1045,18 +1041,8 @@ class BotManager:
             # Configurar webhook para receber mensagens do Telegram
             self._setup_webhook(token, bot_id)
             
-            # ✅ REDIS BRAIN: Registrar bot no Redis (visível para todos os workers)
+            # ✅ REDIS BRAIN: Registrar bot no Redis (única fonte de verdade)
             self.bot_state.register_bot(bot_id, token, config, worker_pid=os.getpid())
-            
-            # ✅ Compatibilidade: Também manter em memória local (durante transição)
-            with self._bots_lock:
-                from models import get_brazil_time
-                self.active_bots[bot_id] = {
-                    'token': token,
-                    'config': config,
-                    'started_at': get_brazil_time(),
-                    'status': 'running'
-                }
             
             # Iniciar heartbeat para manter bot ativo no Redis
             self.bot_state.start_heartbeat_thread(bot_id, interval=60)
@@ -1070,7 +1056,7 @@ class BotManager:
             thread.start()
             self.bot_threads[bot_id] = thread
             
-            logger.info(f"✅ Bot {bot_id} iniciado com webhook configurado (Redis + Local)")
+            logger.info(f"✅ Bot {bot_id} iniciado com webhook configurado (Redis 100%)")
             
         finally:
             # Liberar lock de auto-start
@@ -1078,22 +1064,13 @@ class BotManager:
     
     def stop_bot(self, bot_id: int):
         """
-        Para um bot Telegram - Remove do Redis e memória local
+        Para um bot Telegram - Remove do Redis (única fonte de verdade)
         
         Args:
             bot_id: ID do bot no banco
         """
-        # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
-        if not self.bot_state.is_bot_active(bot_id):
-            logger.warning(f"Bot {bot_id} não está ativo no Redis")
-        
-        # ✅ REDIS BRAIN: Remover do Redis (todos os workers verão)
+        # ✅ REDIS BRAIN: Remover do Redis (todos os workers verão imediatamente)
         self.bot_state.unregister_bot(bot_id)
-        
-        # ✅ Compatibilidade: Também remover da memória local
-        with self._bots_lock:
-            if bot_id in self.active_bots:
-                self.active_bots[bot_id]['status'] = 'stopped'
         
         # Remover job do scheduler se existir
         if bot_id in self.polling_jobs and self.scheduler:
@@ -1104,11 +1081,6 @@ class BotManager:
             except Exception as e:
                 logger.error(f"Erro ao remover job: {e}")
         
-        # Remover da lista de ativos local
-        with self._bots_lock:
-            if bot_id in self.active_bots:
-                del self.active_bots[bot_id]
-        
         # Thread será encerrada automaticamente
         if bot_id in self.bot_threads:
             del self.bot_threads[bot_id]
@@ -1117,21 +1089,19 @@ class BotManager:
     
     def update_bot_config(self, bot_id: int, config: Dict[str, Any]):
         """
-        Atualiza configuração de um bot em tempo real
+        Atualiza configuração de um bot em tempo real via Redis
         
         Args:
             bot_id: ID do bot
             config: Nova configuração
         """
-        # ✅ CORREÇÃO: Atualizar config com LOCK
-        with self._bots_lock:
-            if bot_id in self.active_bots:
-                self.active_bots[bot_id]['config'] = config
-                logger.info(f"🔧 Configuração do bot {bot_id} atualizada")
-                logger.info(f"🔍 DEBUG Config - downsells_enabled: {config.get('downsells_enabled', False)}")
-                logger.info(f"🔍 DEBUG Config - downsells: {config.get('downsells', [])}")
-            else:
-                logger.warning(f"⚠️ Bot {bot_id} não está ativo para atualizar configuração")
+        # ✅ REDIS BRAIN: Atualizar config no Redis (visível para todos os workers)
+        if self.bot_state.update_bot_config(bot_id, config):
+            logger.info(f"🔧 Configuração do bot {bot_id} atualizada no Redis")
+            logger.info(f"🔍 DEBUG Config - downsells_enabled: {config.get('downsells_enabled', False)}")
+            logger.info(f"🔍 DEBUG Config - downsells: {config.get('downsells', [])}")
+        else:
+            logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis para atualizar configuração")
     
     def _bot_monitor_thread(self, bot_id: int):
         """
@@ -1546,15 +1516,11 @@ class BotManager:
                     logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start, ignorando update")
                     return
             
-            # ✅ REDIS BRAIN: Obter dados do bot do Redis (consistente entre workers)
+            # ✅ REDIS BRAIN: Obter dados do bot do Redis (única fonte de verdade)
             bot_info = self.bot_state.get_bot_data(bot_id)
             if not bot_info:
-                # Fallback para memória local durante transição
-                with self._bots_lock:
-                    if bot_id not in self.active_bots:
-                        return
-                    bot_info = self.active_bots[bot_id].copy()
-                    logger.warning(f"⚠️ Bot {bot_id} não encontrado no Redis - usando fallback local")
+                logger.warning(f"🤖 Bot {bot_id} não encontrado no Redis - descartando update")
+                return
             
             token = bot_info['token']
             config = bot_info['config']
@@ -9900,7 +9866,7 @@ Seu pagamento ainda não foi confirmado.
     
     def get_bot_status(self, bot_id: int, verify_telegram: bool = False) -> Dict[str, Any]:
         """
-        Obtém status de um bot
+        Obtém status de um bot via Redis (única fonte de verdade)
         
         Args:
             bot_id: ID do bot
@@ -9909,16 +9875,15 @@ Seu pagamento ainda não foi confirmado.
         Returns:
             Informações de status
         """
-        # ✅ CORREÇÃO: Acessar com LOCK
-        with self._bots_lock:
-            if bot_id not in self.active_bots:
-                return {
-                    'is_running': False,
-                    'status': 'stopped'
-                }
-            
-            bot_info = self.active_bots[bot_id].copy()
-            token = bot_info.get('token')
+        # ✅ REDIS BRAIN: Buscar dados do bot no Redis
+        bot_info = self.bot_state.get_bot_data(bot_id)
+        if not bot_info:
+            return {
+                'is_running': False,
+                'status': 'stopped'
+            }
+        
+        token = bot_info.get('token')
         
         # ✅ VERIFICAÇÃO REAL: Se solicitado, verificar se bot responde no Telegram
         if verify_telegram and token:
@@ -9953,13 +9918,17 @@ Seu pagamento ainda não foi confirmado.
                     'reason': 'verification_failed'
                 }
         
-        # Bot está em active_bots e (se verificado) responde no Telegram
+        # Bot está ativo no Redis e (se verificado) responde no Telegram
         from models import get_brazil_time
+        from datetime import datetime
+        started_at = bot_info.get('started_at')
+        if isinstance(started_at, str):
+            started_at = datetime.fromisoformat(started_at)
         return {
             'is_running': True,
-            'status': bot_info['status'],
-            'started_at': bot_info['started_at'].isoformat(),
-            'uptime': (get_brazil_time() - bot_info['started_at']).total_seconds()
+            'status': bot_info.get('status', 'running'),
+            'started_at': started_at.isoformat() if started_at else None,
+            'uptime': (get_brazil_time() - started_at).total_seconds() if started_at else 0
         }
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
@@ -10087,18 +10056,13 @@ Seu pagamento ainda não foi confirmado.
             
             logger.info(f"✅ Pagamento ainda está pendente - prosseguindo com downsell")
             
-            # Verificar se bot ainda está ativo
-            logger.info(f"🔍 DEBUG _send_downsell - Verificando bot...")
-            if bot_id not in self.active_bots:
-                logger.warning(f"🤖 Bot {bot_id} não está mais ativo, cancelando downsell {index+1}")
-                return
-            logger.info(f"✅ Bot está ativo")
-            
-            # ✅ CORREÇÃO: Acessar com LOCK
-            with self._bots_lock:
-                if bot_id not in self.active_bots:
-                    return
-                bot_info = self.active_bots[bot_id].copy()
+            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis (única fonte de verdade)
+            logger.info(f"🔍 DEBUG _send_downsell - Verificando bot no Redis...")
+            bot_info = self.bot_state.get_bot_data(bot_id)
+            if not bot_info:
+                logger.warning(f"🤖 Bot {bot_id} não está mais ativo no Redis, cancelando downsell {index+1}")
+                return False  # Retorna False para matar o job silenciosamente
+            logger.info(f"✅ Bot está ativo no Redis")
             
             token = bot_info['token']
             
@@ -10488,18 +10452,13 @@ Seu pagamento ainda não foi confirmado.
             
             logger.info(f"✅ Pagamento está pago - prosseguindo com upsell")
             
-            # Verificar se bot ainda está ativo
-            logger.info(f"🔍 DEBUG _send_upsell - Verificando bot...")
-            if bot_id not in self.active_bots:
-                logger.warning(f"🤖 Bot {bot_id} não está mais ativo, cancelando upsell {index+1}")
-                return
-            logger.info(f"✅ Bot está ativo")
-            
-            # ✅ CORREÇÃO: Acessar com LOCK
-            with self._bots_lock:
-                if bot_id not in self.active_bots:
-                    return
-                bot_info = self.active_bots[bot_id].copy()
+            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis (única fonte de verdade)
+            logger.info(f"🔍 DEBUG _send_upsell - Verificando bot no Redis...")
+            bot_info = self.bot_state.get_bot_data(bot_id)
+            if not bot_info:
+                logger.warning(f"🤖 Bot {bot_id} não está mais ativo no Redis, cancelando upsell {index+1}")
+                return False  # Retorna False para matar o job silenciosamente
+            logger.info(f"✅ Bot está ativo no Redis")
             
             token = bot_info['token']
             
