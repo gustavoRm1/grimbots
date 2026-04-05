@@ -429,19 +429,36 @@ def get_brazil_time():
 
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
-from redis_bot_state import redis_bot_state  # ✅ CRÍTICO: Estado centralizado em Redis
+from redis_bot_state import redis_bot_state, get_namespaced_bot_state  # ✅ ISOLAMENTO: Importar factory V2
 import json
 import random
 import time
 
 class BotManager:
-    """Gerenciador de bots Telegram - Com estado centralizado em Redis"""
+    """Gerenciador de bots Telegram - Com estado centralizado em Redis (Namespace Isolado V2)"""
     
-    def __init__(self, socketio, scheduler=None):
+    def __init__(self, socketio, scheduler=None, user_id: int = None):
+        """
+        Inicializa o BotManager.
+        
+        Args:
+            socketio: Instância do SocketIO
+            scheduler: Agendador de tarefas (opcional)
+            user_id: ID do usuário para namespace isolado (None = global/legacy)
+        """
         self.socketio = socketio
         self.scheduler = scheduler
-        # ✅ REDIS BRAIN: Estado centralizado em Redis (100% - RAM removido)
-        self.bot_state = redis_bot_state
+        self.user_id = user_id
+        
+        # ✅ ISOLAMENTO NAMESPACE V2: Usar estado isolado se user_id fornecido
+        if user_id:
+            self.bot_state = get_namespaced_bot_state(user_id)
+            logger.info(f"✅ BotManager inicializado com namespace isolado: gb:{user_id}:*")
+        else:
+            # Fallback para estado global (compatibility mode)
+            self.bot_state = redis_bot_state
+            logger.warning(f"⚠️ BotManager usando estado GLOBAL (legacy) - migre para user_id específico")
+        
         self.bot_threads: Dict[int, threading.Thread] = {}
         self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
         
@@ -1446,9 +1463,13 @@ class BotManager:
         
         logger.info(f"🛑 Polling do bot {bot_id} encerrado")
     
-    def _process_telegram_update(self, bot_id: int, update: Dict[str, Any]):
+    def _process_telegram_update(self, bot_id: int, user_id: int, update: Dict[str, Any], isolated_state=None):
         """
         Processa update recebido do Telegram
+        
+        # ✅ ISOLAMENTO NAMESPACE V2: Agora recebe user_id e usa estado isolado
+        - user_id: ID do dono do bot (para namespace gb:{user_id}:*)
+        - isolated_state: Opcional - estado Redis já isolado (se None, usa self.bot_state)
         
         # ✅ QI 500: ANTI-DUPLICAÇÃO ABSOLUTO
         - Lock por update_id para evitar processamento duplicado
@@ -1457,8 +1478,18 @@ class BotManager:
         
         Args:
             bot_id: ID do bot
+            user_id: ID do dono do bot (para isolamento de namespace)
             update: Dados do update
+            isolated_state: Estado Redis isolado (opcional, para performance)
         """
+        # ✅ ISOLAMENTO: Usar estado isolado se fornecido, senão usar self.bot_state
+        bot_state = isolated_state if isolated_state else self.bot_state
+        
+        # ✅ ISOLAMENTO: Lock de update com namespace do usuário
+        import redis
+        redis_conn = get_redis_connection()
+        lock_key = f"gb:{user_id}:lock:update:{update.get('update_id')}"
+        
         try:
             # ✅ QI 500: ANTI-DUPLICAÇÃO - Lock por update_id (PRIMEIRA COISA)
             update_id = update.get('update_id')
@@ -1467,70 +1498,69 @@ class BotManager:
                 return
             
             try:
-                import redis
-                redis_conn = get_redis_connection()
-                lock_key = f"lock:update:{update_id}"
-                
-                # Verificar se já está processando
+                # ✅ ISOLAMENTO: Lock com namespace do usuário
                 if redis_conn.get(lock_key):
                     logger.warning(f"⚠️ Update {update_id} já processado — ignorando duplicado (anti-duplicação)")
                     return
                 
-                # Adquirir lock (expira em 20 segundos - tempo suficiente para processar)
+                # Adquirir lock (expira em 20 segundos)
                 acquired = redis_conn.set(lock_key, "1", ex=20, nx=True)
                 if not acquired:
                     logger.warning(f"⚠️ Update {update_id} já está sendo processado — ignorando duplicado")
                     return
                 
-                logger.debug(f"🔒 Lock adquirido para update {update_id}")
+                logger.debug(f"🔒 Lock adquirido para update {update_id} (user_id={user_id})")
             except Exception as e:
                 logger.error(f"❌ Erro ao verificar lock update: {e}")
-                # Fail-open: se Redis falhar, permitir processar (melhor que bloquear tudo)
+                # Fail-open: se Redis falhar, permitir processar
                 pass
             
-            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis (visível para todos os workers)
-            if not self.bot_state.is_bot_active(bot_id):
-                logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis, tentando auto-start (webhook fallback)")
+            # ✅ ISOLAMENTO: Verificar se bot está ativo no Redis ISOLADO
+            if not bot_state.is_bot_active(bot_id):
+                logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis (namespace gb:{user_id}:), tentando auto-start")
                 
-                # ✅ REDIS BRAIN: Verificar se outro worker está tentando auto-start
-                if self.bot_state.is_autostart_locked(bot_id):
-                    logger.info(f"🔒 Outro worker está iniciando bot {bot_id} - aguardando")
+                # ✅ ISOLAMENTO: Verificar se outro worker está tentando auto-start (namespace isolado)
+                if bot_state.is_autostart_locked(bot_id):
+                    logger.info(f"🔒 Outro worker está iniciando bot {bot_id} (user_id={user_id}) - aguardando")
                     import time
-                    for _ in range(10):  # Aguardar até 5 segundos
+                    for _ in range(10):
                         time.sleep(0.5)
-                        if self.bot_state.is_bot_active(bot_id):
+                        if bot_state.is_bot_active(bot_id):
                             logger.info(f"✅ Bot {bot_id} foi iniciado por outro worker")
                             break
                     else:
                         logger.warning(f"⚠️ Timeout aguardando bot {bot_id}")
                         return
                 else:
-                    # Tentar auto-start com lock
+                    # Tentar auto-start com lock (namespace isolado)
                     try:
                         from app import app, db
                         from models import Bot, BotConfig
                         with app.app_context():
                             bot = db.session.get(Bot, bot_id)
-                            if bot and bot.is_active:
+                            if bot and bot.is_active and bot.user_id == user_id:  # ✅ Verificar ownership
                                 config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
                                 config_dict = config_obj.to_dict() if config_obj else {}
-                                self.start_bot(bot.id, bot.token, config_dict)
+                                # ✅ Usar o método de registro do bot_state isolado
+                                bot_state.register_bot(bot.id, bot.token, config_dict)
                     except Exception as autostart_error:
                         logger.error(f"❌ Falha ao auto-start bot {bot_id} durante webhook: {autostart_error}")
                 
-                # Verificar novamente após tentativa de auto-start
-                if not self.bot_state.is_bot_active(bot_id):
+                # Verificar novamente
+                if not bot_state.is_bot_active(bot_id):
                     logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start, ignorando update")
                     return
             
-            # ✅ REDIS BRAIN: Obter dados do bot do Redis (única fonte de verdade)
-            bot_info = self.bot_state.get_bot_data(bot_id)
+            # ✅ ISOLAMENTO: Obter dados do bot do Redis ISOLADO
+            bot_info = bot_state.get_bot_data(bot_id)
             if not bot_info:
-                logger.warning(f"🤖 Bot {bot_id} não encontrado no Redis - descartando update")
+                logger.warning(f"🤖 Bot {bot_id} não encontrado no Redis isolado (gb:{user_id}:) - descartando update")
                 return
             
             token = bot_info['token']
             config = bot_info['config']
+            
+            logger.info(f"💬 Processando update {update_id} para bot {bot_id} (user_id={user_id})")
             
             # Processar mensagem
             if 'message' in update:
@@ -4406,10 +4436,24 @@ class BotManager:
                     bot_user_check.welcome_sent_at = None
                     db.session.commit()
                 
-                # Enfileirar processamento pesado (tracking, Redis, device parsing, etc)
+                # ✅ ISOLAMENTO: Enfileirar processamento com user_id no payload
                 try:
+                    from app.workers import enqueue_with_user
                     from tasks_async import task_queue, process_start_async
-                    if task_queue:
+                    if task_queue and self.user_id:
+                        enqueue_with_user(
+                            queue=task_queue,
+                            user_id=self.user_id,  # ✅ user_id do BotManager
+                            func=process_start_async,
+                            bot_id=bot_id,
+                            token=token,
+                            config=config,
+                            chat_id=chat_id,
+                            message=message,
+                            start_param=start_param
+                        )
+                    elif task_queue:
+                        # Fallback sem user_id (legacy)
                         task_queue.enqueue(
                             process_start_async,
                             bot_id=bot_id,
@@ -10139,23 +10183,44 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"📅 Downsell {i+1}: delay={delay_minutes}min")
                 
                 try:
-                    # ✅ AGENDAR VIA RQ: enqueue_in() agenda para executar após o delay
-                    job = marathon_queue.enqueue_in(
-                        timedelta(minutes=delay_minutes),
-                        send_downsell_job,
-                        bot_id=bot_id,
-                        payment_id=payment_id,
-                        chat_id=chat_id,
-                        downsell=downsell,
-                        index=i,
-                        original_price=original_price,
-                        original_button_index=original_button_index,
-                        job_id=f"downsell_{bot_id}_{payment_id}_{i}",  # ID único para anti-duplicação
-                        job_timeout=300  # 5 minutos timeout
-                    )
+                    # ✅ ISOLAMENTO: Agendar downsell com user_id no payload
+                    from app.workers import enqueue_with_user_and_bot
+                    from tasks_async import marathon_queue
                     
-                    logger.info(f"✅ Downsell {i+1} AGENDADO via RQ: job_id={job.id}")
-                    jobs_agendados.append(job.id)
+                    if marathon_queue and self.user_id:
+                        job = enqueue_with_user_and_bot(
+                            queue=marathon_queue,
+                            user_id=self.user_id,  # ✅ Namespace isolado
+                            bot_id=bot_id,
+                            func=send_downsell_job,
+                            payment_id=payment_id,
+                            chat_id=chat_id,
+                            downsell=downsell,
+                            index=i,
+                            original_price=original_price,
+                            original_button_index=original_button_index,
+                            job_id=f"downsell_{bot_id}_{payment_id}_{i}",
+                            job_timeout=300
+                        )
+                    elif marathon_queue:
+                        # Fallback legacy
+                        job = marathon_queue.enqueue_in(
+                            timedelta(minutes=delay_minutes),
+                            send_downsell_job,
+                            bot_id=bot_id,
+                            payment_id=payment_id,
+                            chat_id=chat_id,
+                            downsell=downsell,
+                            index=i,
+                            original_price=original_price,
+                            original_button_index=original_button_index,
+                            job_id=f"downsell_{bot_id}_{payment_id}_{i}",
+                            job_timeout=300
+                        )
+                    
+                    logger.info(f"✅ Downsell {i+1} AGENDADO via RQ: job_id={job.id if job else 'N/A'}")
+                    if job:
+                        jobs_agendados.append(job.id)
                     
                 except Exception as e:
                     logger.error(f"❌ Erro ao agendar downsell {i+1} no RQ: {e}", exc_info=True)

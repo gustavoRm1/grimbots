@@ -12672,10 +12672,15 @@ def telegram_webhook(bot_id):
             logger.warning(f"🟡 Webhook bloqueado pelo Circuit Breaker (cooldown): bot_id={bot_id}, até={bot.circuit_breaker_until}")
             return jsonify({'status': 'ok'}), 200
         
-        logger.info(f"Update recebido do Telegram para bot {bot_id}")
+        logger.info(f"Update recebido do Telegram para bot {bot_id} (user_id={bot.user_id})")
         
-        # Processar update
-        bot_manager._process_telegram_update(bot_id, update)
+        # ✅ ISOLAMENTO NAMESPACE: Criar BotManager isolado para este usuário
+        from redis_bot_state import get_namespaced_bot_state
+        user_bot_state = get_namespaced_bot_state(bot.user_id)
+        
+        # Processar update com contexto isolado
+        # ✅ PASSAR user_id para garantir isolamento no processamento
+        bot_manager._process_telegram_update(bot_id, bot.user_id, update, isolated_state=user_bot_state)
         
         return jsonify({'status': 'ok'}), 200
         

@@ -2,6 +2,9 @@
 Redis Bot State - Centralização do "Cérebro" dos Bots
 Substitui o dicionário self.active_bots volátil por Redis persistente.
 
+⚠️ VERSÃO LEGACY - Mantida para compatibilidade retroativa
+Para novo código, use: from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+
 Arquitetura:
 - Hash Map: botmanager:active_bots - Dados dos bots ativos
 - Keys com TTL: bot:{bot_id}:heartbeat - Heartbeat de cada bot
@@ -31,10 +34,42 @@ def get_redis_client():
     return _redis_client
 
 
+def get_namespaced_bot_state(user_id: int):
+    """
+    Factory para obter estado isolado por user_id.
+    
+    ✅ NOVO: Retorna NamespacedRedisBotState que garante isolamento.
+    ✅ FALLBACK: Bots migram automaticamente do namespace global.
+    
+    Args:
+        user_id: ID do usuário (obrigatório)
+        
+    Returns:
+        NamespacedRedisBotState ou RedisBotState (legacy)
+        
+    Example:
+        >>> # NOVO (recomendado) - Com namespace isolado
+        >>> state = get_namespaced_bot_state(user_id=42)
+        >>> state.register_bot(bot_id=123, token="abc", config={})
+        
+        >>> # LEGACY (mantido para compatibilidade)
+        >>> redis_bot_state.register_bot(bot_id=123, ...)
+    """
+    try:
+        from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+        return NamespacedRedisBotState(user_id=user_id)
+    except ImportError as e:
+        logger.warning(f"⚠️ NamespacedRedisBotState não disponível, usando legacy: {e}")
+        return RedisBotState()
+
+
 class RedisBotState:
     """
     Gerenciador centralizado de estado dos bots via Redis.
     Substitui o dicionário in-memory self.active_bots.
+    
+    ⚠️ ATENÇÃO: Esta classe usa namespace GLOBAL.
+    Para isolamento por usuário, use get_namespaced_bot_state(user_id).
     """
     
     # Keys do Redis
