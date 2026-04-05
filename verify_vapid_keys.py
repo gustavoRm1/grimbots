@@ -1,25 +1,24 @@
 """
-Verificar se as chaves VAPID no .env estão completas
+Verificar se as chaves VAPID estão configuradas corretamente
 Execute: python verify_vapid_keys.py
 """
 
+from utils.secrets_loader import get_vapid_private_key, get_vapid_public_key
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 print("="*70)
 print("🔍 VERIFICAÇÃO DAS CHAVES VAPID")
 print("="*70)
 print()
 
-vapid_public = os.getenv('VAPID_PUBLIC_KEY', '')
-vapid_private = os.getenv('VAPID_PRIVATE_KEY', '')
+# Carregar chaves usando secrets_loader (hierarquia: PATH > BASE64 > STRING)
+vapid_public = get_vapid_public_key()
+vapid_private = get_vapid_private_key()
 vapid_email = os.getenv('VAPID_EMAIL', '')
 
 print("1️⃣ Chave Pública:")
 if vapid_public:
-    print(f"   ✅ Configurada")
+    print(f"   ✅ Configurada (via secrets_loader)")
     print(f"   📏 Tamanho: {len(vapid_public)} caracteres")
     print(f"   🔤 Primeiros 30 chars: {vapid_public[:30]}...")
     print(f"   🔤 Últimos 30 chars: ...{vapid_public[-30:]}")
@@ -33,7 +32,7 @@ else:
 print()
 print("2️⃣ Chave Privada:")
 if vapid_private:
-    print(f"   ✅ Configurada")
+    print(f"   ✅ Configurada (via secrets_loader)")
     print(f"   📏 Tamanho: {len(vapid_private)} caracteres")
     print(f"   🔤 Primeiros 30 chars: {vapid_private[:30]}...")
     print(f"   🔤 Últimos 30 chars: ...{vapid_private[-30:]}")

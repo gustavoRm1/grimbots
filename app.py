@@ -13394,15 +13394,18 @@ def handle_disconnect():
 @login_required
 def get_vapid_public_key():
     """Retorna chave pública VAPID para registro de subscription"""
-    # Chaves VAPID devem ser geradas e configuradas em variáveis de ambiente
-    vapid_public_key = os.getenv('VAPID_PUBLIC_KEY')
-    
-    if not vapid_public_key:
-        logger.warning("⚠️ VAPID_PUBLIC_KEY não configurada. Não é possível gerar chaves temporárias dinamicamente.")
-        logger.warning("⚠️ Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env")
+    try:
+        # ✅ SECRETS LOADER: Usar hierarquia PATH > BASE64 > STRING
+        from utils.secrets_loader import get_vapid_public_key as load_vapid_public_key
+        vapid_public_key = load_vapid_public_key()
+        logger.debug("✅ VAPID_PUBLIC_KEY carregada via secrets_loader (PATH > BASE64 > STRING)")
+        return jsonify({'public_key': vapid_public_key})
+    except ValueError as e:
+        logger.warning(f"⚠️ VAPID_PUBLIC_KEY não configurada: {e}")
         return jsonify({'error': 'VAPID keys não configuradas. Execute: python generate_vapid_keys.py'}), 500
-    
-    return jsonify({'public_key': vapid_public_key})
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar VAPID_PUBLIC_KEY: {e}")
+        return jsonify({'error': 'VAPID keys não configuradas. Execute: python generate_vapid_keys.py'}), 500
 
 @app.route('/api/push/subscribe', methods=['POST'])
 @login_required
@@ -13588,8 +13591,9 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             logger.info(f"⚠️ [PUSH] Nenhuma subscription ativa para user {user_id}")
             return
         
-        # Chave privada VAPID
-        vapid_private_key_raw = os.getenv('VAPID_PRIVATE_KEY')
+        # ✅ SECRETS LOADER: Usar hierarquia PATH > BASE64 > STRING
+        from utils.secrets_loader import get_vapid_private_key
+        vapid_private_key_raw = get_vapid_private_key()
         vapid_claims = {
             "sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@grimbots.com')}"
         }

@@ -13,41 +13,13 @@ import sys
 from pathlib import Path
 
 # ============================================================================
-# CARREGAR .env ANTES DE VALIDAR ENCRYPTION_KEY
+# CARREGAR ENCRYPTION_KEY VIA SECRETS LOADER (hierarquia: PATH > BASE64 > STRING)
 # ============================================================================
 
-# ✅ CRÍTICO: Carregar .env diretamente aqui para garantir que ENCRYPTION_KEY
-# seja lida corretamente, mesmo se este módulo for importado antes de load_dotenv()
-# no app.py. Isso resolve o problema de chaves que terminam com '=' sendo cortadas.
-if not os.environ.get('ENCRYPTION_KEY'):
-    # Tentar carregar do .env manualmente
-    env_path = Path(__file__).parent.parent / '.env'
-    if env_path.exists():
-        try:
-            with open(env_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)  # ✅ split('=', 1) preserva '=' no valor
-                        if key.strip() == 'ENCRYPTION_KEY':
-                            os.environ['ENCRYPTION_KEY'] = value.strip()
-                            break
-        except Exception as e:
-            # Se falhar, continuar e deixar validação abaixo tratar
-            pass
+# ✅ SECRETS LOADER: Usar hierarquia PATH > BASE64 > STRING
+from utils.secrets_loader import get_encryption_key
 
-# ============================================================================
-# VALIDAÇÃO: ENCRYPTION_KEY OBRIGATÓRIA
-# ============================================================================
-
-ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
-
-if not ENCRYPTION_KEY:
-    raise RuntimeError(
-        "\n❌ ERRO CRÍTICO: ENCRYPTION_KEY não configurada!\n\n"
-        "Execute:\n"
-        "  python -c \"from cryptography.fernet import Fernet; print('ENCRYPTION_KEY=' + Fernet.generate_key().decode())\" >> .env\n"
-    )
+ENCRYPTION_KEY = get_encryption_key()
 
 try:
     # Tentar criar Fernet para validar formato
@@ -57,7 +29,7 @@ except Exception as e:
         f"\n❌ ERRO CRÍTICO: ENCRYPTION_KEY inválida!\n"
         f"Erro: {e}\n\n"
         "Gere uma nova:\n"
-        "  python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"\n"
+        "  python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
     )
 
 
