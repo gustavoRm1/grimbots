@@ -52,6 +52,9 @@ PYEOF
 
 load_env_safely
 
+# ATIVAR VIRTUALENV
+source venv/bin/activate
+
 # ============================================================
 # 3. VALIDAÇÃO DE CÓDIGO (BLOQUEIA DEPLOY SE QUEBRADO)
 # ============================================================
