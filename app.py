@@ -270,6 +270,9 @@ logger.info("✅ Rate Limiting configurado")
 
 # Inicializar scheduler para polling
 from flask_apscheduler import APScheduler
+from apscheduler.jobstores.redis import RedisJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor as APThreadPool
+
 SCHEDULER_LOCK_PATH = Path(os.environ.get('GRIMBOTS_SCHEDULER_LOCK', '/tmp/grimbots_scheduler.lock'))
 
 def _is_pid_running(pid: int) -> bool:
@@ -325,6 +328,37 @@ def _acquire_scheduler_lock() -> bool:
                 return False
 
             return False
+
+# =========================================================================
+# CONFIGURAÇÃO CRÍTICA: RedisJobStore para persistência de jobs
+# =========================================================================
+redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+parsed_redis = urlparse(redis_url)
+
+jobstores = {
+    'default': RedisJobStore(
+        host=parsed_redis.hostname or 'localhost',
+        port=parsed_redis.port or 6379,
+        db=int(parsed_redis.path.lstrip('/') or 0),
+        jobs_key='apscheduler.jobs',
+        run_times_key='apscheduler.run_times'
+    )
+}
+
+executors = {
+    'default': APThreadPool(max_workers=20)
+}
+
+job_defaults = {
+    'coalesce': True,  # Consolidar múltiplas execuções atrasadas
+    'max_instances': 1,  # Apenas uma instância por job
+    'misfire_grace_time': 3600  # 1 hora de tolerância para execução atrasada
+}
+
+# Configurar APScheduler com RedisJobStore
+app.config['SCHEDULER_JOBSTORES'] = jobstores
+app.config['SCHEDULER_EXECUTORS'] = executors
+app.config['SCHEDULER_JOB_DEFAULTS'] = job_defaults
 
 scheduler = APScheduler()
 scheduler.init_app(app)
@@ -11293,12 +11327,24 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool Bot encontrado: {pool_bot is not None}")
         
         if not pool_bot:
-            logger.error(f"❌ PROBLEMA RAIZ: Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
-            logger.error(f"   SOLUÇÃO: Associe o bot a um pool no dashboard ou via API")
-            return False
+            logger.warning(f"⚠️ Bot {payment.bot_id} não está associado a nenhum pool - tentando fallback legado")
+            
+            # ✅ FALLBACK: Buscar pixel diretamente do bot (legacy support)
+            bot = payment.bot if payment.bot else Bot.query.get(payment.bot_id)
+            if bot and bot.meta_pixel_id and bot.meta_access_token:
+                logger.info(f"✅ Fallback: Usando pixel do bot {bot.id} (legado)")
+                pool = bot  # Usar bot como "pool" para reutilizar código
+                access_token = decrypt(bot.meta_access_token)
+                pixel_configured_via_fallback = True
+            else:
+                logger.error(f"❌ PROBLEMA RAIZ: Bot {payment.bot_id} não está associado a nenhum pool E não tem pixel legado - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
+                logger.error(f"   SOLUÇÃO: Associe o bot a um pool no dashboard ou configure pixel no bot")
+                return False
+        else:
+            pool = pool_bot.pool
+            pixel_configured_via_fallback = False
         
-        pool = pool_bot.pool
-        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool ID: {pool.id}, Nome: {pool.name}")
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool ID: {pool.id}, Nome: {getattr(pool, 'name', 'Bot Legacy')}")
         
         # ✅ VERIFICAÇÃO 2: Pool tem Meta Pixel configurado?
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Tracking habilitado: {pool.meta_tracking_enabled}")
@@ -14968,6 +15014,50 @@ def health_check():
         checks['checks']['rq_workers'] = f'error: {str(e)}'
         checks['status'] = 'unhealthy'
         logger.error(f"❌ Health check - RQ Workers failed: {e}")
+    
+    # Check 4: APScheduler
+    try:
+        if _scheduler_owner:
+            scheduler_status = {
+                'owner': True,
+                'running': scheduler.running,
+                'pid': os.getpid(),
+                'jobstore': 'redis',
+                'jobs_scheduled': len(scheduler.get_jobs()) if scheduler.running else 0
+            }
+            checks['checks']['scheduler'] = scheduler_status
+            
+            if not scheduler.running:
+                checks['status'] = 'degraded'
+                checks['checks']['scheduler']['warning'] = 'Scheduler is owner but not running'
+                logger.warning(f"⚠️ Health check - Scheduler owner but not running")
+        else:
+            # Not owner - check if owner exists
+            try:
+                if SCHEDULER_LOCK_PATH.exists():
+                    owner_pid = int(SCHEDULER_LOCK_PATH.read_text().strip())
+                    owner_running = _is_pid_running(owner_pid)
+                    checks['checks']['scheduler'] = {
+                        'owner': False,
+                        'owner_pid': owner_pid,
+                        'owner_running': owner_running,
+                        'jobstore': 'redis'
+                    }
+                    if not owner_running:
+                        checks['status'] = 'degraded'
+                        checks['checks']['scheduler']['warning'] = 'Scheduler owner not running but lock exists'
+                else:
+                    checks['checks']['scheduler'] = {
+                        'owner': False,
+                        'warning': 'No scheduler owner found'
+                    }
+                    checks['status'] = 'degraded'
+            except Exception:
+                checks['checks']['scheduler'] = {'owner': False, 'status': 'unknown'}
+                
+    except Exception as e:
+        checks['checks']['scheduler'] = f'error: {str(e)}'
+        logger.error(f"❌ Health check - Scheduler failed: {e}")
     
     # Status code baseado no status geral
     if checks['status'] == 'healthy':

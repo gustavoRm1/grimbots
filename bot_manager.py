@@ -429,21 +429,24 @@ def get_brazil_time():
 
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
+from redis_bot_state import redis_bot_state  # ✅ CRÍTICO: Estado centralizado em Redis
 import json
 import random
 import time
 
 class BotManager:
-    """Gerenciador de bots Telegram"""
+    """Gerenciador de bots Telegram - Com estado centralizado em Redis"""
     
     def __init__(self, socketio, scheduler=None):
         self.socketio = socketio
         self.scheduler = scheduler
-        self.active_bots: Dict[int, Dict[str, Any]] = {}
+        # ✅ REDIS BRAIN: Estado centralizado em Redis (não mais em memória)
+        self.bot_state = redis_bot_state
+        self.active_bots: Dict[int, Dict[str, Any]] = {}  # ✅ DEPRECATED: Mantido para compatibilidade
         self.bot_threads: Dict[int, threading.Thread] = {}
         self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
         
-        # ✅ THREAD SAFETY: Lock para acesso concorrente
+        # ✅ THREAD SAFETY: Lock para acesso concorrente (legacy, Redis é thread-safe)
         self._bots_lock = threading.RLock()  # RLock permite re-entrada na mesma thread
         
         # ✅ CACHE DE RATE LIMITING (em memória)
@@ -1013,22 +1016,39 @@ class BotManager:
     
     def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):
         """
-        Inicia um bot Telegram
+        Inicia um bot Telegram - Com estado centralizado em Redis
         
         Args:
             bot_id: ID do bot no banco
             token: Token do bot
             config: Configuração do bot
         """
-        with self._bots_lock:  # ✅ THREAD SAFE
-            if bot_id in self.active_bots:
-                logger.warning(f"Bot {bot_id} já está ativo")
-                return
-            
+        # ✅ REDIS BRAIN: Verificar se bot já está ativo no Redis (visível para todos os workers)
+        if self.bot_state.is_bot_active(bot_id):
+            logger.warning(f"Bot {bot_id} já está ativo no Redis")
+            return
+        
+        # ✅ REDIS BRAIN: Adquirir lock de auto-start para prevenir race conditions
+        if not self.bot_state.acquire_autostart_lock(bot_id, timeout=30):
+            logger.warning(f"🔒 Bot {bot_id} está sendo iniciado por outro worker - aguardando")
+            # Aguardar até 3 segundos para o outro worker iniciar
+            import time
+            for _ in range(6):
+                time.sleep(0.5)
+                if self.bot_state.is_bot_active(bot_id):
+                    logger.info(f"✅ Bot {bot_id} foi iniciado por outro worker")
+                    return
+            logger.warning(f"⚠️ Timeout aguardando bot {bot_id} iniciar por outro worker")
+            return
+        
+        try:
             # Configurar webhook para receber mensagens do Telegram
             self._setup_webhook(token, bot_id)
             
-            # ✅ CORREÇÃO: Armazenar bot ativo com LOCK
+            # ✅ REDIS BRAIN: Registrar bot no Redis (visível para todos os workers)
+            self.bot_state.register_bot(bot_id, token, config, worker_pid=os.getpid())
+            
+            # ✅ Compatibilidade: Também manter em memória local (durante transição)
             with self._bots_lock:
                 from models import get_brazil_time
                 self.active_bots[bot_id] = {
@@ -1037,34 +1057,45 @@ class BotManager:
                     'started_at': get_brazil_time(),
                     'status': 'running'
                 }
-        
-        # Iniciar thread de monitoramento
-        thread = threading.Thread(
-            target=self._bot_monitor_thread,
-            args=(bot_id,),
-            daemon=True
-        )
-        thread.start()
-        self.bot_threads[bot_id] = thread
-        
-        logger.info(f"Bot {bot_id} iniciado com webhook configurado")
+            
+            # Iniciar heartbeat para manter bot ativo no Redis
+            self.bot_state.start_heartbeat_thread(bot_id, interval=60)
+            
+            # Iniciar thread de monitoramento
+            thread = threading.Thread(
+                target=self._bot_monitor_thread,
+                args=(bot_id,),
+                daemon=True
+            )
+            thread.start()
+            self.bot_threads[bot_id] = thread
+            
+            logger.info(f"✅ Bot {bot_id} iniciado com webhook configurado (Redis + Local)")
+            
+        finally:
+            # Liberar lock de auto-start
+            self.bot_state.release_autostart_lock(bot_id)
     
     def stop_bot(self, bot_id: int):
         """
-        Para um bot Telegram
+        Para um bot Telegram - Remove do Redis e memória local
         
         Args:
             bot_id: ID do bot no banco
         """
-        with self._bots_lock:  # ✅ THREAD SAFE
-            if bot_id not in self.active_bots:
-                logger.warning(f"Bot {bot_id} não está ativo")
-                return
-            
-            # Marcar como parado
-            self.active_bots[bot_id]['status'] = 'stopped'
+        # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
+        if not self.bot_state.is_bot_active(bot_id):
+            logger.warning(f"Bot {bot_id} não está ativo no Redis")
         
-        # Remover job do scheduler se existir (fora do lock)
+        # ✅ REDIS BRAIN: Remover do Redis (todos os workers verão)
+        self.bot_state.unregister_bot(bot_id)
+        
+        # ✅ Compatibilidade: Também remover da memória local
+        with self._bots_lock:
+            if bot_id in self.active_bots:
+                self.active_bots[bot_id]['status'] = 'stopped'
+        
+        # Remover job do scheduler se existir
         if bot_id in self.polling_jobs and self.scheduler:
             try:
                 self.scheduler.remove_job(self.polling_jobs[bot_id])
@@ -1073,8 +1104,8 @@ class BotManager:
             except Exception as e:
                 logger.error(f"Erro ao remover job: {e}")
         
-        # Remover da lista de ativos
-        with self._bots_lock:  # ✅ THREAD SAFE
+        # Remover da lista de ativos local
+        with self._bots_lock:
             if bot_id in self.active_bots:
                 del self.active_bots[bot_id]
         
@@ -1082,7 +1113,7 @@ class BotManager:
         if bot_id in self.bot_threads:
             del self.bot_threads[bot_id]
         
-        logger.info(f"Bot {bot_id} parado")
+        logger.info(f"✅ Bot {bot_id} parado e removido do Redis")
     
     def update_bot_config(self, bot_id: int, config: Dict[str, Any]):
         """
@@ -1480,29 +1511,50 @@ class BotManager:
                 # Fail-open: se Redis falhar, permitir processar (melhor que bloquear tudo)
                 pass
             
-            if bot_id not in self.active_bots:
-                logger.warning(f"⚠️ Bot {bot_id} não está mais ativo em memória, tentando auto-start (webhook fallback)")
-                try:
-                    from app import app, db
-                    from models import Bot, BotConfig
-                    with app.app_context():
-                        bot = db.session.get(Bot, bot_id)
-                        if bot and bot.is_active:
-                            config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
-                            config_dict = config_obj.to_dict() if config_obj else {}
-                            self.start_bot(bot.id, bot.token, config_dict)
-                except Exception as autostart_error:
-                    logger.error(f"❌ Falha ao auto-start bot {bot_id} durante webhook: {autostart_error}")
+            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis (visível para todos os workers)
+            if not self.bot_state.is_bot_active(bot_id):
+                logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis, tentando auto-start (webhook fallback)")
                 
-                if bot_id not in self.active_bots:
+                # ✅ REDIS BRAIN: Verificar se outro worker está tentando auto-start
+                if self.bot_state.is_autostart_locked(bot_id):
+                    logger.info(f"🔒 Outro worker está iniciando bot {bot_id} - aguardando")
+                    import time
+                    for _ in range(10):  # Aguardar até 5 segundos
+                        time.sleep(0.5)
+                        if self.bot_state.is_bot_active(bot_id):
+                            logger.info(f"✅ Bot {bot_id} foi iniciado por outro worker")
+                            break
+                    else:
+                        logger.warning(f"⚠️ Timeout aguardando bot {bot_id}")
+                        return
+                else:
+                    # Tentar auto-start com lock
+                    try:
+                        from app import app, db
+                        from models import Bot, BotConfig
+                        with app.app_context():
+                            bot = db.session.get(Bot, bot_id)
+                            if bot and bot.is_active:
+                                config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
+                                config_dict = config_obj.to_dict() if config_obj else {}
+                                self.start_bot(bot.id, bot.token, config_dict)
+                    except Exception as autostart_error:
+                        logger.error(f"❌ Falha ao auto-start bot {bot_id} durante webhook: {autostart_error}")
+                
+                # Verificar novamente após tentativa de auto-start
+                if not self.bot_state.is_bot_active(bot_id):
                     logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start, ignorando update")
                     return
             
-            # ✅ CORREÇÃO: Acessar com LOCK
-            with self._bots_lock:
-                if bot_id not in self.active_bots:
-                    return
-                bot_info = self.active_bots[bot_id].copy()  # Copy para não segurar lock
+            # ✅ REDIS BRAIN: Obter dados do bot do Redis (consistente entre workers)
+            bot_info = self.bot_state.get_bot_data(bot_id)
+            if not bot_info:
+                # Fallback para memória local durante transição
+                with self._bots_lock:
+                    if bot_id not in self.active_bots:
+                        return
+                    bot_info = self.active_bots[bot_id].copy()
+                    logger.warning(f"⚠️ Bot {bot_id} não encontrado no Redis - usando fallback local")
             
             token = bot_info['token']
             config = bot_info['config']
@@ -8566,6 +8618,8 @@ Seu pagamento ainda não foi confirmado.
                             product_name=description,
                             product_description=pix_result.get('pix_code'),  # Salvar código PIX para reenvio (None se recusado)
                             status=payment_status,  # ✅ 'failed' se recusado, 'pending' se não
+                            # ✅ CRÍTICO: tracking_token do redirect para matching PageView → Purchase
+                            tracking_token=tracking_token if tracking_token else None,
                             # Analytics tracking
                             order_bump_shown=order_bump_shown,
                             order_bump_accepted=order_bump_accepted,
