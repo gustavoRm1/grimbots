@@ -794,16 +794,11 @@ class BotManager:
 
             with app.app_context():
                 bot_id = None
-                with self._bots_lock:
-                    for bid, bot_info in self.active_bots.items():
-                        if bot_info.get('token') == token:
-                            bot_id = bid
-                            break
-
-                if not bot_id:
-                    bot = Bot.query.filter_by(token=token).first()
-                    if bot:
-                        bot_id = bot.id
+                # ✅ REDIS BRAIN: Buscar bot pelo token no Redis
+                # Como não temos índice reverso no Redis, buscar no banco
+                bot = Bot.query.filter_by(token=token).first()
+                if bot:
+                    bot_id = bot.id
 
                 if not bot_id:
                     return
@@ -1118,10 +1113,11 @@ class BotManager:
         cycle = 0
         
         while True:
-            with self._bots_lock:
-                if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
-                    logger.info(f"Monitor do bot {bot_id} encerrado (status não-running ou removido)")
-                    break
+            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
+            bot_info = self.bot_state.get_bot_data(bot_id)
+            if not bot_info or bot_info.get('status') != 'running':
+                logger.info(f"Monitor do bot {bot_id} encerrado (status não-running ou removido)")
+                break
 
             try:
                 # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
@@ -1151,8 +1147,9 @@ class BotManager:
                 cycle += 1
                 if cycle % 10 == 0:
                     try:
-                        with self._bots_lock:
-                            token = self.active_bots.get(bot_id, {}).get('token')
+                        # ✅ REDIS BRAIN: Buscar token do Redis
+                        bot_data = self.bot_state.get_bot_data(bot_id)
+                        token = bot_data.get('token') if bot_data else None
                         if token:
                             import os, requests as _rq
                             expected_base = os.environ.get('WEBHOOK_URL', '')
@@ -1323,30 +1320,35 @@ class BotManager:
             bot_id: ID do bot
             token: Token do bot
         """
-        # ✅ CORREÇÃO: Verificar com LOCK
-        with self._bots_lock:
-            if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
-                # Bot não está mais ativo, remover job
-                if bot_id in self.polling_jobs:
-                    try:
-                        self.scheduler.remove_job(self.polling_jobs[bot_id])
-                        del self.polling_jobs[bot_id]
-                        logger.info(f"🛑 Polling job removido para bot {bot_id}")
-                    except:
-                        pass
-                return
+        # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
+        bot_data = self.bot_state.get_bot_data(bot_id)
+        if not bot_data or bot_data.get('status') != 'running':
+            # Bot não está mais ativo, remover job
+            if bot_id in self.polling_jobs:
+                try:
+                    self.scheduler.remove_job(self.polling_jobs[bot_id])
+                    del self.polling_jobs[bot_id]
+                    logger.info(f"🛑 Polling job removido para bot {bot_id}")
+                except:
+                    pass
+            return
         
         try:
-            # ✅ CORREÇÃO: Acessar active_bots com LOCK
-            with self._bots_lock:
-                # Inicializar offset se não existir
-                if 'offset' not in self.active_bots[bot_id]:
-                    self.active_bots[bot_id]['offset'] = 0
-                    self.active_bots[bot_id]['poll_count'] = 0
-                
-                self.active_bots[bot_id]['poll_count'] += 1
-                poll_count = self.active_bots[bot_id]['poll_count']
-                offset = self.active_bots[bot_id]['offset']
+            # ✅ REDIS BRAIN: Buscar offset/poll_count do Redis (transientes)
+            # Usar config para armazenar métricas temporárias
+            config = bot_data.get('config', {})
+            offset = config.get('_polling_offset', 0)
+            poll_count = config.get('_polling_count', 0)
+            poll_count += 1
+            
+            # Atualizar métricas no Redis (não crítico se falhar)
+            try:
+                new_config = config.copy()
+                new_config['_polling_offset'] = offset
+                new_config['_polling_count'] = poll_count
+                self.bot_state.update_bot_config(bot_id, new_config)
+            except:
+                pass
             
             # Log apenas a cada 30 polls (30 segundos)
             if poll_count % 30 == 0:
@@ -1368,9 +1370,15 @@ class BotManager:
                         logger.info(f"{'='*60}")
                         
                         for update in updates:
-                            # ✅ CORREÇÃO: Atualizar offset com LOCK
-                            with self._bots_lock:
-                                self.active_bots[bot_id]['offset'] = update['update_id'] + 1
+                            # ✅ REDIS BRAIN: Atualizar offset no Redis
+                            try:
+                                current_config = self.bot_state.get_bot_data(bot_id)
+                                if current_config:
+                                    new_config = current_config.get('config', {}).copy()
+                                    new_config['_polling_offset'] = update['update_id'] + 1
+                                    self.bot_state.update_bot_config(bot_id, new_config)
+                            except:
+                                pass
                             self._process_telegram_update(bot_id, update)
         
         except requests.exceptions.Timeout:
@@ -1390,11 +1398,11 @@ class BotManager:
         offset = 0
         poll_count = 0
         
-        # ✅ CORREÇÃO: Loop com verificação thread-safe
+        # ✅ CORREÇÃO: Loop com verificação no Redis
         while True:
-            with self._bots_lock:
-                if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
-                    break
+            bot_data = self.bot_state.get_bot_data(bot_id)
+            if not bot_data or bot_data.get('status') != 'running':
+                break
             try:
                 poll_count += 1
                 url = f"https://api.telegram.org/bot{token}/getUpdates"
@@ -5145,14 +5153,14 @@ class BotManager:
                     if session_bot_id != bot_id:
                         logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
                         # Buscar token e chat_id corretos para o bot da sessão
-                        with self._bots_lock:
-                            if session_bot_id in self.active_bots:
-                                session_bot_info = self.active_bots[session_bot_id]
-                                token = session_bot_info['token']
-                                bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
-                            else:
-                                logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
-                                return
+                        # ✅ REDIS BRAIN: Buscar do Redis
+                        session_bot_data = self.bot_state.get_bot_data(session_bot_id)
+                        if session_bot_data:
+                            token = session_bot_data['token']
+                            bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                        else:
+                            logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
+                            return
                     
                     # ✅ CORREÇÃO: Usar chat_id da sessão (mais confiável)
                     chat_id = session.get('chat_id', chat_id)
@@ -5208,14 +5216,14 @@ class BotManager:
                     if session_bot_id != bot_id:
                         logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
                         # Buscar token e chat_id corretos para o bot da sessão
-                        with self._bots_lock:
-                            if session_bot_id in self.active_bots:
-                                session_bot_info = self.active_bots[session_bot_id]
-                                token = session_bot_info['token']
-                                bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
-                            else:
-                                logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
-                                return
+                        # ✅ REDIS BRAIN: Buscar do Redis
+                        session_bot_data = self.bot_state.get_bot_data(session_bot_id)
+                        if session_bot_data:
+                            token = session_bot_data['token']
+                            bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                        else:
+                            logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
+                            return
                     
                     # ✅ CORREÇÃO: Usar chat_id da sessão (mais confiável)
                     chat_id = session.get('chat_id', chat_id)
@@ -6728,7 +6736,9 @@ Desculpe, não foi possível processar seu pagamento.
                             logger.warning(f"⚠️ [VERIFY] Usando fallback para envio de mensagem (send_payment_delivery falhou)")
                             
                             bot = payment.bot
-                            bot_config = self.active_bots.get(bot_id, {}).get('config', {})
+                            # ✅ REDIS BRAIN: Buscar config do Redis
+                            bot_data = self.bot_state.get_bot_data(bot_id)
+                            bot_config = bot_data.get('config', {}) if bot_data else {}
                             access_link = bot_config.get('access_link', '')
                             custom_success_message = bot_config.get('success_message', '').strip()
                             
@@ -6826,7 +6836,9 @@ Desculpe, não foi possível processar seu pagamento.
                     # ✅ FALLBACK: Se fluxo não processou, usar comportamento tradicional
                     if not flow_processed:
                         bot = payment.bot
-                        bot_config = self.active_bots.get(bot_id, {}).get('config', {})
+                        # ✅ REDIS BRAIN: Buscar config do Redis
+                        bot_data = self.bot_state.get_bot_data(bot_id)
+                        bot_config = bot_data.get('config', {}) if bot_data else {}
                         custom_pending_message = bot_config.get('pending_message', '').strip()
                     
                     # ✅ CORREÇÃO: Buscar PIX code do product_description (onde é salvo)
@@ -7079,14 +7091,14 @@ Seu pagamento ainda não foi confirmado.
             if session_bot_id != bot_id:
                 logger.warning(f"⚠️ Bot ID mismatch em _show_next_order_bump: recebido {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
                 # Buscar token correto para o bot da sessão
-                with self._bots_lock:
-                    if session_bot_id in self.active_bots:
-                        session_bot_info = self.active_bots[session_bot_id]
-                        token = session_bot_info['token']
-                        bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
-                    else:
-                        logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
-                        return
+                # ✅ REDIS BRAIN: Buscar do Redis
+                session_bot_data = self.bot_state.get_bot_data(session_bot_id)
+                if session_bot_data:
+                    token = session_bot_data['token']
+                    bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                else:
+                    logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
+                    return
             
             current_index = session['current_index']
             order_bumps = session['order_bumps']
@@ -7200,14 +7212,14 @@ Seu pagamento ainda não foi confirmado.
             if session_bot_id != bot_id:
                 logger.warning(f"⚠️ Bot ID mismatch em _finalize_order_bump_session: recebido {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
                 # Buscar token correto para o bot da sessão
-                with self._bots_lock:
-                    if session_bot_id in self.active_bots:
-                        session_bot_info = self.active_bots[session_bot_id]
-                        token = session_bot_info['token']
-                        bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
-                    else:
-                        logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
-                        return
+                # ✅ REDIS BRAIN: Buscar do Redis
+                session_bot_data = self.bot_state.get_bot_data(session_bot_id)
+                if session_bot_data:
+                    token = session_bot_data['token']
+                    bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                else:
+                    logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
+                    return
             
             original_price = session['original_price']
             original_description = session['original_description']
@@ -9491,18 +9503,12 @@ Seu pagamento ainda não foi confirmado.
                         import uuid as uuid_lib
                         
                         with app.app_context():
-                            # Buscar bot pelo token
+                            # ✅ REDIS BRAIN: Buscar bot pelo token
+                            # Como não temos índice reverso no Redis, buscar direto no banco
                             bot_id = None
-                            with self._bots_lock:
-                                for bid, bot_info in self.active_bots.items():
-                                    if bot_info.get('token') == token:
-                                        bot_id = bid
-                                        break
-                            
-                            if not bot_id:
-                                bot = Bot.query.filter_by(token=token).first()
-                                if bot:
-                                    bot_id = bot.id
+                            bot = Bot.query.filter_by(token=token).first()
+                            if bot:
+                                bot_id = bot.id
                             
                             if bot_id:
                                 # Buscar bot_user
@@ -9787,12 +9793,12 @@ Seu pagamento ainda não foi confirmado.
                     import uuid as uuid_lib
 
                     with app.app_context():
+                        # ✅ REDIS BRAIN: Buscar bot pelo token
+                        # Como não temos índice reverso no Redis, buscar direto no banco
                         bot_id = None
-                        with self._bots_lock:
-                            for bid, bot_info in self.active_bots.items():
-                                if bot_info.get('token') == token:
-                                    bot_id = bid
-                                    break
+                        bot = Bot.query.filter_by(token=token).first()
+                        if bot:
+                            bot_id = bot.id
 
                         if not bot_id:
                             bot = Bot.query.filter_by(token=token).first()
