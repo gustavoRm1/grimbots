@@ -10380,11 +10380,6 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"❌ Erro ao recuperar scheduler: {recover_error}", exc_info=True)
                     return
             
-            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-            try:
-                scheduler_running = self.scheduler.running
-                logger.info(f"🔍 Scheduler está rodando: {scheduler_running}")
-                if not scheduler_running:
             if not upsells:
                 logger.warning(f"⚠️ Lista de upsells está vazia!")
                 return

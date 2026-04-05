@@ -71,6 +71,14 @@ fi
 
 source venv/bin/activate
 
+# ✅ VERIFICAÇÃO DE SINTAXE: Abortar se código estiver quebrado
+echo "🔍 Verificando sintaxe dos arquivos críticos..."
+python -m py_compile app.py bot_manager.py tasks_async.py || {
+  echo "❌ ERRO DE SINTAXE: Arquivos Python contêm erros. Abortando!"
+  exit 1
+}
+echo "✅ Sintaxe verificada com sucesso"
+
 echo "🚫 Verificando porta 5000..."
 if lsof -ti:5000 >/dev/null 2>&1; then
   echo "   ⚠️  Porta 5000 em uso, liberando..."

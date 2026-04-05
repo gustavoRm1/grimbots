@@ -1,0 +1,41 @@
+[flake8]
+# Linha máxima compatível com padrões modernos
+max-line-length = 120
+
+# Arquivos/diretórios para ignorar
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    migrations,
+    .env,
+    .windsurf,
+    logs,
+    *.log
+
+# Erros para ignorar (justificados)
+# E501: Line too long - tratamos com max-line-length acima
+# W503: Line break before binary operator - padrão PEP8 moderno permite
+# E203: Whitespace before ':' - conflita com black
+ignore = E501, W503, E203
+
+# Complexidade máxima de funções/métodos (McCabe)
+max-complexity = 15
+
+# Parâmetros máximos por função
+max-args = 10
+
+# Importações permitidas
+import-order-style = google
+
+# Verificar sintaxe apenas (não requer docstrings)
+disable-noqa = True
+
+# Mostrar contagem de erros por categoria
+show-source = True
+statistics = True
+
+# Parar no primeiro erro crítico (para CI/CD)
+exit-zero = False
