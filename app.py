@@ -3558,15 +3558,16 @@ def debug_bot(bot_id):
     debug_info = {
         'bot_id': bot.id,
         'is_running_db': bot.is_running,
-        'is_in_active_bots': bot.id in bot_manager.active_bots,
-        'active_bots_count': len(bot_manager.active_bots),
+        'is_in_active_bots': bot_manager.get_bot_status(bot.id).get('is_running', False),
+        'active_bots_count': 'N/A (Redis mode)',
         'active_threads': threading.active_count(),
         'thread_names': [t.name for t in threading.enumerate()],
     }
     
-    if bot.id in bot_manager.active_bots:
-        debug_info['bot_status'] = bot_manager.active_bots[bot.id]['status']
-        debug_info['bot_started_at'] = bot_manager.active_bots[bot.id]['started_at'].isoformat()
+    bot_status = bot_manager.get_bot_status(bot.id)
+    if bot_status.get('is_running', False):
+        debug_info['bot_status'] = bot_status.get('status', 'unknown')
+        debug_info['bot_started_at'] = bot_status.get('started_at', 'N/A')
     
     return jsonify(debug_info)
 
@@ -8395,8 +8396,15 @@ def api_check_bots_status():
             # Bots no banco
             db_bots = Bot.query.filter_by(is_active=True).all()
             
-            # Bots ativos no bot_manager
-            active_bots = list(bot_manager.active_bots.keys())
+            # ✅ OTIMIZAÇÃO ABSOLUTA: Busca em massa no Redis
+            active_bots_map = bot_manager.bot_state.get_all_active_bots()
+            
+            # ✅ PROTEÇÃO DE TIPAGEM: Converte chaves do Redis (strings) para Inteiros
+            active_bot_ids = {int(k) for k in active_bots_map.keys() if str(k).isdigit()}
+            
+            # ✅ INTERSEÇÃO REAL (Segurança Cross-Tenant): Cruza apenas os bots DESTE usuário com os do Redis
+            active_bots = [bot.id for bot in db_bots if bot.id in active_bot_ids]
+            missing_bots = [bot.id for bot in db_bots if bot.id not in active_bot_ids]
             
             result = {
                 'db_bots': [
@@ -8409,7 +8417,7 @@ def api_check_bots_status():
                 'active_bots': active_bots,
                 'total_db': len(db_bots),
                 'total_active': len(active_bots),
-                'missing': [bot.id for bot in db_bots if bot.id not in active_bots]
+                'missing': [bot.id for bot in db_bots if bot.id not in active_bot_ids]
             }
             
             return jsonify(result)
@@ -8426,14 +8434,15 @@ def _reload_user_bots_config(user_id: int):
         active_bots = Bot.query.filter_by(user_id=user_id, is_active=True).all()
         
         for bot in active_bots:
-            if bot.id in bot_manager.active_bots:
+            bot_status = bot_manager.get_bot_status(bot.id)
+            if bot_status.get('is_running', False):
                 logger.info(f"🔄 Recarregando configuração do bot {bot.id} (gateway mudou)")
                 
                 # Buscar configuração atualizada
                 config = BotConfig.query.filter_by(bot_id=bot.id).first()
                 if config:
-                    # Atualizar configuração em memória
-                    bot_manager.active_bots[bot.id]['config'] = config.to_dict()
+                    # Atualizar configuração no Redis
+                    bot_manager.update_bot_config(bot.id, config.to_dict())
                     logger.info(f"✅ Bot {bot.id} recarregado com novo gateway")
                 else:
                     logger.warning(f"⚠️ Configuração não encontrada para bot {bot.id}")
@@ -9869,15 +9878,19 @@ def send_chat_message(bot_id, telegram_user_id):
         return jsonify({'success': False, 'error': 'Mensagem não pode estar vazia'}), 400
     
     try:
-        # Buscar token do bot
-        with bot_manager._bots_lock:
-            bot_data = bot_manager.active_bots.get(bot_id)
-            if not bot_data:
-                return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
-            
-            token = bot_data.get('token')
-            if not token:
-                return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
+        # Buscar token do bot via Redis
+        bot_status = bot_manager.get_bot_status(bot_id)
+        if not bot_status.get('is_running', False):
+            return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
+        
+        # Obter dados do bot do Redis
+        bot_data = bot_manager.bot_state.get_bot_data(bot_id)
+        if not bot_data:
+            return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
+        
+        token = bot_data.get('token')
+        if not token:
+            return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
         
         # Enviar mensagem via Telegram API
         result = bot_manager.send_telegram_message(
