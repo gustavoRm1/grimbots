@@ -7885,7 +7885,7 @@ def bolt_webhook():
 
     try:
         from tasks_async import webhook_queue, process_webhook_async
-        from app.workers import enqueue_with_user
+        from internal_logic.workers import enqueue_with_user
         if webhook_queue:
             # ✅ ISOLAMENTO: Enfileirar com contexto de usuário
             # O user_id será resolvido pelo worker baseado no transaction_id
