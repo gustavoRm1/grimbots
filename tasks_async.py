@@ -1332,58 +1332,55 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                     
                     # ============================================================================
                     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (TASKS_ASYNC)
-                    # ✅ CORREÇÃO CRÍTICA QI 500: Processar SEMPRE que status='paid'
+                    # ✅ FLAT CODE: Processamento simplificado com Guard Clauses
                     # ============================================================================
-                    logger.info(f"🔍 [UPSELLS ASYNC] Verificando condições: status='{status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
                     
-                    if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+                    # 🛡️ GUARD CLAUSE: Verificar condições uma única vez
+                    if status != 'paid' or not payment.bot or not payment.bot.config or not payment.bot.config.upsells_enabled:
+                        logger.info(f"ℹ️ [UPSELLS ASYNC] Condições não atendidas para payment {payment.payment_id} - pulando upsells")
+                    else:
                         logger.info(f"✅ [UPSELLS ASYNC] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                        
                         try:
-                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados
                             from models import Payment as PaymentModel
                             payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                             
-                            # ✅ UPSELLS AUTOMÁTICOS - APÓS CONFIRMAÇÃO DE PAGAMENTO
-                        # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento é confirmado
-                        # ============================================================================
-                        logger.info(f"🔍 [UPSELLS ASYNC] Verificando condições: status='paid', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
-                        
-                        if payment.bot.config and payment.bot.config.upsells_enabled:
-                            logger.info(f"✅ [UPSELLS ASYNC] Condições atendidas! Processando upsells para payment {payment.payment_id}")
-                            try:
-                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
-                                from bot_manager import BotManager
-                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
+                            # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                            from bot_manager import BotManager
+                            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
+                            
+                            # Obter upsells configurados
+                            upsells = payment.bot.config.get_upsells()
+                            if not upsells:
+                                logger.info(f"ℹ️ [UPSELLS ASYNC] Lista de upsells vazia para payment {payment.payment_id}")
+                            else:
+                                logger.info(f"🎯 [UPSELLS ASYNC] Verificando upsells para produto: {payment.product_name}")
                                 
-                                upsells = payment.bot.config.get_upsells()
+                                # Filtrar upsells que fazem match com o produto comprado
+                                matched_upsells = [
+                                    upsell for upsell in upsells
+                                    if not upsell.get('trigger_product') or upsell.get('trigger_product') == payment.product_name
+                                ]
                                 
-                                if upsells:
-                                    logger.info(f"🎯 [UPSELLS ASYNC] Verificando upsells para produto: {payment.product_name}")
-                                    
-                                    # Filtrar upsells que fazem match com o produto comprado
-                                    matched_upsells = []
-                                    for upsell in upsells:
-                                        trigger_product = upsell.get('trigger_product', '')
-                                        if not trigger_product or trigger_product == payment.product_name:
-                                            matched_upsells.append(upsell)
-                                    
-                                    if matched_upsells:
-                                        logger.info(f"✅ [UPSELLS ASYNC] {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
-                                        local_bot_manager.schedule_upsells(
-                                            bot_id=payment.bot_id,
-                                            payment_id=payment.payment_id,
-                                            chat_id=int(payment.customer_user_id),
-                                            upsells=matched_upsells,
-                                            original_price=payment.amount,
-                                            original_button_index=-1
-                                        )
-                                        logger.info(f"📅 [UPSELLS ASYNC] Upsells agendados com sucesso para payment {payment.payment_id}!")
+                                if matched_upsells:
+                                    logger.info(f"✅ [UPSELLS ASYNC] {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
+                                    local_bot_manager.schedule_upsells(
+                                        bot_id=payment.bot_id,
+                                        payment_id=payment.payment_id,
+                                        chat_id=int(payment.customer_user_id),
+                                        upsells=matched_upsells,
+                                        original_price=payment.amount,
+                                        original_button_index=-1
+                                    )
+                                    logger.info(f"📅 [UPSELLS ASYNC] Upsells agendados com sucesso para payment {payment.payment_id}!")
                                 else:
-                                    logger.info(f"ℹ️ [UPSELLS ASYNC] Lista de upsells vazia")
-                            except Exception as e:
-                                logger.error(f"❌ [UPSELLS ASYNC] Erro ao processar upsells: {e}", exc_info=True)
-                                import traceback
-                                traceback.print_exc()
+                                    logger.info(f"ℹ️ [UPSELLS ASYNC] Nenhum upsell configurado para '{payment.product_name}'")
+                                    
+                        except Exception as e:
+                            logger.error(f"❌ [UPSELLS ASYNC] Erro ao processar upsells para payment {payment.payment_id}: {e}", exc_info=True)
+                            import traceback
+                            traceback.print_exc()
                     
                     # ✅ Enviar notificação WebSocket APENAS para o dono do bot (após atualizar status para 'paid')
                     if status == 'paid' and payment and payment.bot:
