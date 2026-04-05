@@ -1,116 +1,120 @@
 #!/usr/bin/env bash
+#
+# restart-app.sh - Script de deploy para GrimBots
+# Versão limpa e robusta para produção
+#
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# VALIDAÇÃO PRÉ-DEPLOY
 if [[ ! -d "venv" ]]; then
-  echo "⚠️ Virtualenv 'venv' não encontrado. Abortando."
+  echo " Virtualenv 'venv' não encontrado. Abortando."
   exit 1
 fi
 
-# Exportar variáveis do .env (para SECRET_KEY, ENCRYPTION_KEY, REDIS_URL, etc.)
-# ✅ CORREÇÃO: Usar python-dotenv para carregar .env de forma segura
-# Isso evita problemas quando VAPID_PRIVATE_KEY tem quebras de linha
-if [[ -f ".env" ]]; then
-  # Tentar usar python-dotenv se disponível (mais seguro)
+if [[ ! -f ".env" ]]; then
+  echo " Arquivo .env não encontrado. Abortando."
+  exit 1
+fi
+
+# FUNÇÃO: Carregar .env de forma segura
+load_env_safely() {
+  # Usar python-dotenv se disponível (mais seguro para chaves multilinha)
   if python3 -c "import dotenv" 2>/dev/null; then
-    # Usar dotenv para carregar e exportar
     eval "$(python3 << 'PYEOF'
 from dotenv import dotenv_values
-import os
+import os, shlex
 
 env_vars = dotenv_values('.env')
 for key, value in env_vars.items():
     if value is not None:
-        # Escapar para bash de forma segura
-        import shlex
         # Preservar \n literal como string
         if isinstance(value, str) and '\n' in value:
-            # Substituir quebras reais por \n literal para export
             value = value.replace('\n', '\\n').replace('\r', '')
         print(f"export {key}={shlex.quote(str(value))}")
 PYEOF
 )"
   else
-    # Fallback: carregar manualmente, mas pular linhas problemáticas
+    # Fallback: carregar manualmente
     set -a
-    while IFS= read -r line || [ -n "$line" ]; do
-      # Ignorar comentários, linhas vazias e linhas que não são KEY=VALUE
+    while IFS= read -r line || [[ -n "$line" ]]; do
       [[ "$line" =~ ^[[:space:]]*# ]] && continue
       [[ -z "${line// }" ]] && continue
       [[ ! "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]] && continue
-      
-      # ✅ Pular VAPID_PRIVATE_KEY aqui (será carregada via Python se necessário)
-      [[ "$line" =~ ^[[:space:]]*VAPID_PRIVATE_KEY= ]] && continue
-      
-      # Exportar outras variáveis normalmente
       export "$line"
-    done < <(grep -v "^VAPID_PRIVATE_KEY=" .env | grep -v "^[[:space:]]*#")
+    done < <(grep -v "^[[:space:]]*#" .env)
     set +a
-    
-    # ✅ Carregar VAPID_PRIVATE_KEY separadamente se existir
-    if grep -q "^VAPID_PRIVATE_KEY=" .env; then
-      VAPID_PRIVATE_KEY_VALUE=$(python3 -c "
-import re
-with open('.env', 'r') as f:
-    content = f.read()
-    match = re.search(r'^VAPID_PRIVATE_KEY=(.*?)(?=^[A-Z_]|$)', content, re.MULTILINE | re.DOTALL)
-    if match:
-        value = match.group(1).strip()
-        # Se contém \n literal, manter; se tem quebras reais, converter para \n literal
-        if '\n' in value and '\\n' not in value:
-            value = value.replace('\n', '\\n')
-        print(value)
-" 2>/dev/null)
-      if [ -n "$VAPID_PRIVATE_KEY_VALUE" ]; then
-        export VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY_VALUE"
-      fi
-    fi
   fi
-fi
+}
 
+# CARREGAR VARIÁVEIS
+load_env_safely
+
+# ATIVAR VIRTUALENV
 source venv/bin/activate
 
-# ✅ VERIFICAÇÃO DE SINTAXE: Abortar se código estiver quebrado
-echo "🔍 Verificando sintaxe dos arquivos críticos..."
+# VERIFICAÇÃO DE SINTAXE (BLOQUEIA DEPLOY SE QUEBRADO)
+echo " Validando sintaxe Python..."
 python -m py_compile app.py bot_manager.py tasks_async.py || {
-  echo "❌ ERRO DE SINTAXE: Arquivos Python contêm erros. Abortando!"
+  echo " ERRO DE SINTAXE: Arquivos Python contêm erros. Deploy abortado!"
   exit 1
 }
-echo "✅ Sintaxe verificada com sucesso"
+echo " Sintaxe Python validada"
 
-echo "🚫 Verificando porta 5000..."
-if lsof -ti:5000 >/dev/null 2>&1; then
-  echo "   ⚠️  Porta 5000 em uso, liberando..."
-  lsof -ti:5000 | xargs kill -9 2>/dev/null || true
-  sleep 1
-fi
-
-echo "🚫 Encerrando workers RQ..."
-if pgrep -f start_rq_worker.py >/dev/null; then
-  pgrep -f start_rq_worker.py | xargs -r kill -9
-fi
-
-echo "🧪 Testando importação do app..."
-python -c "from app import app; print('✅ App OK')" || {
-  echo "❌ ERRO: App não pode ser importado! Verifique os logs acima."
+# VALIDAR IMPORTAÇÃO (CRÍTICO - evita deploy quebrado)
+echo " Testando importação do app..."
+python -c "from app import app; print(' App importa corretamente')" || {
+  echo " ERRO: App não pode ser importado! Verifique as dependências."
   exit 1
 }
 
-echo "⚙️ Iniciando workers RQ..."
+# LIBERAR PORTA 5000 (portável: não depende de lsof)
+echo " Verificando porta 5000..."
+PORT_PID=""
+if command -v ss >/dev/null 2>&1; then
+    PORT_PID=$(ss -tlnp 2>/dev/null | grep ':5000' | grep -oP 'pid=\K[0-9]+' | head -1)
+elif command -v netstat >/dev/null 2>&1; then
+    PORT_PID=$(netstat -tlnp 2>/dev/null | grep ':5000' | awk '{print $7}' | cut -d'/' -f1 | head -1)
+elif command -v lsof >/dev/null 2>&1; then
+    PORT_PID=$(lsof -ti:5000 2>/dev/null | head -1)
+fi
 
-# WORKERS DE INFRA (Gateway/Webhooks)
+if [[ -n "$PORT_PID" ]]; then
+    echo "   Porta 5000 em uso (PID: $PORT_PID), liberando..."
+    kill -9 "$PORT_PID" 2>/dev/null || true
+    sleep 1
+fi
+
+# ENCERRAR WORKERS RQ
+echo " Encerrando workers RQ..."
+if pgrep -f start_rq_worker.py >/dev/null 2>&1; then
+    pgrep -f start_rq_worker.py | xargs -r kill -9 2>/dev/null || true
+fi
+
+# INICIAR WORKERS RQ
+echo " Iniciando workers RQ..."
+mkdir -p logs
+
+# Workers de Infra
 nohup python3 start_rq_worker.py gateway > logs/rq-gateway.log 2>&1 &
 nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
 
-# VIA EXPRESSA (Alta Prioridade: /start, Tracking) - 2 Workers
+# Via Expressa (Alta Prioridade)
 nohup python3 start_rq_worker.py tasks > logs/rq-tasks-1.log 2>&1 &
 nohup python3 start_rq_worker.py tasks > logs/rq-tasks-2.log 2>&1 &
 
-# TREM DE CARGA (Remarketing Massivo) - 4 Workers
+# Trem de Carga (Remarketing)
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-1.log 2>&1 &
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-2.log 2>&1 &
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-3.log 2>&1 &
 nohup python3 start_rq_worker.py marathon > logs/rq-marathon-4.log 2>&1 &
 
-echo "✅ Workers RQ reiniciados com sucesso."
+echo ""
+echo " Workers RQ reiniciados com sucesso!"
+echo ""
+echo " Comandos úteis:"
+echo "   sudo systemctl status grimbots    # Status do serviço"
+echo "   tail -f logs/rq-*.log             # Logs dos workers"
+echo "   curl http://localhost:5000/health # Health check"
+echo ""

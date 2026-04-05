@@ -1374,47 +1374,13 @@ def enqueue_reconcile_bolt():
     except Exception as e:
         logger.warning(f"Erro ao enfileirar reconciliação Bolt: {e}")
 
-if _scheduler_owner:
-    scheduler.add_job(id='reconcile_paradise', func=enqueue_reconcile_paradise,
-                      trigger='interval', seconds=300, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação Paradise agendado (5min, fila async)")
+# ✅ RECONCILIADORES VIA RQ: Agendamentos removidos - usar cron ou systemd timers
+logger.info("✅ Reconciliadores RQ configurados (sem APScheduler)")
 
-if _scheduler_owner:
-    scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
-                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação PushynPay agendado (60s, fila async)")
+# ✅ JOB PERIÓDICO: Sincronização UmbrellaPay (desativado - migrar para cron)
+logger.info("ℹ️ Jobs periódicos devem ser configurados via cron ou systemd")
 
-if _scheduler_owner:
-    scheduler.add_job(id='reconcile_atomopay', func=enqueue_reconcile_atomopay,
-                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação Atomopay agendado (60s, fila async)")
-
-if _scheduler_owner:
-    scheduler.add_job(id='reconcile_aguia', func=enqueue_reconcile_aguia,
-                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação ÁguiaPags agendado (60s, fila async)")
-
-if _scheduler_owner:
-    scheduler.add_job(id='reconcile_bolt', func=enqueue_reconcile_bolt,
-                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação Bolt agendado (60s, fila async)")
-
-# ✅ JOB PERIÓDICO: Sincronização UmbrellaPay (5 minutos)
-if _scheduler_owner:
-    try:
-        from jobs.sync_umbrellapay import sync_umbrellapay_payments
-        scheduler.add_job(
-            id='sync_umbrellapay',
-            func=sync_umbrellapay_payments,
-            trigger='interval',
-            seconds=300,  # 5 minutos
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job de sincronização UmbrellaPay agendado (5min)")
-    except ImportError as e:
-        pass
-
+# ============================================================================
 # ✅ SISTEMA DE ASSINATURAS - Jobs Agendados
 # ✅ CORREÇÃO 11: Job de recuperação para resetar error_count após 7 dias
 def reset_high_error_count_subscriptions():
@@ -1489,18 +1455,8 @@ def reset_high_error_count_subscriptions():
         except Exception as e:
             logger.debug(f"⚠️ Erro ao liberar lock: {e}")
 
-# ✅ CORREÇÃO 11: Registrar job de recuperação
-try:
-    scheduler.add_job(
-        id='reset_error_count_subscriptions',
-        func=reset_high_error_count_subscriptions,
-        trigger='interval',
-        hours=24,  # Executar a cada 24 horas
-        replace_existing=True
-    )
-    logger.info("✅ Job reset_error_count_subscriptions registrado (24 horas)")
-except Exception as e:
-    logger.error(f"❌ Erro ao registrar job reset_error_count_subscriptions: {e}")
+# ✅ MIGRAÇÃO RQ: Jobs periódicos devem ser configurados via cron/systemd
+logger.info("ℹ️ Jobs de recuperação e verificação devem ser configurados via cron")
 
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
@@ -14386,47 +14342,8 @@ def retry_failed_subscription_removals():
 
 
 # ✅ REGISTRAR JOBS DE ASSINATURAS (APÓS DEFINIÇÕES DAS FUNÇÕES)
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='check_expired_subscriptions',
-            func=check_expired_subscriptions,
-            trigger='interval',
-            minutes=5,  # Executar a cada 5 minutos
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job check_expired_subscriptions registrado (5 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job check_expired_subscriptions: {e}")
-
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='check_pending_subscriptions_in_groups',
-            func=check_pending_subscriptions_in_groups,
-            trigger='interval',
-            minutes=30,  # Executar a cada 30 minutos
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job check_pending_subscriptions_in_groups registrado (30 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job check_pending_subscriptions_in_groups: {e}")
-
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='retry_failed_subscription_removals',
-            func=retry_failed_subscription_removals,
-            trigger='interval',
-            minutes=30,
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job retry_failed_subscription_removals registrado (30 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job retry_failed_subscription_removals: {e}")
+# ✅ MIGRAÇÃO RQ: Jobs periódicos devem ser configurados via cron/systemd
+logger.info("ℹ️ Jobs de assinaturas devem ser configurados via cron ou systemd timers")
 
 
 # ============================================================================
@@ -14703,23 +14620,11 @@ def health_check_all_pools():
             db.session.rollback()
 
 
-# ✅ RANKING V2.0 - Job para atualizar taxas premium dos Top 3
-scheduler.add_job(
-    id='update_ranking_premium_rates',
-    func=update_ranking_premium_rates,
-    trigger='interval',
-    hours=1,  # Atualizar a cada hora
-    replace_existing=True
-)
+# ✅ RANKING V2.0 - Job desativado (migrar para cron)
+logger.info("ℹ️ Job update_ranking_premium_rates deve ser configurado via cron")
 
-# Agendar health check a cada 15 segundos
-scheduler.add_job(
-    id='health_check_pools',
-    func=health_check_all_pools,
-    trigger='interval',
-    seconds=15,
-    replace_existing=True
-)
+# ✅ Health check de pools desativado (migrar para cron)
+logger.info("ℹ️ Job health_check_all_pools deve ser configurado via cron")
 
 # ✅ V2.0: Verificar e executar campanhas de remarketing agendadas
 def check_scheduled_remarketing_campaigns():
@@ -14769,26 +14674,8 @@ def check_scheduled_remarketing_campaigns():
     except Exception as e:
         logger.error(f"❌ Erro ao verificar campanhas agendadas: {e}", exc_info=True)
 
-# Agendar verificação de campanhas agendadas a cada 1 minuto
-try:
-    if _scheduler_owner:
-        scheduler.add_job(
-            id='check_scheduled_remarketing',
-            func=check_scheduled_remarketing_campaigns,
-            trigger='interval',
-            minutes=1,  # Verificar a cada 1 minuto
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job de verificação de campanhas agendadas configurado (1 minuto)")
-except Exception as e:
-    logger.warning(f"⚠️ Não foi possível agendar verificação de campanhas: {e}")
-
-if _scheduler_owner:
-    try:
-        scheduler.start()
-    except Exception as e:
-        logger.error(f"❌ Erro ao iniciar APScheduler: {e}")
+# ✅ MIGRAÇÃO RQ: Todos os jobs periódicos devem ser configurados via cron/systemd
+logger.info("✅ Sistema migrado para RQ - configure jobs periódicos via cron")
 
 # ==================== HEALTH CHECK ENDPOINT ====================
 @app.route('/health', methods=['GET'])
@@ -14878,50 +14765,10 @@ def health_check():
         checks['status'] = 'unhealthy'
         logger.error(f"❌ Health check - RQ Workers failed: {e}")
     
-    # Check 4: APScheduler
-    try:
-        if _scheduler_owner:
-            scheduler_status = {
-                'owner': True,
-                'running': scheduler.running,
-                'pid': os.getpid(),
-                'jobstore': 'redis',
-                'jobs_scheduled': len(scheduler.get_jobs()) if scheduler.running else 0
-            }
-            checks['checks']['scheduler'] = scheduler_status
-            
-            if not scheduler.running:
-                checks['status'] = 'degraded'
-                checks['checks']['scheduler']['warning'] = 'Scheduler is owner but not running'
-                logger.warning(f"⚠️ Health check - Scheduler owner but not running")
-        else:
-            # Not owner - check if owner exists
-            try:
-                if SCHEDULER_LOCK_PATH.exists():
-                    owner_pid = int(SCHEDULER_LOCK_PATH.read_text().strip())
-                    owner_running = _is_pid_running(owner_pid)
-                    checks['checks']['scheduler'] = {
-                        'owner': False,
-                        'owner_pid': owner_pid,
-                        'owner_running': owner_running,
-                        'jobstore': 'redis'
-                    }
-                    if not owner_running:
-                        checks['status'] = 'degraded'
-                        checks['checks']['scheduler']['warning'] = 'Scheduler owner not running but lock exists'
-                else:
-                    checks['checks']['scheduler'] = {
-                        'owner': False,
-                        'warning': 'No scheduler owner found'
-                    }
-                    checks['status'] = 'degraded'
-            except Exception:
-                checks['checks']['scheduler'] = {'owner': False, 'status': 'unknown'}
-                
-    except Exception as e:
-        checks['checks']['scheduler'] = f'error: {str(e)}'
-        logger.error(f"❌ Health check - Scheduler failed: {e}")
+    # ✅ MIGRAÇÃO RQ: APScheduler removido - health check foca em RQ
+    checks['checks']['scheduler'] = {'status': 'migrated_to_rq', 'note': 'APScheduler removed, using RQ'}
     
+    # Response
     # Status code baseado no status geral
     if checks['status'] == 'healthy':
         status_code = 200
