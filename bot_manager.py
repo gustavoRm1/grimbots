@@ -10417,11 +10417,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     logger.info(f"✅ Upsell {i+1} AGENDADO via RQ: job_id={job.id}")
                     jobs_agendados.append(job.id)
-                    except Exception as e:
-                        logger.error(f"❌ ERRO ao verificar job agendado: {e}", exc_info=True)
-                        logger.error(f"   Job ID: {job_id}")
-                        logger.error(f"   Payment ID: {payment_id}")
-                        
+                    
                 except Exception as e:
                     logger.error(f"❌ Erro ao agendar upsell {i+1}: {e}", exc_info=True)
             
