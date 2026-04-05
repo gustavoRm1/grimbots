@@ -1,64 +1,63 @@
 [Unit]
-Description=GrimBots - Telegram Bot Platform
-Documentation=https://grimbots.com/docs
+Description=GrimBots - Sistema de Bots Telegram
+Documentation=https://github.com/grimbots/core
 After=network.target redis.service postgresql.service
 Wants=redis.service postgresql.service
 
 [Service]
-Type=notify
-User=grpay
-Group=grpay
-WorkingDirectory=/opt/grpay
+Type=simple
 
-# Environment File (KEY=VALUE format only - no multiline!)
-EnvironmentFile=/opt/grpay/.env
+# ✅ REALIDADE DO SERVIDOR: /root/grimbots
+WorkingDirectory=/root/grimbots
+User=root
+Group=root
 
-# Security Hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/log/grpay /tmp /opt/grpay/logs
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# ✅ EnvironmentFile na localização real
+EnvironmentFile=/root/grimbots/.env
 
-# Resource Limits
-LimitAS=2G
-LimitNOFILE=65535
-LimitNPROC=4096
+# ✅ Criar diretório de logs se não existir
+ExecStartPre=/bin/bash -c 'mkdir -p /root/grimbots/logs && chmod 755 /root/grimbots/logs'
 
-# Process Management
-KillMode=mixed
-KillSignal=SIGTERM
-TimeoutStopSec=30
+# ✅ Gunicorn com logs configurados em /root/grimbots/logs/
+ExecStart=/root/grimbots/venv/bin/gunicorn \
+    --bind 0.0.0.0:5000 \
+    --workers 4 \
+    --worker-class sync \
+    --worker-connections 1000 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --access-logfile /root/grimbots/logs/access.log \
+    --error-logfile /root/grimbots/logs/error.log \
+    --log-level info \
+    --capture-output \
+    --enable-stdio-inheritance \
+    wsgi:app
+
+# ✅ Graceful shutdown
+ExecStop=/bin/kill -s TERM $MAINPID
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# ✅ Restart automático
 Restart=always
-RestartSec=5
+RestartSec=10
 StartLimitInterval=60s
 StartLimitBurst=3
 
-# Health Check (requires app.py health endpoint)
-ExecStartPre=/bin/sh -c 'until curl -s localhost:6379 > /dev/null 2>&1 || ! grep -q REDIS_URL /opt/grpay/.env; do sleep 1; done'
-ExecStart=/opt/grpay/venv/bin/gunicorn \
-    --bind 0.0.0.0:5000 \
-    --workers 3 \
-    --threads 4 \
-    --worker-class gthread \
-    --worker-connections 1000 \
-    --max-requests 10000 \
-    --max-requests-jitter 1000 \
-    --timeout 120 \
-    --graceful-timeout 30 \
-    --keep-alive 5 \
-    --access-logfile /var/log/grpay/access.log \
-    --error-logfile /var/log/grpay/error.log \
-    --capture-output \
-    --enable-stdio-inheritance \
-    --preload \
-    "app:create_app()"
+# ✅ Timeout para startup
+TimeoutStartSec=60
+TimeoutStopSec=30
 
-# Health check endpoint
-ExecStartPost=/bin/sh -c 'sleep 5 && curl -s http://localhost:5000/health || echo "Health check failed"'
+# ✅ Limites de recursos (ajustar conforme VPS)
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# ✅ Isolamento de segurança (permissivo para root em /root)
+PrivateTmp=no
+ProtectSystem=no
+ProtectHome=no
+NoNewPrivileges=no
 
 [Install]
 WantedBy=multi-user.target
