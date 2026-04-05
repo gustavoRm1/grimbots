@@ -267,22 +267,19 @@ logger.info("✅ Rate Limiting configurado")
 # Downsells e upsells agendados via queue.enqueue_in()
 logger.info("✅ Agendamentos via RQ (Redis Queue)")
 
-# Inicializar gerenciador de bots (sem scheduler - usando RQ)
-bot_manager = BotManager(socketio, scheduler=None)
+# 🛑 BLINDAGEM MÁXIMA: BotManager global REMOVIDO
+# BotManager deve ser instanciado DENTRO das funções com user_id específico
+# Isso garante isolamento completo entre usuários (namespace gb:{user_id}:*)
 
 # ==================== FUNÇÃO CENTRALIZADA: ENVIO DE ENTREGÁVEL ====================
-def send_payment_delivery(payment, bot_manager):
+def send_payment_delivery(payment):
     """
     Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado
     
-    ✅ NOVA ARQUITETURA: Purchase disparado na página de entrega
-    - Gera delivery_token único
-    - Envia link /delivery/<token>
-    - Purchase é disparado quando cliente acessa (matching perfeito)
+    ✅ REFATORADO: Cria BotManager localmente com user_id do payment
     
     Args:
         payment: Objeto Payment com status='paid'
-        bot_manager: Instância do BotManager para enviar mensagem
     
     Returns:
         bool: True se enviado com sucesso, False se houve erro
@@ -291,6 +288,10 @@ def send_payment_delivery(payment, bot_manager):
         if not payment or not payment.bot:
             logger.warning(f"⚠️ Payment ou bot inválido para envio de entregável: payment={payment}")
             return False
+        
+        # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+        from bot_manager import BotManager
+        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
         
         # ✅ CRÍTICO: Não enviar entregável se pagamento não estiver 'paid'
         allowed_status = ['paid']
@@ -420,9 +421,9 @@ Aproveite! 🚀
             """
             logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado e Meta Pixel inativo - enviando mensagem genérica")
         
-        # Enviar via bot manager e capturar exceção se falhar
+        # Enviar via bot manager local e capturar exceção se falhar
         try:
-            bot_manager.send_telegram_message(
+            local_bot_manager.send_telegram_message(
                 token=payment.bot.token,
                 chat_id=str(payment.customer_user_id),
                 message=access_message.strip()
@@ -561,7 +562,7 @@ def reconcile_paradise_payments():
                                 
                                 # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                                 if payment_obj.status == 'paid':
-                                    send_payment_delivery(payment_obj, bot_manager)
+                                    send_payment_delivery(payment_obj)
                                 else:
                                     logger.error(
                                         f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -604,7 +605,10 @@ def reconcile_paradise_payments():
                                     
                                     if matched_upsells:
                                         logger.info(f"✅ [UPSELLS RECONCILE PARADISE] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
-                                        bot_manager.schedule_upsells(
+                                        # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                        from bot_manager import BotManager
+                                        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=p.bot.user_id)
+                                        local_bot_manager.schedule_upsells(
                                             bot_id=p.bot_id,
                                             payment_id=p.payment_id,
                                             chat_id=int(p.customer_user_id),
@@ -725,7 +729,7 @@ def reconcile_pushynpay_payments():
                                 
                                 # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                                 if payment_obj.status == 'paid':
-                                    send_payment_delivery(payment_obj, bot_manager)
+                                    send_payment_delivery(payment_obj)
                                 else:
                                     logger.error(
                                         f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -758,53 +762,29 @@ def reconcile_pushynpay_payments():
                         if p.bot.config and p.bot.config.upsells_enabled:
                             logger.info(f"✅ [UPSELLS RECONCILE PUSHYNPAY] Condições atendidas! Processando upsells para payment {p.payment_id}")
                             try:
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                if not bot_manager.scheduler:
-                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                    logger.error(f"   Payment ID: {p.payment_id}")
-                                else:
-                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                    try:
-                                        scheduler_running = bot_manager.scheduler.running
-                                        if not scheduler_running:
-                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                            logger.error(f"   Payment ID: {p.payment_id}")
-                                    except Exception as scheduler_check_error:
-                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
-                                    
-                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados
-                                    upsells_already_scheduled = False
-                                    try:
-                                        for i in range(10):
-                                            job_id = f"upsell_{p.bot_id}_{p.payment_id}_{i}"
-                                            existing_job = bot_manager.scheduler.get_job(job_id)
-                                            if existing_job:
-                                                upsells_already_scheduled = True
-                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {p.payment_id} (job {job_id} existe)")
-                                                break
-                                    except Exception as check_error:
-                                        logger.warning(f"⚠️ Erro ao verificar jobs existentes: {check_error}")
+                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                from bot_manager import BotManager
+                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=p.bot.user_id)
                                 
-                                if bot_manager.scheduler and not upsells_already_scheduled:
-                                    upsells = p.bot.config.get_upsells()
-                                    if upsells:
-                                        matched_upsells = []
-                                        for upsell in upsells:
-                                            trigger_product = upsell.get('trigger_product', '')
-                                            if not trigger_product or trigger_product == p.product_name:
-                                                matched_upsells.append(upsell)
-                                        
-                                        if matched_upsells:
-                                            logger.info(f"✅ [UPSELLS RECONCILE PUSHYNPAY] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
-                                            bot_manager.schedule_upsells(
-                                                bot_id=p.bot_id,
-                                                payment_id=p.payment_id,
-                                                chat_id=int(p.customer_user_id),
-                                                upsells=matched_upsells,
-                                                original_price=p.amount,
-                                                original_button_index=-1
-                                            )
-                                            logger.info(f"📅 [UPSELLS RECONCILE PUSHYNPAY] Upsells agendados com sucesso!")
+                                upsells = p.bot.config.get_upsells()
+                                if upsells:
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == p.product_name:
+                                            matched_upsells.append(upsell)
+                                    
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS RECONCILE PUSHYNPAY] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
+                                        local_bot_manager.schedule_upsells(
+                                            bot_id=p.bot_id,
+                                            payment_id=p.payment_id,
+                                            chat_id=int(p.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=p.amount,
+                                            original_button_index=-1
+                                        )
+                                        logger.info(f"📅 [UPSELLS RECONCILE PUSHYNPAY] Upsells agendados via RQ com sucesso!")
                             except Exception as e:
                                 logger.error(f"❌ [UPSELLS RECONCILE PUSHYNPAY] Erro ao processar upsells: {e}", exc_info=True)
                     else:
@@ -937,7 +917,7 @@ def reconcile_atomopay_payments():
                                 
                                 # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                                 if payment_obj.status == 'paid':
-                                    send_payment_delivery(payment_obj, bot_manager)
+                                    send_payment_delivery(payment_obj)
                                 else:
                                     logger.error(
                                         f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -970,53 +950,29 @@ def reconcile_atomopay_payments():
                         if p.bot.config and p.bot.config.upsells_enabled:
                             logger.info(f"✅ [UPSELLS RECONCILE ATOMOPAY] Condições atendidas! Processando upsells para payment {p.payment_id}")
                             try:
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                if not bot_manager.scheduler:
-                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                    logger.error(f"   Payment ID: {p.payment_id}")
-                                else:
-                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                    try:
-                                        scheduler_running = bot_manager.scheduler.running
-                                        if not scheduler_running:
-                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                            logger.error(f"   Payment ID: {p.payment_id}")
-                                    except Exception as scheduler_check_error:
-                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
-                                    
-                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados
-                                    upsells_already_scheduled = False
-                                    try:
-                                        for i in range(10):
-                                            job_id = f"upsell_{p.bot_id}_{p.payment_id}_{i}"
-                                            existing_job = bot_manager.scheduler.get_job(job_id)
-                                            if existing_job:
-                                                upsells_already_scheduled = True
-                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {p.payment_id} (job {job_id} existe)")
-                                                break
-                                    except Exception as check_error:
-                                        logger.warning(f"⚠️ Erro ao verificar jobs existentes: {check_error}")
+                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                from bot_manager import BotManager
+                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=p.bot.user_id)
                                 
-                                if bot_manager.scheduler and not upsells_already_scheduled:
-                                    upsells = p.bot.config.get_upsells()
-                                    if upsells:
-                                        matched_upsells = []
-                                        for upsell in upsells:
-                                            trigger_product = upsell.get('trigger_product', '')
-                                            if not trigger_product or trigger_product == p.product_name:
-                                                matched_upsells.append(upsell)
-                                        
-                                        if matched_upsells:
-                                            logger.info(f"✅ [UPSELLS RECONCILE ATOMOPAY] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
-                                            bot_manager.schedule_upsells(
-                                                bot_id=p.bot_id,
-                                                payment_id=p.payment_id,
-                                                chat_id=int(p.customer_user_id),
-                                                upsells=matched_upsells,
-                                                original_price=p.amount,
-                                                original_button_index=-1
-                                            )
-                                            logger.info(f"📅 [UPSELLS RECONCILE ATOMOPAY] Upsells agendados com sucesso!")
+                                upsells = p.bot.config.get_upsells()
+                                if upsells:
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == p.product_name:
+                                            matched_upsells.append(upsell)
+                                    
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS RECONCILE ATOMOPAY] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
+                                        local_bot_manager.schedule_upsells(
+                                            bot_id=p.bot_id,
+                                            payment_id=p.payment_id,
+                                            chat_id=int(p.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=p.amount,
+                                            original_button_index=-1
+                                        )
+                                        logger.info(f"📅 [UPSELLS RECONCILE ATOMOPAY] Upsells agendados via RQ com sucesso!")
                             except Exception as e:
                                 logger.error(f"❌ [UPSELLS RECONCILE ATOMOPAY] Erro ao processar upsells: {e}", exc_info=True)
                 except Exception as e:
@@ -1134,7 +1090,7 @@ def reconcile_aguia_payments():
                                 
                                 # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                                 if payment_obj.status == 'paid':
-                                    send_payment_delivery(payment_obj, bot_manager)
+                                    send_payment_delivery(payment_obj)
                                 else:
                                     logger.error(
                                         f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -1166,82 +1122,37 @@ def reconcile_aguia_payments():
                         if p.bot.config and p.bot.config.upsells_enabled:
                             logger.info(f"✅ [UPSELLS RECONCILE ÁGUIAPAGS] Condições atendidas! Processando upsells para payment {p.payment_id}")
                             try:
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                if not bot_manager.scheduler:
-                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                    logger.error(f"   Payment ID: {p.payment_id}")
-                                    logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                from bot_manager import BotManager
+                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=p.bot.user_id)
+                                
+                                upsells = p.bot.config.get_upsells()
+                                
+                                if upsells:
+                                    logger.info(f"🎯 [UPSELLS RECONCILE ÁGUIAPAGS] Verificando upsells para produto: {p.product_name}")
+                                    
+                                    # Filtrar upsells que fazem match com o produto comprado
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == p.product_name:
+                                            matched_upsells.append(upsell)
+                                    
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS RECONCILE ÁGUIAPAGS] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
+                                        local_bot_manager.schedule_upsells(
+                                            bot_id=p.bot_id,
+                                            payment_id=p.payment_id,
+                                            chat_id=int(p.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=p.amount,
+                                            original_button_index=-1
+                                        )
+                                        logger.info(f"📅 [UPSELLS RECONCILE ÁGUIAPAGS] Upsells agendados com sucesso para payment {p.payment_id}!")
                                 else:
-                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                    try:
-                                        scheduler_running = bot_manager.scheduler.running
-                                        if not scheduler_running:
-                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                            logger.error(f"   Payment ID: {p.payment_id}")
-                                            logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
-                                    except Exception as scheduler_check_error:
-                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
-                                    
-                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                    upsells_already_scheduled = False
-                                    try:
-                                        # Verificar se já existe job de upsell para este payment
-                                        for i in range(10):  # Verificar até 10 upsells possíveis
-                                            job_id = f"upsell_{p.bot_id}_{p.payment_id}_{i}"
-                                            existing_job = bot_manager.scheduler.get_job(job_id)
-                                            if existing_job:
-                                                upsells_already_scheduled = True
-                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {p.payment_id} (job {job_id} existe)")
-                                                logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
-                                                break
-                                    except Exception as check_error:
-                                        logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
-                                        logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
-                                        # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
-                                    
-                                    if bot_manager.scheduler and not upsells_already_scheduled:
-                                        upsells = p.bot.config.get_upsells()
-                                        
-                                        if upsells:
-                                            logger.info(f"🎯 [UPSELLS RECONCILE ÁGUIAPAGS] Verificando upsells para produto: {p.product_name}")
-                                            
-                                            # Filtrar upsells que fazem match com o produto comprado
-                                            matched_upsells = []
-                                            for upsell in upsells:
-                                                trigger_product = upsell.get('trigger_product', '')
-                                                
-                                                # Match: trigger vazio (todas compras) OU produto específico
-                                                if not trigger_product or trigger_product == p.product_name:
-                                                    matched_upsells.append(upsell)
-                                            
-                                            if matched_upsells:
-                                                logger.info(f"✅ [UPSELLS RECONCILE ÁGUIAPAGS] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
-                                                
-                                                # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
-                                                bot_manager.schedule_upsells(
-                                                    bot_id=p.bot_id,
-                                                    payment_id=p.payment_id,
-                                                    chat_id=int(p.customer_user_id),
-                                                    upsells=matched_upsells,
-                                                    original_price=p.amount,
-                                                    original_button_index=-1
-                                                )
-                                                
-                                                logger.info(f"📅 [UPSELLS RECONCILE ÁGUIAPAGS] Upsells agendados com sucesso para payment {p.payment_id}!")
-                                            else:
-                                                logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Nenhum upsell configurado para '{p.product_name}' (trigger_product não faz match)")
-                                        else:
-                                            logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Lista de upsells vazia no config do bot")
-                                    else:
-                                        if not bot_manager.scheduler:
-                                            logger.error(f"❌ [UPSELLS RECONCILE ÁGUIAPAGS] Scheduler não disponível - upsells não serão agendados")
-                                        else:
-                                            logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Upsells já foram agendados anteriormente para payment {p.payment_id} (evitando duplicação)")
-                                        
+                                    logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Lista de upsells vazia")
                             except Exception as e:
-                                logger.error(f"❌ [UPSELLS RECONCILE ÁGUIAPAGS] Erro ao processar upsells: {e}", exc_info=True)
-                                import traceback
-                                traceback.print_exc()
+                                logger.error(f"❌ [UPSELLS RECONCILE ÁGUIAPAGS] Erro: {e}", exc_info=True)
                 except Exception as e:
                     logger.error(f"❌ Erro ao reconciliar payment ÁguiaPags {p.id} ({p.payment_id}): {e}", exc_info=True)
                     continue

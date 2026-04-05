@@ -1160,7 +1160,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                         # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                         if payment.status == 'paid':
                             try:
-                                send_payment_delivery(payment, bot_manager)
+                                send_payment_delivery(payment)
                                 logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável reenviado")
                             except Exception as e:
                                 logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao reenviar entregável (duplicado): {e}")
@@ -1178,44 +1178,32 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                         # Upsells podem não ter sido agendados no primeiro webhook se houve algum erro
                         logger.info(f"🔍 [UPSELLS ASYNC WEBHOOK DUPLICADO] Verificando upsells para payment {payment.payment_id}")
                         if payment.bot.config and payment.bot.config.upsells_enabled:
-                            logger.info(f"✅ [UPSELLS ASYNC WEBHOOK DUPLICADO] Upsells habilitados - verificando se já foram agendados...")
-                            # Verificar se upsells já foram agendados (anti-duplicação)
-                            upsells_already_scheduled = False
-                            if bot_manager.scheduler:
-                                try:
-                                    for i in range(10):
-                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
-                                        existing_job = bot_manager.scheduler.get_job(job_id)
-                                        if existing_job:
-                                            upsells_already_scheduled = True
-                                            logger.info(f"ℹ️ [UPSELLS ASYNC WEBHOOK DUPLICADO] Upsells já agendados (job {job_id} existe)")
-                                            break
-                                except Exception as check_error:
-                                    logger.warning(f"⚠️ Erro ao verificar jobs no webhook duplicado: {check_error}")
-                            
-                            # Se não foram agendados, agendar agora
-                            if bot_manager.scheduler and not upsells_already_scheduled:
-                                try:
-                                    upsells = payment.bot.config.get_upsells()
-                                    if upsells:
-                                        matched_upsells = []
-                                        for upsell in upsells:
-                                            trigger_product = upsell.get('trigger_product', '')
-                                            if not trigger_product or trigger_product == payment.product_name:
-                                                matched_upsells.append(upsell)
-                                        
-                                        if matched_upsells:
-                                            logger.info(f"✅ [UPSELLS ASYNC WEBHOOK DUPLICADO] Agendando {len(matched_upsells)} upsell(s) para payment {payment.payment_id}")
-                                            bot_manager.schedule_upsells(
-                                                bot_id=payment.bot_id,
-                                                payment_id=payment.payment_id,
-                                                chat_id=int(payment.customer_user_id),
-                                                upsells=matched_upsells,
-                                                original_price=payment.amount,
-                                                original_button_index=-1
-                                            )
-                                except Exception as upsell_error:
-                                    logger.error(f"❌ Erro ao processar upsells no webhook duplicado: {upsell_error}", exc_info=True)
+                            logger.info(f"✅ [UPSELLS ASYNC WEBHOOK DUPLICADO] Upsells habilitados - agendando via RQ")
+                            try:
+                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                from bot_manager import BotManager
+                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
+                                
+                                upsells = payment.bot.config.get_upsells()
+                                if upsells:
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == payment.product_name:
+                                            matched_upsells.append(upsell)
+                                    
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS ASYNC WEBHOOK DUPLICADO] Agendando {len(matched_upsells)} upsell(s)")
+                                        local_bot_manager.schedule_upsells(
+                                            bot_id=payment.bot_id,
+                                            payment_id=payment.payment_id,
+                                            chat_id=int(payment.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=payment.amount,
+                                            original_button_index=-1
+                                        )
+                            except Exception as upsell_error:
+                                logger.error(f"❌ Erro ao processar upsells no webhook duplicado: {upsell_error}", exc_info=True)
                         
                         return {'status': 'already_processed'}
                     
@@ -1307,7 +1295,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                         if payment.status == 'paid':
                             try:
                                 logger.info(f"📦 [WEBHOOK {gateway_type.upper()}] Enviando entregável...")
-                                send_payment_delivery(payment, bot_manager)
+                                send_payment_delivery(payment)
                                 logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável enviado com sucesso")
                             except Exception as e:
                                 logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar entregável: {e}", exc_info=True)
@@ -1355,40 +1343,18 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                             from models import Payment as PaymentModel
                             payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                             
-                            # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
-                            if not bot_manager.scheduler:
-                                logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                logger.error(f"   Payment ID: {payment.payment_id}")
-                                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                            else:
-                                # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                try:
-                                    scheduler_running = bot_manager.scheduler.running
-                                    if not scheduler_running:
-                                        logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                        logger.error(f"   Payment ID: {payment.payment_id}")
-                                        logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
-                                except Exception as scheduler_check_error:
-                                    logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                            # ✅ UPSELLS AUTOMÁTICOS - APÓS CONFIRMAÇÃO DE PAGAMENTO
+                        # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento é confirmado
+                        # ============================================================================
+                        logger.info(f"🔍 [UPSELLS ASYNC] Verificando condições: status='paid', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+                        
+                        if payment.bot.config and payment.bot.config.upsells_enabled:
+                            logger.info(f"✅ [UPSELLS ASYNC] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                            try:
+                                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                                from bot_manager import BotManager
+                                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
                                 
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                upsells_already_scheduled = False
-                                try:
-                                    # Verificar se já existe job de upsell para este payment
-                                    for i in range(10):  # Verificar até 10 upsells possíveis
-                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
-                                        existing_job = bot_manager.scheduler.get_job(job_id)
-                                        if existing_job:
-                                            upsells_already_scheduled = True
-                                            logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
-                                            logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
-                                            break
-                                except Exception as check_error:
-                                    logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
-                                    logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
-                                    # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
-                            
-                            if bot_manager.scheduler and not upsells_already_scheduled:
                                 upsells = payment.bot.config.get_upsells()
                                 
                                 if upsells:
@@ -1398,16 +1364,12 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                                     matched_upsells = []
                                     for upsell in upsells:
                                         trigger_product = upsell.get('trigger_product', '')
-                                        
-                                        # Match: trigger vazio (todas compras) OU produto específico
                                         if not trigger_product or trigger_product == payment.product_name:
                                             matched_upsells.append(upsell)
                                     
                                     if matched_upsells:
                                         logger.info(f"✅ [UPSELLS ASYNC] {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
-                                        
-                                        # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
-                                        bot_manager.schedule_upsells(
+                                        local_bot_manager.schedule_upsells(
                                             bot_id=payment.bot_id,
                                             payment_id=payment.payment_id,
                                             chat_id=int(payment.customer_user_id),
@@ -1415,22 +1377,13 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                                             original_price=payment.amount,
                                             original_button_index=-1
                                         )
-                                        
                                         logger.info(f"📅 [UPSELLS ASYNC] Upsells agendados com sucesso para payment {payment.payment_id}!")
-                                    else:
-                                        logger.info(f"ℹ️ [UPSELLS ASYNC] Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
                                 else:
-                                    logger.info(f"ℹ️ [UPSELLS ASYNC] Lista de upsells vazia no config do bot")
-                            else:
-                                if not bot_manager.scheduler:
-                                    logger.error(f"❌ [UPSELLS ASYNC] Scheduler não disponível - upsells não serão agendados")
-                                else:
-                                    logger.info(f"ℹ️ [UPSELLS ASYNC] Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
-                                
-                        except Exception as e:
-                            logger.error(f"❌ [UPSELLS ASYNC] Erro ao processar upsells: {e}", exc_info=True)
-                            import traceback
-                            traceback.print_exc()
+                                    logger.info(f"ℹ️ [UPSELLS ASYNC] Lista de upsells vazia")
+                            except Exception as e:
+                                logger.error(f"❌ [UPSELLS ASYNC] Erro ao processar upsells: {e}", exc_info=True)
+                                import traceback
+                                traceback.print_exc()
                     
                     # ✅ Enviar notificação WebSocket APENAS para o dono do bot (após atualizar status para 'paid')
                     if status == 'paid' and payment and payment.bot:
@@ -1667,11 +1620,14 @@ def generate_pix_async(
                 
                 if pix_code:
                     # Enviar mensagem com QR Code
-                    bot_manager = BotManager(None, None)
+                    # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                    from bot_manager import BotManager
+                    local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.user_id)
+                    
                     message = f"💰 PIX Gerado!\n\nValor: R$ {price:.2f}\n\nEscaneie o QR Code ou copie o código PIX:"
                     qr_code = pix_code
                     
-                    bot_manager.send_telegram_message(
+                    local_bot_manager.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
                         message=message,
@@ -1688,7 +1644,7 @@ def generate_pix_async(
                         or pix_result.get('qr_code_base64')
                     )
                     if media_url:
-                        bot_manager.send_telegram_message(
+                        local_bot_manager.send_telegram_message(
                             token=token,
                             chat_id=str(chat_id),
                             message="",
@@ -1765,7 +1721,17 @@ def task_process_broadcast_campaign(campaign_id: int):
             
             # ✅ INICIALIZAR CONEXÕES
             redis_conn = get_redis_connection()
-            bot_manager = BotManager(None, None)
+            
+            # ✅ ISOLAMENTO: Buscar bot para obter user_id
+            from models import Bot
+            bot = Bot.query.get(bot_id)
+            if not bot:
+                logger.error(f"❌ [MARATHON SETUP] Bot {bot_id} não encontrado")
+                return
+            
+            # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do bot
+            from bot_manager import BotManager
+            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=bot.user_id)
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
             # ==========================================
@@ -1774,7 +1740,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             logger.info(f"🔍 [MARATHON SETUP] Contando leads elegíveis para campanha {campaign_id} | Bot: {bot_id}")
             
             # Contar leads elegíveis usando o método correto (count_eligible_leads)
-            total_targets = bot_manager.count_eligible_leads(
+            total_targets = local_bot_manager.count_eligible_leads(
                 bot_id=bot_id,
                 target_audience=target_audience,
                 days_since_last_contact=days_since_last_contact,
@@ -1999,7 +1965,7 @@ def task_process_broadcast_campaign(campaign_id: int):
                         
                         for attempt in range(3):
                             try:
-                                result = bot_manager.send_telegram_message(
+                                result = local_bot_manager.send_telegram_message(
                                     token=bot_token_str,
                                     chat_id=str(lead.telegram_user_id),
                                     message=personalized_message,
@@ -2344,11 +2310,12 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
                 logger.info(f"ℹ️ [DOWNSELL JOB] Payment {payment_id} status='{payment.status}' - downsell cancelado")
                 return False
             
-            # ✅ BotManager disponível via import
-            from app import bot_manager
+            # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+            from bot_manager import BotManager
+            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
             
             # Executar envio do downsell
-            result = bot_manager._send_downsell(
+            result = local_bot_manager._send_downsell(
                 bot_id=bot_id,
                 payment_id=payment_id,
                 chat_id=chat_id,
@@ -2388,11 +2355,12 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
                 logger.info(f"ℹ️ [UPSELL JOB] Payment {payment_id} status='{payment.status}' - upsell cancelado")
                 return False
             
-            # ✅ BotManager disponível via import
-            from app import bot_manager
+            # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+            from bot_manager import BotManager
+            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
             
             # Executar envio do upsell
-            result = bot_manager._send_upsell(
+            result = local_bot_manager._send_upsell(
                 bot_id=bot_id,
                 payment_id=payment_id,
                 chat_id=chat_id,
