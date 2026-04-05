@@ -12579,6 +12579,9 @@ def telegram_webhook(bot_id):
     try:
         update = request.json
         
+        # ✅ LOG CRÍTICO: Rastreamento de entrada do webhook
+        logger.critical(f"📥 WEBHOOK RECEBIDO: bot_id={bot_id}, update_id={update.get('update_id')}")
+        
         # ✅ SEGURANÇA: Validar que bot_id existe e pertence a algum usuário
         bot = Bot.query.get(bot_id)
         if not bot:
@@ -12596,6 +12599,9 @@ def telegram_webhook(bot_id):
             return jsonify({'status': 'ok'}), 200
         
         logger.info(f"Update recebido do Telegram para bot {bot_id} (user_id={bot.user_id})")
+        
+        # ✅ LOG CRÍTICO: Rastreamento de identidade do dono
+        logger.critical(f"🔑 IDENTIDADE LOCALIZADA: bot_id={bot_id} -> user_id={bot.user_id}")
         
         # ✅ ISOLAMENTO NAMESPACE: Criar BotManager isolado para este usuário
         from redis_bot_state import get_namespaced_bot_state

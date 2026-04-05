@@ -312,7 +312,7 @@ class MessageRouterV8:
                 # Buscar step atual do Redis
                 try:
                     if self.redis_conn:
-                        current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                        current_step_key = f"gb:{self.bot_manager.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                         current_step_id = self.redis_conn.get(current_step_key)
                         
                         if current_step_id:

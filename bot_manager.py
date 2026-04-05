@@ -615,7 +615,7 @@ class BotManager:
         import random
         import time
 
-        queue_key = f"remarketing:queue:{bot_id}"
+        queue_key = f"gb:{self.user_id}:remarketing:queue:{bot_id}"
         logger.info(f"🚀 Remarketing worker ativo e drenando fila: {queue_key}")
         msg_counter = 0
         next_long_pause_after = random.randint(15, 25)
@@ -1645,7 +1645,7 @@ class BotManager:
                                 # Lock específico para esta mensagem (chat_id + hash do texto)
                                 import hashlib
                                 text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:8]
-                                msg_lock_key = f"lock:msg:{bot_id}:{telegram_user_id}:{text_hash}"
+                                msg_lock_key = f"gb:{self.user_id}:lock:msg:{bot_id}:{telegram_user_id}:{text_hash}"
                                 
                                 # Tentar adquirir lock (expira em 3 segundos)
                                 lock_acquired = redis_conn_msg.set(msg_lock_key, "1", ex=3, nx=True)
@@ -1992,7 +1992,7 @@ class BotManager:
                                     try:
                                         redis_conn = get_redis_connection()
                                         if redis_conn:
-                                            current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                            current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                                             redis_conn.delete(current_step_key)
                                             
                                             # ✅ NOVO: Limpar tentativas globais quando condição matcha
@@ -2021,7 +2021,7 @@ class BotManager:
                                         try:
                                             redis_conn = get_redis_connection()
                                             if redis_conn:
-                                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                                current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                                                 redis_conn.delete(current_step_key)
                                         except:
                                             pass
@@ -2041,7 +2041,7 @@ class BotManager:
                                         try:
                                             redis_conn = get_redis_connection()
                                             if redis_conn:
-                                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                                current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                                                 redis_conn.delete(current_step_key)
                                         except:
                                             pass
@@ -2069,7 +2069,7 @@ class BotManager:
                                             if global_attempts >= max_global_attempts:
                                                 logger.warning(f"⚠️ Limite global de tentativas ({max_global_attempts}) atingido para step {current_step_id}")
                                                 # Limpar step ativo e enviar mensagem final
-                                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                                current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                                                 redis_conn.delete(current_step_key)
                                                 final_message = "⚠️ Muitas tentativas incorretas. Por favor, reinicie o bot com /start."
                                                 self.send_telegram_message(
@@ -2283,7 +2283,7 @@ class BotManager:
         try:
             import redis
             redis_conn = get_redis_connection()
-            lock_key = f"lock:start:{chat_id}"
+            lock_key = f"gb:{self.user_id}:lock:start:{chat_id}"
             
             # Tentar adquirir lock (expira em 3 segundos)
             acquired = redis_conn.set(lock_key, "1", ex=3, nx=True)
@@ -2347,7 +2347,7 @@ class BotManager:
         ).hexdigest()[:12]  # 12 caracteres para maior unicidade
         
         # Lock único e sincronizado para mídia + texto completo
-        media_text_lock_key = f"lock:send_media_and_text:{chat_id}:{content_hash}"
+        media_text_lock_key = f"gb:{self.user_id}:lock:send_media_and_text:{chat_id}:{content_hash}"
         redis_conn_send = None
         lock_acquired = False
         
@@ -2493,7 +2493,7 @@ class BotManager:
                         # ✅ LOCK ESPECÍFICO PARA TEXTO COMPLETO (ANTI-DUPLICAÇÃO)
                         # ========================================================================
                         text_only_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:12]
-                        text_complete_lock_key = f"lock:send_text_only:{chat_id}:{text_only_hash}"
+                        text_complete_lock_key = f"gb:{self.user_id}:lock:send_text_only:{chat_id}:{text_only_hash}"
 
                         text_lock_acquired = False
                         redis_conn_text = None
@@ -3414,7 +3414,7 @@ class BotManager:
             telegram_user_id = telegram_user_id.strip()
             
             lock_key = f"lock:flow_step:{bot_id}:{telegram_user_id}"
-            step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+            step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
             
             # ✅ NOVO: Timeout de 2 segundos para operações Redis
             try:
@@ -3481,7 +3481,7 @@ class BotManager:
                 return None
             
             # ✅ NOVO: Timeout de 2 segundos para operações Redis
-            step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+            step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
             try:
                 step_id = redis_conn.get(step_key)
             except Exception as e:
@@ -4063,7 +4063,7 @@ class BotManager:
             if not redis_conn:
                 return False
             
-            key = f"flow_current_step:{bot.id}:{telegram_user_id}"
+            key = f"gb:{self.user_id}:flow_current_step:{bot.id}:{telegram_user_id}"
             step_id = redis_conn.get(key)
             
             if step_id:
@@ -4372,7 +4372,7 @@ class BotManager:
                 import redis
                 import time as _time
                 redis_conn = get_redis_connection()
-                last_start_key = f"last_start:{chat_id}"
+                last_start_key = f"gb:{self.user_id}:last_start:{chat_id}"
                 last_start = redis_conn.get(last_start_key)
                 now = int(_time.time())
                 
@@ -11135,7 +11135,7 @@ Seu pagamento ainda não foi confirmado.
                     db.session.commit()
 
                     redis_conn = get_redis_connection()
-                    queue_key = f"remarketing:queue:{campaign.bot_id}"
+                    queue_key = f"gb:{self.user_id}:remarketing:queue:{campaign.bot_id}"
                     sent_set_key = f"remarketing:sent:{campaign.id}"
                     stats_key = f"remarketing:stats:{campaign.id}"
 
