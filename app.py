@@ -2257,12 +2257,15 @@ def api_dashboard_analytics():
 
 # ==================== GERENCIAMENTO DE BOTS ====================
 
-@app.route('/api/bots', methods=['GET'])
 @login_required
 def get_bots():
     """Lista todos os bots do usuário"""
     bots = current_user.bots.filter_by(is_active=True).all()
     bots_data = []
+    # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+    from bot_manager import BotManager
+    bot_manager = BotManager(socketio=None, user_id=current_user.id)
+    
     for bot in bots:
         bot_dict = bot.to_dict()
         # Corrigir status inicial usando memória/heartbeat (evita mostrar "Iniciar" indevidamente)
@@ -2318,6 +2321,10 @@ def create_bot():
         return jsonify({'error': 'Bot já cadastrado no sistema'}), 400
     
     try:
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
         # Validar token com a API do Telegram
         validation_result = bot_manager.validate_token(token)
         bot_info = validation_result.get('bot_info')
@@ -2341,6 +2348,10 @@ def create_bot():
         
         auto_started = False
         try:
+            # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+            
             logger.info(f"⚙️ Auto-start do bot recém-criado {bot.id} (@{bot.username})")
             bot_manager.start_bot(
                 bot_id=bot.id,
@@ -2413,6 +2424,10 @@ def update_bot_token(bot_id):
         return jsonify({'error': 'Este token já está cadastrado em outro bot'}), 400
     
     try:
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
         # ✅ AUTO-STOP: Parar bot se estiver rodando (limpeza completa do cache)
         was_running = bot.is_running
         if was_running:
@@ -2506,6 +2521,10 @@ def delete_bot(bot_id):
     """
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
+    # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+    from bot_manager import BotManager
+    bot_manager = BotManager(socketio=None, user_id=current_user.id)
+    
     # Parar bot se estiver rodando
     if bot.is_running:
         bot_manager.stop_bot(bot.id)
@@ -2577,6 +2596,10 @@ def duplicate_bot(bot_id):
         return jsonify({'error': 'Este token já está cadastrado no sistema'}), 400
     
     try:
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
         # VALIDAÇÃO 4: Token válido no Telegram
         validation_result = bot_manager.validate_token(new_token)
         bot_info = validation_result.get('bot_info')
@@ -2624,6 +2647,10 @@ def duplicate_bot(bot_id):
         
         auto_started = False
         try:
+            # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+            
             logger.info(f"⚙️ Auto-start do bot duplicado {new_bot.id} (@{new_bot.username})")
             bot_manager.start_bot(
                 bot_id=new_bot.id,
@@ -3030,6 +3057,10 @@ def import_bot_config():
             
             # Validar token com Telegram (com tratamento de erro de rede)
             try:
+                # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+                from bot_manager import BotManager
+                bot_manager = BotManager(socketio=None, user_id=current_user.id)
+                
                 validation_result = bot_manager.validate_token(new_bot_token)
                 bot_info = validation_result.get('bot_info')
                 
@@ -3277,6 +3308,10 @@ def start_bot(bot_id):
     
     # ✅ VALIDAR TOKEN ANTES DE INICIAR (QI 500)
     try:
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
         validation_result = bot_manager.validate_token(bot.token)
         if validation_result.get('error_type'):
             error_type = validation_result.get('error_type')
@@ -3322,6 +3357,10 @@ def start_bot(bot_id):
         if not config_dict or not isinstance(config_dict, dict):
             logger.error(f"❌ Config do bot {bot_id} serializado é inválido: {config_dict}")
             return jsonify({'error': 'Configuração do bot inválida. Recarregue a página e tente novamente.'}), 500
+        
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
         
         bot_manager.start_bot(bot.id, bot.token, config_dict)
         bot.is_running = True
@@ -3371,6 +3410,10 @@ def verify_bots_status():
         restart_failures = {}
         db_dirty = False
         
+        # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
         for bot in user_bots:
             status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
             is_in_memory = status_memory.get('is_running', False)
@@ -3408,6 +3451,10 @@ def verify_bots_status():
                         restart_failures[bot.id] = restart_error
                     else:
                         try:
+                            # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+                            from bot_manager import BotManager
+                            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+                            
                             bot_manager.start_bot(bot.id, bot.token, bot.config.to_dict())
                             bot.is_running = True
                             bot.last_started = get_brazil_time()
@@ -3463,6 +3510,10 @@ def stop_bot(bot_id):
 def debug_bot(bot_id):
     """Debug do status do bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+    from bot_manager import BotManager
+    bot_manager = BotManager(socketio=None, user_id=current_user.id)
     
     import threading
     
@@ -3867,6 +3918,10 @@ def send_remarketing_campaign(bot_id, campaign_id):
             db.session.commit()
 
             # Disparar envio para o bot específico
+            # ✅ ISOLAMENTO: Criar BotManager local para o usuário
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+            
             bot_manager.send_remarketing_campaign(clone.id, target_bot.token)
             created_campaigns.append(clone.to_dict())
 
@@ -12604,6 +12659,9 @@ def telegram_webhook(bot_id):
         logger.critical(f"🔑 IDENTIDADE LOCALIZADA: bot_id={bot_id} -> user_id={bot.user_id}")
         
         # ✅ ISOLAMENTO NAMESPACE: Criar BotManager isolado para este usuário
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=bot.user_id)
+        
         from redis_bot_state import get_namespaced_bot_state
         user_bot_state = get_namespaced_bot_state(bot.user_id)
         
