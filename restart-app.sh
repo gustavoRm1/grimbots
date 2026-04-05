@@ -85,7 +85,19 @@ systemctl restart grimbots || {
 echo "✅ API reiniciada"
 
 # ============================================================
-# 5. REINICIAR WORKERS RQ (Todos os 10 workers)
+# 5. REINICIAR RQ SCHEDULER (OBRIGATÓRIO para enqueue_in)
+# ✅ Move jobs agendados do ScheduledJobRegistry para filas
+# ============================================================
+
+echo "🔄 Reiniciando RQ Scheduler..."
+systemctl restart rq-scheduler 2>/dev/null || {
+    echo "⚠️  rq-scheduler service não encontrado (instale: sudo cp rq-scheduler.service /etc/systemd/system/)"
+}
+systemctl enable rq-scheduler 2>/dev/null || true
+echo "✅ RQ Scheduler reiniciado"
+
+# ============================================================
+# 6. REINICIAR WORKERS RQ (Todos os 10 workers)
 # ✅ Cada worker é reiniciado individualmente com proteção || true
 # ============================================================
 
@@ -115,7 +127,7 @@ done
 echo "✅ Workers RQ reiniciados"
 
 # ============================================================
-# 6. STATUS FINAL
+# 7. STATUS FINAL
 # ============================================================
 
 echo ""
@@ -123,11 +135,13 @@ echo "🚀 Deploy SRE concluído!"
 echo ""
 echo "📋 Status dos serviços:"
 echo "   sudo systemctl status grimbots              # API"
+echo "   sudo systemctl status rq-scheduler          # Job Scheduler (CRÍTICO)"
 echo "   sudo systemctl status rq-worker@gateway-1   # Workers"
 echo "   sudo systemctl list-units 'rq-worker@*'     # Todos workers"
 echo ""
 echo "📊 Logs:"
 echo "   sudo journalctl -u grimbots -f              # API em tempo real"
+echo "   sudo journalctl -u rq-scheduler -f        # Scheduler em tempo real"
 echo "   sudo journalctl -u rq-worker@tasks-1 -f     # Worker em tempo real"
 echo "   curl http://localhost:5000/health           # Health check"
 echo ""

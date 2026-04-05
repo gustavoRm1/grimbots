@@ -1,0 +1,37 @@
+[Unit]
+Description=RQ Scheduler - GrimBots Job Scheduler
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/grimbots
+Environment=PYTHONPATH=/root/grimbots
+Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=REDIS_URL=redis://localhost:6379/0
+
+# ✅ Comando: RQ Scheduler monitora ScheduledJobRegistry e move jobs para filas
+ExecStart=/root/grimbots/venv/bin/python -m rq_scheduler.scheduler --url redis://localhost:6379/0 --interval 1
+
+# ✅ RESILIÊNCIA MÁXIMA
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# ✅ LOGS VIA JOURNALD
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rq-scheduler
+
+# ✅ LIMITE DE RECURSOS
+MemoryMax=256M
+CPUQuota=100%
+
+# ✅ GRACEFUL SHUTDOWN
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
