@@ -1801,8 +1801,8 @@ def task_process_broadcast_campaign(campaign_id: int):
             logger.info(f"🏃 [MARATHON] Iniciando envio para {total_targets} leads | Bot: {bot.name}")
             
             # Chaves Redis
-            sent_set_key = f"remarketing:sent:{campaign_id}"
-            blacklist_key = f"remarketing:blacklist:{bot_id}"
+            sent_set_key = f"gb:{bot.user_id}:remarketing:sent:{campaign_id}"
+            blacklist_key = f"gb:{bot.user_id}:remarketing:blacklist:{bot_id}"
             
             # Variáveis de controle
             bot_token_str = str(bot.token)
