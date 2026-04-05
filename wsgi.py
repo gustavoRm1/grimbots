@@ -5,7 +5,11 @@ Para produção com Gunicorn
 
 import os
 import time
-from app import app, socketio, restart_all_active_bots
+from app import app, socketio
+
+# 🛑 BLINDAGEM MÁXIMA: Não há mais instância global de bot_manager
+# BotManager deve ser instanciado DENTRO das rotas com user_id específico
+# Isso garante isolamento completo entre usuários (namespace gb:{user_id}:*)
 
 # ✅ Reiniciar bots que estavam rodando quando servidor iniciar
 # Proteção contra execução múltipla em workers do gunicorn (baseado em arquivo)
@@ -55,9 +59,11 @@ def _ensure_single_execution():
                     lock_file.close()
                     return False  # Outro processo já tem o lock
             
-            # Executar reinicialização
-            with app.app_context():
-                restart_all_active_bots()
+            # 🛑 REMOVIDO: reinicialização de bots sem user_id específico
+            # BotManager deve ser instanciado por usuário, não globalmente
+            # A reinicialização deve ser feita via endpoint admin por usuário
+            logger.warning("🛑 Reinicialização global de bots REMOVIDA - use endpoint /admin/bots/restart-by-user")
+            return True
             
             # Marcar como executado
             try:

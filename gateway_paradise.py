@@ -45,30 +45,44 @@ VALID_CPFS = [
 ]
 
 
-def _load_identities_if_needed():
+def _load_identities_to_redis(redis_client, user_id: int):
     """
-    Carrega identidades válidas do CSV para o cache global (apenas uma vez)
-    """
-    global _VALID_IDENTITIES_CACHE
+    Carrega identidades válidas do CSV para o Redis isolado do usuário.
     
-    if not _VALID_IDENTITIES_CACHE:
-        try:
-            with open('cpf_nome_formatado.csv', 'r', encoding='utf-8') as file:
-                reader = csv.reader(file)
-                next(reader)  # Pular cabeçalho (cpf,nome)
-                for row in reader:
-                    if len(row) >= 2 and row[0] and row[1]:
-                        _VALID_IDENTITIES_CACHE.append({
-                            'cpf': row[0].strip(),
-                            'nome': row[1].strip()
-                        })
-            logger.info(f"✅ KYC Cache: {len(_VALID_IDENTITIES_CACHE)} identidades carregadas do CSV")
-        except FileNotFoundError:
-            logger.warning("⚠️ KYC Cache: Arquivo cpf_nome_formatado.csv não encontrado, usando fallback")
-            _VALID_IDENTITIES_CACHE = []
-        except Exception as e:
-            logger.error(f"❌ KYC Cache: Erro ao carregar CSV: {e}")
-            _VALID_IDENTITIES_CACHE = []
+    Args:
+        redis_client: Cliente Redis (GrimBotsRedis)
+        user_id: ID do usuário para namespace isolado
+    """
+    cache_key = f"gb:{user_id}:kyc_cache:identities"
+    
+    # Verificar se já existe no Redis
+    if redis_client.exists(cache_key):
+        logger.info(f"✅ KYC Cache já existe no Redis para user_id={user_id}")
+        return
+    
+    identities = []
+    try:
+        with open('cpf_nome_formatado.csv', 'r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            next(reader)  # Pular cabeçalho
+            for row in reader:
+                if len(row) >= 2 and row[0] and row[1]:
+                    identities.append({
+                        'cpf': row[0].strip(),
+                        'nome': row[1].strip()
+                    })
+        
+        # Salvar no Redis isolado com TTL de 24 horas
+        import json
+        redis_client.set(cache_key, json.dumps(identities), ex=86400)
+        logger.info(f"✅ KYC Cache: {len(identities)} identidades carregadas para user_id={user_id}")
+        
+    except FileNotFoundError:
+        logger.warning("⚠️ KYC Cache: Arquivo cpf_nome_formatado.csv não encontrado")
+        redis_client.set(cache_key, '[]', ex=3600)  # Cache vazio por 1h
+    except Exception as e:
+        logger.error(f"❌ KYC Cache: Erro ao carregar CSV: {e}")
+        redis_client.set(cache_key, '[]', ex=3600)
 
 
 class ParadisePaymentGateway(PaymentGateway):

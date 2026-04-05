@@ -7964,12 +7964,24 @@ def bolt_webhook():
     data.setdefault('_payload_source', payload_source)
 
     logger.info(f" [BOLT WEBHOOK] Recebido | content-type={request.content_type} | source={payload_source}")
+    
+    # ✅ ISOLAMENTO: Extrair identificador da transação para lookup de user_id
+    transaction_id = data.get('transaction_id') or data.get('id') or data.get('reference_id')
+    
+    # Primeiro passo: enfileirar com user_id=0 (será resolvido no worker pelo transaction_id)
+    # O worker DEVE fazer o lookup de Payment/Transaction para obter o user_id correto
+    data['_transaction_id_for_lookup'] = transaction_id
 
     try:
         from tasks_async import webhook_queue, process_webhook_async
+        from app.workers import enqueue_with_user
         if webhook_queue:
-            webhook_queue.enqueue(
-                process_webhook_async,
+            # ✅ ISOLAMENTO: Enfileirar com contexto de usuário
+            # O user_id será resolvido pelo worker baseado no transaction_id
+            enqueue_with_user(
+                queue=webhook_queue,
+                user_id=0,  # Placeholder - worker resolve pelo transaction_id
+                func=process_webhook_async,
                 gateway_type='bolt',
                 data=data
             )

@@ -813,9 +813,11 @@ def process_start_async(
         logger.error(f"❌ Erro em process_start_async: {e}", exc_info=True)
 
 
-def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
+def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any]):
     """
     Processa webhook de pagamento de forma assíncrona
+    
+    ✅ ISOLAMENTO NAMESPACE V2: Agora recebe user_id como primeiro argumento
     
     Executa:
     - Processar webhook via adapter
@@ -824,18 +826,42 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     - Processar estatísticas
     - Enviar entregável
     - Enviar Meta Pixel Purchase
+    
+    Args:
+        user_id: ID do usuário (OBRIGATÓRIO para namespace isolado)
+        gateway_type: Tipo do gateway (bolt, paradise, etc)
+        data: Dados do webhook
     """
     try:
         # CRÍTICO: Logging no início para verificar se função está sendo chamada
-        logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}")
+        logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}, user_id={user_id}")
         
         from app import app, db
         from models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
-        from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
+        
+        # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
+        # Não usar bot_manager global - criar instância com user_id
         
         with app.app_context():
-            logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - App context criado para gateway_type={gateway_type}")
+            logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - App context criado para gateway_type={gateway_type}, user_id={user_id}")
+            
+            # ✅ ISOLAMENTO: Se user_id for 0, resolver pelo transaction_id
+            if user_id == 0:
+                transaction_id = data.get('_transaction_id_for_lookup')
+                if transaction_id:
+                    # Buscar payment para obter user_id
+                    payment = Payment.query.filter_by(external_id=transaction_id).first()
+                    if payment:
+                        user_id = payment.user_id
+                        logger.info(f"✅ User_id resolvido pelo transaction_id: {user_id}")
+                    else:
+                        # Buscar pelo gateway_transaction_id
+                        payment = Payment.query.filter_by(gateway_transaction_id=transaction_id).first()
+                        if payment:
+                            user_id = payment.user_id
+                            logger.info(f"✅ User_id resolvido pelo gateway_transaction_id: {user_id}")
+            
             grim_payment_id = data.pop('_grim_payment_id', None)
             # Criar gateway com adapter
             dummy_credentials = {}
@@ -873,8 +899,11 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 
                 result = gateway_instance.process_webhook(data)
             else:
-                from bot_manager import bot_manager
-                result = bot_manager.process_payment_webhook(gateway_type, data)
+                # 🛑 BLINDAGEM: Não usar bot_manager global
+                # Criar instância isolada do BotManager para este usuário
+                from bot_manager import BotManager
+                user_bot_manager = BotManager(None, None, user_id=user_id)
+                result = user_bot_manager.process_payment_webhook(gateway_type, data)
             
             if result:
                 gateway_transaction_id = result.get('gateway_transaction_id')

@@ -439,25 +439,29 @@ class BotManager:
     
     def __init__(self, socketio, scheduler=None, user_id: int = None):
         """
-        Inicializa o BotManager.
+        Inicializa o BotManager com namespace isolado obrigatório.
+        
+        ⚠️ REGRA DE OURO: user_id é OBRIGATÓRIO. Não há mais fallback para global.
         
         Args:
             socketio: Instância do SocketIO
             scheduler: Agendador de tarefas (opcional)
-            user_id: ID do usuário para namespace isolado (None = global/legacy)
+            user_id: ID do usuário para namespace isolado (OBRIGATÓRIO)
+            
+        Raises:
+            ValueError: Se user_id não for fornecido
         """
+        # 🛑 BLINDAGEM MÁXIMA: user_id é obrigatório
+        if not user_id or not isinstance(user_id, int) or user_id <= 0:
+            raise ValueError(f"🛑 Identidade do usuário é obrigatória! user_id={user_id} é inválido.")
+        
         self.socketio = socketio
         self.scheduler = scheduler
         self.user_id = user_id
         
-        # ✅ ISOLAMENTO NAMESPACE V2: Usar estado isolado se user_id fornecido
-        if user_id:
-            self.bot_state = get_namespaced_bot_state(user_id)
-            logger.info(f"✅ BotManager inicializado com namespace isolado: gb:{user_id}:*")
-        else:
-            # Fallback para estado global (compatibility mode)
-            self.bot_state = redis_bot_state
-            logger.warning(f"⚠️ BotManager usando estado GLOBAL (legacy) - migre para user_id específico")
+        # ✅ ISOLAMENTO NAMESPACE V2: Sempre usar estado isolado
+        self.bot_state = get_namespaced_bot_state(user_id)
+        logger.info(f"✅ BotManager inicializado com namespace isolado: gb:{user_id}:*")
         
         self.bot_threads: Dict[int, threading.Thread] = {}
         self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
