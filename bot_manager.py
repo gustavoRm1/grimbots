@@ -1319,21 +1319,15 @@ class BotManager:
         Args:
             bot_id: ID do bot
             token: Token do bot
-        """
         # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
         bot_data = self.bot_state.get_bot_data(bot_id)
         if not bot_data or bot_data.get('status') != 'running':
-            # Bot não está mais ativo, remover job
-            if bot_id in self.polling_jobs:
-                try:
-                    self.scheduler.remove_job(self.polling_jobs[bot_id])
-                    del self.polling_jobs[bot_id]
-                    logger.info(f"🛑 Polling job removido para bot {bot_id}")
-                except:
-                    pass
+            logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis, não enviando mensagem")
             return
         
-        try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        with self.telegram_http_semaphore:
+            response = requests.post(url, json={'chat_id': chat_id, 'text': message, 'parse_mode': parse_mode}, timeout=10)
             # ✅ REDIS BRAIN: Buscar offset/poll_count do Redis (transientes)
             # Usar config para armazenar métricas temporárias
             config = bot_data.get('config', {})
@@ -9570,6 +9564,151 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"❌ Erro ao enviar arquivo Telegram: {e}", exc_info=True)
             return False
     
+    # Taxonomia de Erros do Telegram - 3 Buckets
+    USER_FATAL_KEYWORDS = [
+        'bot was blocked by the user', 'user is deactivated', 'have no rights to send a message',
+        'not enough rights', 'chat not found', 'user not found', 'chat_id is empty',
+        'peer_id_invalid', 'input_user_deactivated', 'bot was kicked', 'bot is not a member',
+        'need administrator rights', 'group chat was upgraded', 'blocked by the user', 'user blocked'
+    ]
+    
+    BOT_FATAL_KEYWORDS = [
+        'unauthorized', 'token is invalid', 'bot token is invalid', '401',
+        'bot was banned', 'this bot has been blocked', 'terminated by other getupdates request'
+    ]
+    
+    RETRYABLE_KEYWORDS = [
+        'too many requests', 'retry_after', 'flood', '500', '502', '503', '504',
+        'bad gateway', 'service unavailable', 'gateway timeout', 'internal server error',
+        'connection', 'timeout', 'timed out', 'network', 'remotedisconnected',
+        'connectionreset', 'connectionrefused', 'migrate_to_chat_id', 'retry'
+    ]
+
+    def _classify_telegram_error(self, error_str: str) -> str:
+        """
+        Classifica erro da API Telegram em 3 buckets:
+        - USER_FATAL: Erro do usuário (não punir bot)
+        - BOT_FATAL: Erro do bot (desativar imediatamente)
+        - RETRYABLE: Erro transitório (tentar novamente)
+        
+        Args:
+            error_str: String do erro em lowercase
+            
+        Returns:
+            'USER_FATAL', 'BOT_FATAL', ou 'RETRYABLE'
+        """
+        error_lower = error_str.lower()
+        
+        # Verificar BOT_FATAL primeiro (prioridade máxima)
+        for keyword in self.BOT_FATAL_KEYWORDS:
+            if keyword in error_lower:
+                return 'BOT_FATAL'
+        
+        # Verificar USER_FATAL
+        for keyword in self.USER_FATAL_KEYWORDS:
+            if keyword in error_lower:
+                return 'USER_FATAL'
+        
+        # Verificar RETRYABLE
+        for keyword in self.RETRYABLE_KEYWORDS:
+            if keyword in error_lower:
+                return 'RETRYABLE'
+        
+        # Por padrão, considerar RETRYABLE (fail-safe)
+        return 'RETRYABLE'
+
+    def _apply_circuit_breaker(self, token: str, error_bucket: str, error_description: str):
+        """
+        Aplica lógica de Circuit Breaker baseada no bucket de erro.
+        
+        Args:
+            token: Token do bot
+            error_bucket: 'BOT_FATAL', 'USER_FATAL', ou 'RETRYABLE'
+            error_description: Descrição do erro para logging
+        """
+        from app import app, db
+        from models import Bot
+        from datetime import datetime, timedelta
+        
+        with app.app_context():
+            bot = Bot.query.filter_by(token=token).first()
+            if not bot:
+                return
+            
+            # USER_FATAL: NÃO punir o bot, apenas retornar
+            if error_bucket == 'USER_FATAL':
+                logger.info(f"👤 USER_FATAL detectado para bot {bot.id}: {error_description[:100]}")
+                return
+            
+            # BOT_FATAL: Desativar bot imediatamente
+            if error_bucket == 'BOT_FATAL':
+                bot.is_active = False
+                bot.health_status = 'offline'
+                bot.circuit_breaker_until = None  # Permanente
+                bot.last_error = f"BOT_FATAL: {error_description[:500]}"
+                bot.last_health_check = datetime.now()
+                bot.error_count += 1
+                logger.critical(f"🔴 BOT_FATAL: Bot {bot.id} DESATIVADO. Erro: {error_description[:200]}")
+                
+                # Desregistrar do Redis
+                try:
+                    self.bot_state.unregister_bot(bot.id)
+                    logger.info(f"🗑️ Bot {bot.id} removido do Redis (BOT_FATAL)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Falha ao remover bot {bot.id} do Redis: {e}")
+                
+                db.session.commit()
+                return
+            
+            # RETRYABLE: Incrementar falhas e aplicar cooldown se necessário
+            if error_bucket == 'RETRYABLE':
+                bot.consecutive_failures += 1
+                bot.error_count += 1
+                bot.last_error = f"RETRYABLE: {error_description[:500]}"
+                bot.last_health_check = datetime.now()
+                
+                # Verificar se atingiu threshold para Circuit Breaker
+                if bot.consecutive_failures >= 5:
+                    bot.circuit_breaker_until = datetime.now() + timedelta(minutes=30)
+                    bot.health_status = 'degraded'
+                    logger.critical(
+                        f"🟡 CIRCUIT_BREAKER_TRIPPED: Bot {bot.id} isolado por 30min "
+                        f"({bot.consecutive_failures} falhas). Erro: {error_description[:200]}"
+                    )
+                else:
+                    bot.health_status = 'degraded'
+                    logger.warning(
+                        f"⚠️ Bot {bot.id} falha {bot.consecutive_failures}/5 (RETRYABLE): {error_description[:200]}"
+                    )
+                
+                db.session.commit()
+
+    def _reset_circuit_breaker_on_success(self, token: str):
+        """
+        Reseta contadores de falha quando o bot envia mensagem com sucesso.
+        Só acessa o banco se o bot estava machucado (consecutive_failures > 0 ou health_status != 'online').
+        
+        Args:
+            token: Token do bot
+        """
+        try:
+            from app import app, db
+            from models import Bot
+            from datetime import datetime
+            
+            with app.app_context():
+                bot = Bot.query.filter_by(token=token).first()
+                # 🟢 A MÁGICA DA ESCALA: Só faz update se o bot estava machucado!
+                if bot and (bot.consecutive_failures > 0 or bot.health_status != 'online' or bot.circuit_breaker_until):
+                    bot.consecutive_failures = 0
+                    bot.health_status = 'online'
+                    bot.circuit_breaker_until = None
+                    bot.last_health_check = datetime.now()
+                    db.session.commit()
+                    logger.info(f"✅ Bot {bot.id} recuperado - Circuit Breaker resetado para ZERO")
+        except Exception as e:
+            logger.error(f"❌ Erro no reset do circuit breaker: {e}") 
+
     def send_telegram_message(self, token: str, chat_id: str, message: str, 
                              media_url: Optional[str] = None, 
                              media_type: str = 'video',
@@ -9839,10 +9978,20 @@ Seu pagamento ainda não foi confirmado.
                 except Exception as e:
                     logger.error(f"❌ Erro ao salvar mensagem enviada pelo bot: {e}")
 
+                # ✅ CIRCUIT BREAKER: Reset de sucesso
+                self._reset_circuit_breaker_on_success(token)
+
                 return result_data or True
             else:
                 error_description = result_data.get('description', 'Erro desconhecido') if isinstance(result_data, dict) else 'Resposta inválida'
                 error_code = result_data.get('error_code', response.status_code) if isinstance(result_data, dict) else response.status_code
+                
+                # ✅ NOVO CIRCUIT BREAKER: Taxonomia de 3 Buckets
+                error_str = f"{error_code} {error_description}"
+                error_bucket = self._classify_telegram_error(error_str)
+                
+                # Aplicar Circuit Breaker baseado no bucket
+                self._apply_circuit_breaker(token, error_bucket, error_description)
                 
                 # ✅ EXTRAIR retry_after do Telegram (crítico para FloodWait 429)
                 retry_after = None
@@ -9860,14 +10009,21 @@ Seu pagamento ainda não foi confirmado.
                     'error': True,
                     'error_code': error_code,
                     'description': error_description,
-                    'retry_after': retry_after  # ✅ Incluir retry_after para tratamento upstream
+                    'retry_after': retry_after,
+                    'error_bucket': error_bucket  # ✅ Incluir bucket para tratamento upstream
                 }
 
-        except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout as e:
             logger.error(f"⏱️ Timeout ao enviar mensagem para chat {chat_id}")
+            # ✅ CIRCUIT BREAKER: Timeout é RETRYABLE
+            self._apply_circuit_breaker(token, 'RETRYABLE', f"timeout: {str(e)}")
             return False
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem Telegram: {e}")
+            # ✅ CIRCUIT BREAKER: Exception genérica é RETRYABLE por padrão
+            error_str = str(e).lower()
+            bucket = self._classify_telegram_error(error_str)
+            self._apply_circuit_breaker(token, bucket, str(e))
             return False
     
     def get_bot_status(self, bot_id: int, verify_telegram: bool = False) -> Dict[str, Any]:

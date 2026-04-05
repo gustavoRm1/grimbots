@@ -12647,6 +12647,16 @@ def telegram_webhook(bot_id):
             logger.warning(f"⚠️ Webhook recebido para bot inexistente: {bot_id}")
             return jsonify({'status': 'ok'}), 200  # Retornar 200 para não revelar estrutura
         
+        # ✅ CIRCUIT BREAKER: Verificar se bot está isolado
+        from datetime import datetime
+        if bot.health_status == 'offline':
+            logger.warning(f"🔴 Webhook bloqueado pelo Circuit Breaker (offline): bot_id={bot_id}")
+            return jsonify({'status': 'ok'}), 200
+        
+        if bot.circuit_breaker_until and bot.circuit_breaker_until > datetime.now():
+            logger.warning(f"🟡 Webhook bloqueado pelo Circuit Breaker (cooldown): bot_id={bot_id}, até={bot.circuit_breaker_until}")
+            return jsonify({'status': 'ok'}), 200
+        
         logger.info(f"Update recebido do Telegram para bot {bot_id}")
         
         # Processar update

@@ -224,6 +224,13 @@ class Bot(db.Model):
     is_running = db.Column(db.Boolean, default=False, index=True)  # Indexado para filtrar bots em execução
     last_error = db.Column(db.Text)
     
+    # Circuit Breaker - Controle de saúde e falhas
+    error_count = db.Column(db.Integer, default=0)
+    consecutive_failures = db.Column(db.Integer, default=0)
+    circuit_breaker_until = db.Column(db.DateTime, index=True)
+    health_status = db.Column(db.String(20), default='online')  # online, degraded, offline
+    last_health_check = db.Column(db.DateTime)
+    
     # Estatísticas
     total_users = db.Column(db.Integer, default=0)
     total_messages = db.Column(db.Integer, default=0)
