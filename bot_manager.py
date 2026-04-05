@@ -4438,7 +4438,7 @@ class BotManager:
                 
                 # ✅ ISOLAMENTO: Enfileirar processamento com user_id no payload
                 try:
-                    from app.workers import enqueue_with_user
+                    from internal_logic.workers import enqueue_with_user
                     from tasks_async import task_queue, process_start_async
                     if task_queue and self.user_id:
                         enqueue_with_user(
@@ -10184,7 +10184,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 try:
                     # ✅ ISOLAMENTO: Agendar downsell com user_id no payload
-                    from app.workers import enqueue_with_user_and_bot
+                    from internal_logic.workers import enqueue_with_user_and_bot
                     from tasks_async import marathon_queue
                     
                     if marathon_queue and self.user_id:

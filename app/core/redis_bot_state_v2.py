@@ -25,7 +25,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
 # Importar o novo wrapper namespaced
-from app.core.redis_wrapper import GrimBotsRedis, get_namespaced_redis
+from internal_logic.core.redis_wrapper import GrimBotsRedis, get_namespaced_redis
 
 logger = logging.getLogger(__name__)
 

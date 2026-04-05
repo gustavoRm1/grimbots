@@ -6,7 +6,7 @@ Helpers para garantir que jobs RQ recebam e usem o user_id corretamente,
 mantendo o isolamento de namespace no Redis durante processamento em background.
 
 Uso:
-    from app.workers.helpers import enqueue_with_user, with_user_context
+    from internal_logic.workers.helpers import enqueue_with_user, with_user_context
     
     # Enfileirar job com user_id
     enqueue_with_user(
@@ -142,7 +142,7 @@ def with_user_context(func: Callable) -> Callable:
     """
     @functools.wraps(func)
     def wrapper(user_id: int, *args, **kwargs):
-        from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+        from internal_logic.core.redis_bot_state_v2 import NamespacedRedisBotState
         
         # Criar estado isolado
         bot_state = NamespacedRedisBotState(user_id=user_id)
@@ -177,7 +177,7 @@ def with_isolated_redis(func: Callable) -> Callable:
     """
     @functools.wraps(func)
     def wrapper(user_id: int, *args, **kwargs):
-        from app.core.redis_wrapper import get_namespaced_redis
+        from internal_logic.core.redis_wrapper import get_namespaced_redis
         
         # Criar cliente Redis isolado
         redis = get_namespaced_redis(user_id)
@@ -211,8 +211,8 @@ class UserContext:
         self.bot_state = None
     
     def __enter__(self):
-        from app.core.redis_wrapper import get_namespaced_redis
-        from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+        from internal_logic.core.redis_wrapper import get_namespaced_redis
+        from internal_logic.core.redis_bot_state_v2 import NamespacedRedisBotState
         
         self.redis = get_namespaced_redis(self.user_id)
         self.bot_state = NamespacedRedisBotState(self.user_id)

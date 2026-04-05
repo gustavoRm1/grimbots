@@ -3,7 +3,7 @@ Redis Bot State - Centralização do "Cérebro" dos Bots
 Substitui o dicionário self.active_bots volátil por Redis persistente.
 
 ⚠️ VERSÃO LEGACY - Mantida para compatibilidade retroativa
-Para novo código, use: from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+Para novo código, use: from internal_logic.core.redis_bot_state_v2 import NamespacedRedisBotState
 
 Arquitetura:
 - Hash Map: botmanager:active_bots - Dados dos bots ativos
@@ -56,7 +56,7 @@ def get_namespaced_bot_state(user_id: int):
         >>> redis_bot_state.register_bot(bot_id=123, ...)
     """
     try:
-        from app.core.redis_bot_state_v2 import NamespacedRedisBotState
+        from internal_logic.core.redis_bot_state_v2 import NamespacedRedisBotState
         return NamespacedRedisBotState(user_id=user_id)
     except ImportError as e:
         logger.warning(f"⚠️ NamespacedRedisBotState não disponível, usando legacy: {e}")
