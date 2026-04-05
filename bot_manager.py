@@ -1320,17 +1320,14 @@ class BotManager:
             bot_id: ID do bot
             token: Token do bot
         """
-        # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
-        bot_data = self.bot_state.get_bot_data(bot_id)
-        if not bot_data or bot_data.get('status') != 'running':
-            logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis, não enviando mensagem")
-            return
-        
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        with self.telegram_http_semaphore:
-            response = requests.post(url, json={'chat_id': chat_id, 'text': message, 'parse_mode': parse_mode}, timeout=10)
+        try:
+            # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
+            bot_data = self.bot_state.get_bot_data(bot_id)
+            if not bot_data or bot_data.get('status') != 'running':
+                logger.warning(f"⚠️ Bot {bot_id} não está ativo no Redis, não enviando mensagem")
+                return
+            
             # ✅ REDIS BRAIN: Buscar offset/poll_count do Redis (transientes)
-            # Usar config para armazenar métricas temporárias
             config = bot_data.get('config', {})
             offset = config.get('_polling_offset', 0)
             poll_count = config.get('_polling_count', 0)
@@ -1364,22 +1361,29 @@ class BotManager:
                         logger.info(f"📨 NOVA MENSAGEM RECEBIDA! ({len(updates)} update(s))")
                         logger.info(f"{'='*60}")
                         
+                        max_update_id = offset
                         for update in updates:
-                            # ✅ REDIS BRAIN: Atualizar offset no Redis
+                            if update.get('update_id', 0) > max_update_id:
+                                max_update_id = update['update_id']
+                            self._process_telegram_update(bot_id, update)
+                        
+                        # ✅ OTIMIZAÇÃO: Atualizar offset uma única vez após processar todos
+                        if max_update_id > offset:
                             try:
                                 current_config = self.bot_state.get_bot_data(bot_id)
                                 if current_config:
                                     new_config = current_config.get('config', {}).copy()
-                                    new_config['_polling_offset'] = update['update_id'] + 1
+                                    new_config['_polling_offset'] = max_update_id + 1
                                     self.bot_state.update_bot_config(bot_id, new_config)
                             except:
                                 pass
-                            self._process_telegram_update(bot_id, update)
         
         except requests.exceptions.Timeout:
             pass  # Timeout é esperado
         except Exception as e:
             logger.error(f"❌ Erro no polling bot {bot_id}: {e}")
+            import time
+            time.sleep(5)  # ✅ DEFESA: Evitar loop infinito de CPU em caso de erro contínuo
     
     def _polling_mode(self, bot_id: int, token: str):
         """
