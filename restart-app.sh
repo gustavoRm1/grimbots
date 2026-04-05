@@ -90,6 +90,10 @@ echo "✅ API reiniciada"
 # ============================================================
 
 echo "🔄 Reiniciando RQ Scheduler..."
+
+# ✅ LIMPAR ERROS DE START-LIMIT antes de reiniciar
+systemctl reset-failed rq-scheduler 2>/dev/null || true
+
 systemctl restart rq-scheduler 2>/dev/null || {
     echo "⚠️  rq-scheduler service não encontrado (instale: sudo cp rq-scheduler.service /etc/systemd/system/)"
 }

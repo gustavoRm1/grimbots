@@ -1,5 +1,5 @@
 [Unit]
-Description=RQ Scheduler - GrimBots Job Scheduler
+Description=RQ Scheduler - GrimBots Job Scheduler (Native RQ)
 After=network.target redis.service
 Wants=redis.service
 
@@ -11,8 +11,8 @@ Environment=PYTHONPATH=/root/grimbots
 Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=REDIS_URL=redis://localhost:6379/0
 
-# ✅ Comando: RQ Scheduler monitora ScheduledJobRegistry e move jobs para filas
-ExecStart=/root/grimbots/venv/bin/python -m rq_scheduler.scheduler --url redis://localhost:6379/0 --interval 1
+# ✅ Comando NATIVO RQ: O scheduler é built-in no RQ 2.7.0+
+ExecStart=/root/grimbots/venv/bin/rq scheduler --url redis://localhost:6379/0
 
 # ✅ RESILIÊNCIA MÁXIMA
 Restart=always
