@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, date, timezone
 import json
 import logging
 from sqlalchemy import func
+from internal_logic.core.extensions import db
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -19,8 +20,6 @@ BRAZIL_TZ_OFFSET = timedelta(hours=-3)
 def get_brazil_time():
     """Retorna o horário atual do Brasil (UTC-3)"""
     return datetime.utcnow() + BRAZIL_TZ_OFFSET
-
-db = SQLAlchemy()
 
 
 class MetaTrackingSession(db.Model):

@@ -4,9 +4,13 @@ Sistema de gerenciamento de bots do Telegram com painel web
 """
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response, send_file
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
+from flask_login import login_user, logout_user, login_required, current_user
+from flask_socketio import emit, join_room, leave_room
+from internal_logic.core.extensions import db, socketio
+from internal_logic.core.config import Config
+from internal_logic.blueprints.auth.routes import auth_bp
+from internal_logic.blueprints.dashboard.routes import dashboard_bp
+from models import User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 import hashlib
@@ -96,86 +100,24 @@ except ImportError as e:
 app = Flask(__name__)
 
 # ============================================================================
-# CORREÇÃO #4: SECRET_KEY OBRIGATÓRIA E FORTE
+# APLICAR CONFIGURAÇÕES CENTRALIZADAS
 # ============================================================================
-SECRET_KEY = os.environ.get('SECRET_KEY')
+Config.init_app(app)
+logger.info("✅ Configurações aplicadas via Config.init_app()")
 
-if not SECRET_KEY:
-    raise RuntimeError(
-        "\n❌ ERRO CRÍTICO: SECRET_KEY não configurada!\n\n"
-        "Execute:\n"
-        "  python -c \"import secrets; print('SECRET_KEY=' + secrets.token_hex(32))\" >> .env\n"
-    )
-
-if SECRET_KEY == 'dev-secret-key-change-in-production':
-    raise RuntimeError(
-        "\n❌ ERRO CRÍTICO: SECRET_KEY padrão detectada!\n"
-        "Gere uma nova: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
-    )
-
-if len(SECRET_KEY) < 32:
-    raise RuntimeError(
-        f"\n❌ ERRO CRÍTICO: SECRET_KEY muito curta ({len(SECRET_KEY)} caracteres)!\n"
-        "Mínimo: 32 caracteres. Gere uma nova: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
-    )
-
-app.config['SECRET_KEY'] = SECRET_KEY
-logger.info("✅ SECRET_KEY validada (forte e única)")
-
-# ✅ CORREÇÃO: Usar caminho ABSOLUTO para SQLite (compatível com threads)
-import os
-from pathlib import Path
-
-# Diretório base do projeto
-BASE_DIR = Path(__file__).resolve().parent
-
-# Caminho absoluto para o banco de dados
-DB_PATH = BASE_DIR / 'instance' / 'saas_bot_manager.db'
-
-# Criar pasta instance se não existir
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-# URI com caminho absoluto
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-    'DATABASE_URL', 
-    f'sqlite:///{DB_PATH}'
-)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# Ajuste para suportar PostgreSQL (sem check_same_thread)
-connect_args = (
-    {'check_same_thread': False, 'timeout': 30}
-    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite')
-    else {}
-)
-
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 300,
-    'pool_size': 30,  # ✅ Pool expandido para 8 workers RQ + Gunicorn
-    'max_overflow': 15,  # ✅ Permitir até 45 conexões totais (30 + 15)
-    'connect_args': connect_args
-}
-
-# ==================== CONFIGURAÇÃO DE COOKIES/SESSÃO ====================
-session_cookie_domain = os.environ.get('SESSION_COOKIE_DOMAIN')
-if session_cookie_domain:
-    app.config['SESSION_COOKIE_DOMAIN'] = session_cookie_domain
-
-session_cookie_secure = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes'}
-app.config['SESSION_COOKIE_SECURE'] = session_cookie_secure
-app.config['REMEMBER_COOKIE_SECURE'] = session_cookie_secure
-
-session_cookie_samesite = os.environ.get('SESSION_COOKIE_SAMESITE', 'None')
-app.config['SESSION_COOKIE_SAMESITE'] = session_cookie_samesite
-app.config['REMEMBER_COOKIE_SAMESITE'] = session_cookie_samesite
-
-if session_cookie_domain:
-    app.config['REMEMBER_COOKIE_DOMAIN'] = session_cookie_domain
-
-app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
-
-# Inicializar extensões
+# ============================================================================
+# INICIALIZAR EXTENSÕES (Application Factory Pattern)
+# ============================================================================
 db.init_app(app)
+socketio.init_app(app, cors_allowed_origins=Config.ALLOWED_ORIGINS, async_mode='eventlet')
+logger.info("✅ Extensões inicializadas via init_app()")
+
+# ============================================================================
+# REGISTRAR BLUEPRINTS
+# ============================================================================
+app.register_blueprint(auth_bp)
+app.register_blueprint(dashboard_bp)
+logger.info("✅ Blueprints registrados: auth, dashboard")
 
 def _ensure_payments_payment_method_column() -> None:
     try:
