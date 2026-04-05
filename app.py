@@ -41,12 +41,6 @@ logging.basicConfig(
 
 # Silenciar logs desnecessários
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
-# ✅ CORREÇÃO: Manter logs do APScheduler para debug de downsells
-# logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)
-# logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
-logging.getLogger('apscheduler.scheduler').setLevel(logging.WARNING)  # Apenas WARNING e acima
-logging.getLogger('apscheduler.executors').setLevel(logging.WARNING)  # Apenas WARNING e acima
-
 logger = logging.getLogger(__name__)
 
 def strip_surrogate_chars(value: Any) -> Any:
@@ -268,116 +262,13 @@ limiter = Limiter(
 )
 logger.info("✅ Rate Limiting configurado")
 
-# Inicializar scheduler para polling
-from flask_apscheduler import APScheduler
-from apscheduler.jobstores.redis import RedisJobStore
-from apscheduler.executors.pool import ThreadPoolExecutor as APThreadPool
+# ✅ MIGRAÇÃO RQ: APScheduler REMOVIDO - Usando RQ para agendamentos
+# A infraestrutura usa RQ (Redis Queue) com workers dedicados
+# Downsells e upsells agendados via queue.enqueue_in()
+logger.info("✅ Agendamentos via RQ (Redis Queue)")
 
-SCHEDULER_LOCK_PATH = Path(os.environ.get('GRIMBOTS_SCHEDULER_LOCK', '/tmp/grimbots_scheduler.lock'))
-
-def _is_pid_running(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    else:
-        return True
-
-def _acquire_scheduler_lock() -> bool:
-    """
-    Tenta adquirir lock do scheduler com timeout para evitar travamento
-    """
-    import time
-    max_attempts = 5  # Máximo de 5 tentativas
-    attempt = 0
-    
-    while attempt < max_attempts:
-        try:
-            fd = os.open(str(SCHEDULER_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode())
-            os.close(fd)
-            return True
-        except FileExistsError:
-            try:
-                existing_pid = int(SCHEDULER_LOCK_PATH.read_text().strip())
-            except Exception:
-                existing_pid = None
-
-            if existing_pid and not _is_pid_running(existing_pid):
-                # PID não está rodando - remover lock stale
-                try:
-                    SCHEDULER_LOCK_PATH.unlink()
-                    # Tentar novamente imediatamente após remover lock stale
-                    continue
-                except FileNotFoundError:
-                    pass
-                except Exception as e:
-                    logger.warning(f"⚠️ Erro ao remover lock stale: {e}")
-            
-            # Lock existe e PID está rodando (ou não conseguiu verificar)
-            attempt += 1
-            if attempt < max_attempts:
-                # Aguardar 0.5s antes de tentar novamente
-                time.sleep(0.5)
-                continue
-            else:
-                # Timeout atingido - não é o owner
-                logger.debug(f"⚠️ Não foi possível adquirir scheduler lock após {max_attempts} tentativas")
-                return False
-
-            return False
-
-# =========================================================================
-# CONFIGURAÇÃO CRÍTICA: RedisJobStore para persistência de jobs
-# =========================================================================
-redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-parsed_redis = urlparse(redis_url)
-
-jobstores = {
-    'default': RedisJobStore(
-        host=parsed_redis.hostname or 'localhost',
-        port=parsed_redis.port or 6379,
-        db=int(parsed_redis.path.lstrip('/') or 0),
-        jobs_key='apscheduler.jobs',
-        run_times_key='apscheduler.run_times'
-    )
-}
-
-executors = {
-    'default': APThreadPool(max_workers=20)
-}
-
-job_defaults = {
-    'coalesce': True,  # Consolidar múltiplas execuções atrasadas
-    'max_instances': 1,  # Apenas uma instância por job
-    'misfire_grace_time': 3600  # 1 hora de tolerância para execução atrasada
-}
-
-# Configurar APScheduler com RedisJobStore
-app.config['SCHEDULER_JOBSTORES'] = jobstores
-app.config['SCHEDULER_EXECUTORS'] = executors
-app.config['SCHEDULER_JOB_DEFAULTS'] = job_defaults
-
-scheduler = APScheduler()
-scheduler.init_app(app)
-_scheduler_owner = _acquire_scheduler_lock()
-
-if _scheduler_owner:
-    logger.info(f"✅ APScheduler iniciado por PID {os.getpid()}")
-
-    @atexit.register
-    def _release_scheduler_lock():
-        try:
-            SCHEDULER_LOCK_PATH.unlink()
-        except FileNotFoundError:
-            pass
-else:
-    logger.info("⚠️ APScheduler não iniciado neste processo (lock em uso)")
-
-# Inicializar gerenciador de bots
-bot_manager = BotManager(socketio, scheduler)
+# Inicializar gerenciador de bots (sem scheduler - usando RQ)
+bot_manager = BotManager(socketio, scheduler=None)
 
 # ==================== FUNÇÃO CENTRALIZADA: ENVIO DE ENTREGÁVEL ====================
 def send_payment_delivery(payment, bot_manager):
@@ -703,53 +594,25 @@ def reconcile_paradise_payments():
                         if p.bot.config and p.bot.config.upsells_enabled:
                             logger.info(f"✅ [UPSELLS RECONCILE PARADISE] Condições atendidas! Processando upsells para payment {p.payment_id}")
                             try:
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                if not bot_manager.scheduler:
-                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                    logger.error(f"   Payment ID: {p.payment_id}")
-                                else:
-                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                    try:
-                                        scheduler_running = bot_manager.scheduler.running
-                                        if not scheduler_running:
-                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                            logger.error(f"   Payment ID: {p.payment_id}")
-                                    except Exception as scheduler_check_error:
-                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                                upsells = p.bot.config.get_upsells()
+                                if upsells:
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == p.product_name:
+                                            matched_upsells.append(upsell)
                                     
-                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados
-                                    upsells_already_scheduled = False
-                                    try:
-                                        for i in range(10):
-                                            job_id = f"upsell_{p.bot_id}_{p.payment_id}_{i}"
-                                            existing_job = bot_manager.scheduler.get_job(job_id)
-                                            if existing_job:
-                                                upsells_already_scheduled = True
-                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {p.payment_id} (job {job_id} existe)")
-                                                break
-                                    except Exception as check_error:
-                                        logger.warning(f"⚠️ Erro ao verificar jobs existentes: {check_error}")
-                                
-                                if bot_manager.scheduler and not upsells_already_scheduled:
-                                    upsells = p.bot.config.get_upsells()
-                                    if upsells:
-                                        matched_upsells = []
-                                        for upsell in upsells:
-                                            trigger_product = upsell.get('trigger_product', '')
-                                            if not trigger_product or trigger_product == p.product_name:
-                                                matched_upsells.append(upsell)
-                                        
-                                        if matched_upsells:
-                                            logger.info(f"✅ [UPSELLS RECONCILE PARADISE] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
-                                            bot_manager.schedule_upsells(
-                                                bot_id=p.bot_id,
-                                                payment_id=p.payment_id,
-                                                chat_id=int(p.customer_user_id),
-                                                upsells=matched_upsells,
-                                                original_price=p.amount,
-                                                original_button_index=-1
-                                            )
-                                            logger.info(f"📅 [UPSELLS RECONCILE PARADISE] Upsells agendados com sucesso!")
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS RECONCILE PARADISE] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
+                                        bot_manager.schedule_upsells(
+                                            bot_id=p.bot_id,
+                                            payment_id=p.payment_id,
+                                            chat_id=int(p.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=p.amount,
+                                            original_button_index=-1
+                                        )
+                                        logger.info(f"📅 [UPSELLS RECONCILE PARADISE] Upsells agendados via RQ com sucesso!")
                             except Exception as e:
                                 logger.error(f"❌ [UPSELLS RECONCILE PARADISE] Erro ao processar upsells: {e}", exc_info=True)
                 except Exception as e:

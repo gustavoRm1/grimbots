@@ -9964,7 +9964,7 @@ Seu pagamento ainda não foi confirmado.
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
         """
-        Agenda downsells para um pagamento pendente
+        ✅ MIGRAÇÃO RQ: Agenda downsells usando RQ (Redis Queue) em vez de APScheduler
         
         Args:
             bot_id: ID do bot
@@ -9974,118 +9974,61 @@ Seu pagamento ainda não foi confirmado.
             original_price: Preço do botão original (para cálculo percentual)
             original_button_index: Índice do botão original clicado
         """
-        logger.info(f"🚨 ===== SCHEDULE_DOWNSELLS CHAMADO =====")
+        from datetime import timedelta
+        
+        logger.info(f"🚨 ===== SCHEDULE_DOWNSELLS (RQ) =====")
         logger.info(f"   bot_id: {bot_id}")
         logger.info(f"   payment_id: {payment_id}")
         logger.info(f"   chat_id: {chat_id}")
-        logger.info(f"   original_price: {original_price}")
-        logger.info(f"   original_button_index: {original_button_index}")
         logger.info(f"   downsells count: {len(downsells) if downsells else 0}")
         
         try:
-            # ✅ DIAGNÓSTICO CRÍTICO: Verificar scheduler
-            if not self.scheduler:
-                logger.error(f"❌ CRÍTICO: Scheduler não está disponível!")
-                logger.error(f"   Isso significa que downsells NÃO serão agendados!")
-                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                return
-            
-            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-            try:
-                scheduler_running = self.scheduler.running
-                logger.info(f"🔍 Scheduler está rodando: {scheduler_running}")
-                if not scheduler_running:
-                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                    logger.error(f"   Jobs agendados NÃO serão executados!")
-            except Exception as e:
-                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {e}")
-            
             if not downsells:
                 logger.warning(f"⚠️ Lista de downsells está vazia!")
-                logger.warning(f"   Verificar se downsells estão configurados no bot")
                 return
             
-            logger.info(f"📅 Agendando {len(downsells)} downsell(s) para pagamento {payment_id}")
+            # ✅ Importar fila RQ e função de job
+            from tasks_async import marathon_queue, send_downsell_job
             
-            # ✅ DIAGNÓSTICO: Verificar se pagamento existe e está pendente
-            try:
-                from app import app, db
-                from models import Payment
-                with app.app_context():
-                    payment = Payment.query.filter_by(payment_id=payment_id).first()
-                    if payment:
-                        logger.info(f"✅ Pagamento encontrado: status={payment.status}")
-                        if payment.status != 'pending':
-                            logger.warning(f"⚠️ Pagamento não está pendente (status={payment.status})")
-                            logger.warning(f"   Downsells podem ser cancelados se pagamento for aprovado antes do delay")
-                    else:
-                        logger.error(f"❌ Pagamento {payment_id} não encontrado no banco!")
-            except Exception as e:
-                logger.error(f"❌ Erro ao verificar pagamento: {e}")
+            if not marathon_queue:
+                logger.error(f"❌ CRÍTICO: Fila RQ 'marathon' não disponível!")
+                return
+            
+            logger.info(f"📅 Agendando {len(downsells)} downsell(s) via RQ para payment {payment_id}")
             
             jobs_agendados = []
             for i, downsell in enumerate(downsells):
-                delay_minutes = int(downsell.get('delay_minutes', 5))  # Converter para int
-                job_id = f"downsell_{bot_id}_{payment_id}_{i}"
+                delay_minutes = int(downsell.get('delay_minutes', 5))
                 
-                # ✅ CRÍTICO: Calcular data/hora de execução em UTC (scheduler usa UTC)
-                # PROBLEMA IDENTIFICADO: get_brazil_time() retorna UTC-3, mas scheduler espera UTC
-                from datetime import datetime, timezone
-                now_utc = datetime.now(timezone.utc)
-                run_time = now_utc + timedelta(minutes=delay_minutes)
-                
-                logger.info(f"📅 Downsell {i+1}:")
-                logger.info(f"   - Delay: {delay_minutes} minutos")
-                logger.info(f"   - Hora atual (UTC): {now_utc}")
-                logger.info(f"   - Hora execução (UTC): {run_time}")
-                logger.info(f"   - Job ID: {job_id}")
+                logger.info(f"📅 Downsell {i+1}: delay={delay_minutes}min")
                 
                 try:
-                    # ✅ CRÍTICO: Criar wrapper para garantir Flask app context
-                    def _send_downsell_wrapper(*args, **kwargs):
-                        """Wrapper que garante Flask app context para execução do scheduler"""
-                        from app import app
-                        logger.info(f"🔍 [SCHEDULER WRAPPER] Job sendo executado - criando app context")
-                        with app.app_context():
-                            try:
-                                return self._send_downsell(*args, **kwargs)
-                            except Exception as e:
-                                logger.error(f"❌ Erro no wrapper do scheduler: {e}", exc_info=True)
-                                raise
-                    
-                    # Agendar downsell com preço original para cálculo percentual
-                    self.scheduler.add_job(
-                        id=job_id,
-                        func=_send_downsell_wrapper,
-                        args=[bot_id, payment_id, chat_id, downsell, i, original_price, original_button_index],
-                        trigger='date',
-                        run_date=run_time,
-                        replace_existing=True,
-                        misfire_grace_time=300  # ✅ Permitir execução mesmo se atrasado até 5 minutos
+                    # ✅ AGENDAR VIA RQ: enqueue_in() agenda para executar após o delay
+                    job = marathon_queue.enqueue_in(
+                        timedelta(minutes=delay_minutes),
+                        send_downsell_job,
+                        bot_id=bot_id,
+                        payment_id=payment_id,
+                        chat_id=chat_id,
+                        downsell=downsell,
+                        index=i,
+                        original_price=original_price,
+                        original_button_index=original_button_index,
+                        job_id=f"downsell_{bot_id}_{payment_id}_{i}",  # ID único para anti-duplicação
+                        job_timeout=300  # 5 minutos timeout
                     )
                     
-                    # ✅ VERIFICAR se job foi realmente agendado
-                    try:
-                        job = self.scheduler.get_job(job_id)
-                        if job:
-                            logger.info(f"✅ Downsell {i+1} AGENDADO COM SUCESSO")
-                            logger.info(f"   - Job ID: {job.id}")
-                            logger.info(f"   - Próxima execução: {job.next_run_time}")
-                            jobs_agendados.append(job_id)
-                        else:
-                            logger.error(f"❌ CRÍTICO: Job {job_id} NÃO foi encontrado após agendamento!")
-                            logger.error(f"   O job pode não ter sido criado corretamente")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao verificar job agendado: {e}")
-                        
+                    logger.info(f"✅ Downsell {i+1} AGENDADO via RQ: job_id={job.id}")
+                    jobs_agendados.append(job.id)
+                    
                 except Exception as e:
-                    logger.error(f"❌ Erro ao agendar downsell {i+1}: {e}", exc_info=True)
+                    logger.error(f"❌ Erro ao agendar downsell {i+1} no RQ: {e}", exc_info=True)
             
-            logger.info(f"✅ Total de {len(jobs_agendados)} downsell(s) agendado(s) com sucesso")
-            logger.info(f"🚨 ===== FIM SCHEDULE_DOWNSELLS =====")
+            logger.info(f"✅ Total de {len(jobs_agendados)} downsell(s) agendado(s) via RQ")
+            logger.info(f"🚨 ===== FIM SCHEDULE_DOWNSELLS (RQ) =====")
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao agendar downsells: {e}", exc_info=True)
+            logger.error(f"❌ Erro ao agendar downsells via RQ: {e}", exc_info=True)
     
     def _send_downsell(self, bot_id: int, payment_id: str, chat_id: int, downsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
         """
@@ -10442,116 +10385,43 @@ Seu pagamento ainda não foi confirmado.
                 scheduler_running = self.scheduler.running
                 logger.info(f"🔍 Scheduler está rodando: {scheduler_running}")
                 if not scheduler_running:
-                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                    logger.error(f"   Jobs agendados NÃO serão executados!")
-                    logger.error(f"   Payment ID: {payment_id}")
-                    logger.error(f"   Bot ID: {bot_id}")
-                    logger.error(f"   AÇÃO NECESSÁRIA: Reiniciar aplicação ou verificar APScheduler")
-                    # ✅ CORREÇÃO CRÍTICA QI 500: Tentar iniciar scheduler se não estiver rodando
-                    try:
-                        logger.warning(f"⚠️ Tentando iniciar scheduler manualmente...")
-                        self.scheduler.start()
-                        logger.info(f"✅ Scheduler iniciado manualmente!")
-                        # Verificar novamente após iniciar
-                        scheduler_running = self.scheduler.running
-                        if scheduler_running:
-                            logger.info(f"✅ Scheduler confirmado rodando após início manual")
-                        else:
-                            logger.error(f"❌ Scheduler ainda não está rodando após tentativa de início")
-                    except Exception as start_error:
-                        logger.error(f"❌ Erro ao tentar iniciar scheduler: {start_error}", exc_info=True)
-                        logger.warning(f"⚠️ Continuando com agendamento mesmo assim (pode ser iniciado depois)")
-            except Exception as e:
-                logger.error(f"❌ ERRO ao verificar se scheduler está rodando: {e}", exc_info=True)
-                logger.warning(f"⚠️ Continuando com agendamento mesmo com erro na verificação")
-            
             if not upsells:
                 logger.warning(f"⚠️ Lista de upsells está vazia!")
-                logger.warning(f"   Verificar se upsells estão configurados no bot")
                 return
             
-            logger.info(f"📅 Agendando {len(upsells)} upsell(s) para pagamento {payment_id}")
+            # ✅ Importar fila RQ e função de job
+            from tasks_async import marathon_queue, send_upsell_job
             
-            # ✅ DIAGNÓSTICO: Verificar se pagamento existe e está pago
-            try:
-                from app import app, db
-                from models import Payment
-                with app.app_context():
-                    payment = Payment.query.filter_by(payment_id=payment_id).first()
-                    if payment:
-                        logger.info(f"✅ Pagamento encontrado: status={payment.status}")
-                        if payment.status != 'paid':
-                            logger.warning(f"⚠️ Pagamento não está pago (status={payment.status})")
-                            logger.warning(f"   Upsells devem ser enviados apenas para pagamentos aprovados")
-                            logger.warning(f"   Upsells NÃO serão agendados")
-                            return
-                    else:
-                        logger.error(f"❌ Pagamento {payment_id} não encontrado no banco!")
-                        return
-            except Exception as e:
-                logger.error(f"❌ Erro ao verificar pagamento: {e}")
+            if not marathon_queue:
+                logger.error(f"❌ CRÍTICO: Fila RQ 'marathon' não disponível!")
                 return
+            
+            logger.info(f"📅 Agendando {len(upsells)} upsell(s) via RQ para payment {payment_id}")
             
             jobs_agendados = []
             for i, upsell in enumerate(upsells):
-                delay_minutes = int(upsell.get('delay_minutes', 0))  # Converter para int
-                job_id = f"upsell_{bot_id}_{payment_id}_{i}"
+                delay_minutes = int(upsell.get('delay_minutes', 5))
                 
-                # ✅ CRÍTICO: Calcular data/hora de execução em UTC (scheduler usa UTC)
-                from datetime import datetime, timezone, timedelta
-                now_utc = datetime.now(timezone.utc)
-                run_time = now_utc + timedelta(minutes=delay_minutes)
-                
-                logger.info(f"📅 Upsell {i+1}:")
-                logger.info(f"   - Delay: {delay_minutes} minutos")
-                logger.info(f"   - Hora atual (UTC): {now_utc}")
-                logger.info(f"   - Hora execução (UTC): {run_time}")
-                logger.info(f"   - Job ID: {job_id}")
+                logger.info(f"📅 Upsell {i+1}: delay={delay_minutes}min")
                 
                 try:
-                    # ✅ CRÍTICO: Criar wrapper para garantir Flask app context
-                    def _send_upsell_wrapper(*args, **kwargs):
-                        """Wrapper que garante Flask app context para execução do scheduler"""
-                        from app import app
-                        logger.info(f"🔍 [SCHEDULER WRAPPER] Job sendo executado - criando app context")
-                        with app.app_context():
-                            try:
-                                return self._send_upsell(*args, **kwargs)
-                            except Exception as e:
-                                logger.error(f"❌ Erro no wrapper do scheduler: {e}", exc_info=True)
-                                raise
-                    
-                    # Agendar upsell com preço original para cálculo percentual
-                    self.scheduler.add_job(
-                        id=job_id,
-                        func=_send_upsell_wrapper,
-                        args=[bot_id, payment_id, chat_id, upsell, i, original_price, original_button_index],
-                        trigger='date',
-                        run_date=run_time,
-                        replace_existing=True,
-                        misfire_grace_time=300  # ✅ Permitir execução mesmo se atrasado até 5 minutos
+                    # ✅ AGENDAR VIA RQ: enqueue_in() agenda para executar após o delay
+                    job = marathon_queue.enqueue_in(
+                        timedelta(minutes=delay_minutes),
+                        send_upsell_job,
+                        bot_id=bot_id,
+                        payment_id=payment_id,
+                        chat_id=chat_id,
+                        upsell=upsell,
+                        index=i,
+                        original_price=original_price,
+                        original_button_index=original_button_index,
+                        job_id=f"upsell_{bot_id}_{payment_id}_{i}",  # ID único para anti-duplicação
+                        job_timeout=300  # 5 minutos timeout
                     )
                     
-                    # ✅ VERIFICAR se job foi realmente agendado (com retry e validação robusta)
-                    try:
-                        import time
-                        # ✅ Aguardar um pouco para garantir que job foi persistido
-                        time.sleep(0.1)
-                        
-                        job = self.scheduler.get_job(job_id)
-                        if job:
-                            logger.info(f"✅ Upsell {i+1} AGENDADO COM SUCESSO")
-                            logger.info(f"   - Job ID: {job.id}")
-                            logger.info(f"   - Próxima execução: {job.next_run_time}")
-                            logger.info(f"   - Delay configurado: {delay_minutes} minutos")
-                            jobs_agendados.append(job_id)
-                        else:
-                            logger.error(f"❌ CRÍTICO: Job {job_id} NÃO foi encontrado após agendamento!")
-                            logger.error(f"   - Payment ID: {payment_id}")
-                            logger.error(f"   - Bot ID: {bot_id}")
-                            logger.error(f"   - Delay: {delay_minutes} minutos")
-                            logger.error(f"   - Scheduler running: {self.scheduler.running if self.scheduler else 'N/A'}")
-                            logger.error(f"   AÇÃO: Verificar logs do scheduler ou reiniciar aplicação")
+                    logger.info(f"✅ Upsell {i+1} AGENDADO via RQ: job_id={job.id}")
+                    jobs_agendados.append(job.id)
                     except Exception as e:
                         logger.error(f"❌ ERRO ao verificar job agendado: {e}", exc_info=True)
                         logger.error(f"   Job ID: {job_id}")
