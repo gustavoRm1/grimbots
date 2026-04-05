@@ -1445,7 +1445,7 @@ class BotManager:
         """
         Processa update recebido do Telegram
         
-        ✅ QI 500: ANTI-DUPLICAÇÃO ABSOLUTO
+        # ✅ QI 500: ANTI-DUPLICAÇÃO ABSOLUTO
         - Lock por update_id para evitar processamento duplicado
         - Garante que cada update é processado apenas 1 vez
         - Previne reset múltiplo, pixel duplicado, mensagens duplicadas
@@ -1866,7 +1866,7 @@ class BotManager:
         """
         Processa mensagens de texto (não comandos)
         
-        ✅ CORREÇÃO CRÍTICA QI 600+:
+        # ✅ CORREÇÃO CRÍTICA QI 600+:
         - Verifica se há conversa ativa (mensagens do bot nos últimos 30 min)
         - Se houver conversa ativa, NÃO reinicia funil (apenas salva mensagem)
         - Se NÃO houver conversa ativa, reinicia funil (usuário retornando)
@@ -2107,7 +2107,7 @@ class BotManager:
         Envia apenas a mensagem de boas-vindas (sem Meta Pixel)
         Usado para mensagens de texto que reiniciam o funil
         
-        ✅ CRÍTICO: Respeita flow_enabled - se fluxo visual está ativo, não envia welcome_message
+        # ✅ CRÍTICO: Respeita flow_enabled - se fluxo visual está ativo, não envia welcome_message
         """
         try:
             from app import app, db
@@ -2236,7 +2236,7 @@ class BotManager:
     
     def _check_start_lock(self, chat_id: int) -> bool:
         """
-        ✅ QI 500: Lock para evitar /start duplicado
+        # ✅ QI 500: Lock para evitar /start duplicado
         
         Retorna True se pode processar (lock adquirido)
         Retorna False se já está processando (lock já existe)
@@ -2267,18 +2267,18 @@ class BotManager:
                                    buttons: list = None,
                                    delay_between: float = 0.2):
         """
-        ✅ QI 500: Envia step do funil SEQUENCIALMENTE (garante ordem)
+        # ✅ QI 500: Envia step do funil SEQUENCIALMENTE (garante ordem)
         
-        ✅ QI 10000: ANTI-DUPLICAÇÃO - Lock por chat+hash(texto) antes de enviar
+        # ✅ QI 10000: ANTI-DUPLICAÇÃO - Lock por chat+hash(texto) antes de enviar
         
-        ✅ NOVA LÓGICA: Se texto > 1024 caracteres (limite do Telegram para caption) E tem mídia:
+        # ✅ NOVA LÓGICA: Se texto > 1024 caracteres (limite do Telegram para caption) E tem mídia:
            1. Mídia PRIMEIRO (sem caption)
            2. Texto completo COM botões (depois da mídia)
         
-        ✅ LÓGICA PADRÃO: Se texto <= 1024 caracteres E tem mídia:
+        # ✅ LÓGICA PADRÃO: Se texto <= 1024 caracteres E tem mídia:
            1. Mídia COM caption e botões
         
-        ✅ LÓGICA SEM MÍDIA: Se não tem mídia:
+        # ✅ LÓGICA SEM MÍDIA: Se não tem mídia:
            1. Texto com botões (se houver texto)
            2. OU Botões separados (se não houver texto)
         
@@ -2631,8 +2631,8 @@ class BotManager:
         """
         Busca step por ID no fluxo
         
-        ✅ VALIDAÇÃO: Sanitiza step_id antes de buscar
-        ✅ CRÍTICO: Compara IDs como strings (pode vir como número ou string)
+        # ✅ VALIDAÇÃO: Sanitiza step_id antes de buscar
+        # ✅ CRÍTICO: Compara IDs como strings (pode vir como número ou string)
         """
         if not step_id:
             return None
@@ -2665,7 +2665,7 @@ class BotManager:
     
     def _validate_condition(self, condition: Dict[str, Any]) -> tuple:
         """
-        ✅ QI 500: Valida estrutura de uma condição
+        # ✅ QI 500: Valida estrutura de uma condição
         
         Returns:
             (is_valid: bool, error_message: str)
@@ -2731,11 +2731,11 @@ class BotManager:
                             context: Dict[str, Any] = None, bot_id: int = None, 
                             telegram_user_id: str = None, step_id: str = None) -> Optional[str]:
         """
-        ✅ QI 500: Avalia condições do step e retorna próximo step_id
+        # ✅ QI 500: Avalia condições do step e retorna próximo step_id
         
-        ✅ NOVO: Validação completa de condições antes de avaliar
-        ✅ NOVO: Validação de max_attempts com fallback
-        ✅ NOVO: Suporte a step de erro padrão
+        # ✅ NOVO: Validação completa de condições antes de avaliar
+        # ✅ NOVO: Validação de max_attempts com fallback
+        # ✅ NOVO: Suporte a step de erro padrão
         
         Args:
             step: Step atual com condições
@@ -2892,9 +2892,9 @@ class BotManager:
     
     def _match_button_click(self, condition: Dict[str, Any], callback_data: str, step: Dict[str, Any] = None) -> bool:
         """
-        ✅ QI 500: Verifica se callback_data corresponde ao botão da condição
+        # ✅ QI 500: Verifica se callback_data corresponde ao botão da condição
         
-        ✅ CORREÇÃO: Match exato usando índice do botão quando disponível
+        # ✅ CORREÇÃO: Match exato usando índice do botão quando disponível
         """
         if not callback_data or not isinstance(callback_data, str):
             return False
@@ -2958,9 +2958,9 @@ class BotManager:
     def _match_time_elapsed(self, condition: Dict[str, Any], context: Dict[str, Any], 
                            bot_id: int = None, telegram_user_id: str = None, step_id: str = None) -> bool:
         """
-        ✅ QI 500: Verifica se tempo decorrido corresponde à condição
+        # ✅ QI 500: Verifica se tempo decorrido corresponde à condição
         
-        ✅ NOVO: Implementação funcional usando Redis para rastrear timestamp
+        # ✅ NOVO: Implementação funcional usando Redis para rastrear timestamp
         """
         required_minutes = condition.get('minutes', 5)
         
@@ -2989,9 +2989,9 @@ class BotManager:
     
     def _validate_cpf(self, cpf: str) -> bool:
         """
-        ✅ QI 500: Valida CPF com dígitos verificadores
+        # ✅ QI 500: Valida CPF com dígitos verificadores
         
-        ✅ NOVO: Validação robusta de edge cases
+        # ✅ NOVO: Validação robusta de edge cases
         
         Args:
             cpf: CPF a ser validado (pode conter formatação)
@@ -3045,7 +3045,7 @@ class BotManager:
     
     def _save_payment_flow_step_id(self, payment_id: str, step_id: str) -> bool:
         """
-        ✅ QI 500: Salva flow_step_id no payment de forma atômica
+        # ✅ QI 500: Salva flow_step_id no payment de forma atômica
         
         Returns:
             bool: True se salvou com sucesso
@@ -3092,7 +3092,7 @@ class BotManager:
     
     def _build_step_buttons(self, step: Dict[str, Any], config: Dict[str, Any] = None) -> list:
         """
-        ✅ QI 500: Constrói lista de botões para um step (customizados + cadastrados)
+        # ✅ QI 500: Constrói lista de botões para um step (customizados + cadastrados)
         
         Returns:
             list: Lista de botões no formato Telegram API
@@ -3154,7 +3154,7 @@ class BotManager:
     
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
         """
-        ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
+        # ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
         """
         import time
         
@@ -3352,10 +3352,10 @@ class BotManager:
     
     def _save_current_step_atomic(self, bot_id: int, telegram_user_id: str, step_id: str, ttl: int = 7200) -> bool:
         """
-        ✅ QI 500: Salva step atual com lock atômico (evita race conditions)
+        # ✅ QI 500: Salva step atual com lock atômico (evita race conditions)
         
-        ✅ NOVO: TTL aumentado para 2 horas (evita perda de estado em sessões longas)
-        ✅ NOVO: Timeout em operações Redis
+        # ✅ NOVO: TTL aumentado para 2 horas (evita perda de estado em sessões longas)
+        # ✅ NOVO: Timeout em operações Redis
         
         Returns:
             bool: True se salvou com sucesso, False se falhou
@@ -3431,7 +3431,7 @@ class BotManager:
     
     def _get_current_step_atomic(self, bot_id: int, telegram_user_id: str) -> Optional[str]:
         """
-        ✅ QI 500: Busca step atual com validação e timeout
+        # ✅ QI 500: Busca step atual com validação e timeout
         
         Returns:
             str: step_id ou None se não encontrado
@@ -3462,7 +3462,7 @@ class BotManager:
     
     def _get_flow_snapshot_from_redis(self, bot_id: int, telegram_user_id: str) -> Optional[Dict[str, Any]]:
         """
-        ✅ QI 500: Busca snapshot de config do Redis
+        # ✅ QI 500: Busca snapshot de config do Redis
         
         Returns:
             Dict com snapshot ou None se não encontrado
@@ -3494,12 +3494,12 @@ class BotManager:
     def _execute_flow(self, bot_id: int, token: str, config: Dict[str, Any], 
                       chat_id: int, telegram_user_id: str):
         """
-        ✅ QI 500: Executa fluxo visual configurado - com snapshot de config
+        # ✅ QI 500: Executa fluxo visual configurado - com snapshot de config
         
-        ✅ SEGURO: Fallback para welcome_message se fluxo inválido
-        ✅ HÍBRIDO: Síncrono até payment, assíncrono após callback
-        ✅ INTELIGENTE: Usa flow_start_step_id ou fallback automático (order=1 ou primeiro step)
-        ✅ SNAPSHOT: Cria snapshot da config no início (evita mudanças durante execução)
+        # ✅ SEGURO: Fallback para welcome_message se fluxo inválido
+        # ✅ HÍBRIDO: Síncrono até payment, assíncrono após callback
+        # ✅ INTELIGENTE: Usa flow_start_step_id ou fallback automático (order=1 ou primeiro step)
+        # ✅ SNAPSHOT: Cria snapshot da config no início (evita mudanças durante execução)
         """
         try:
             import json
@@ -3638,11 +3638,11 @@ class BotManager:
                                 recursion_depth: int = 0, visited_steps: set = None,
                                 flow_snapshot: Dict[str, Any] = None):
         """
-        ✅ QI 500: Executa step recursivamente - THREAD-SAFE e ROBUSTO
+        # ✅ QI 500: Executa step recursivamente - THREAD-SAFE e ROBUSTO
         
-        ✅ RECURSÃO LIMITADA: Máximo 50 steps (proteção contra loops infinitos)
-        ✅ DETECÇÃO DE LOOPS: Usa visited_steps para detectar ciclos
-        ✅ SNAPSHOT DE CONFIG: Usa snapshot se disponível (evita mudanças durante execução)
+        # ✅ RECURSÃO LIMITADA: Máximo 50 steps (proteção contra loops infinitos)
+        # ✅ DETECÇÃO DE LOOPS: Usa visited_steps para detectar ciclos
+        # ✅ SNAPSHOT DE CONFIG: Usa snapshot se disponível (evita mudanças durante execução)
         
         Args:
             recursion_depth: Profundidade atual (passado como parâmetro, não atributo)
@@ -4009,7 +4009,7 @@ class BotManager:
     
     def continue_flow_if_active(self, bot, chat_id, telegram_user_id):
         """
-        ✅ V∞: Se o usuário estiver no meio do flow, continuar automaticamente.
+        # ✅ V∞: Se o usuário estiver no meio do flow, continuar automaticamente.
         
         Args:
             bot: Objeto Bot
@@ -4055,7 +4055,7 @@ class BotManager:
     def _handle_missing_step(self, bot_id: int, token: str, config: Dict[str, Any],
                              chat_id: int, telegram_user_id: str):
         """
-        ✅ QI 500: Fallback quando step não é encontrado
+        # ✅ QI 500: Fallback quando step não é encontrado
         """
         try:
             # Limpar step atual do Redis
@@ -4084,11 +4084,11 @@ class BotManager:
     def _execute_flow_step_async(self, bot_id: int, token: str, config: Dict[str, Any],
                                   chat_id: int, telegram_user_id: str, step_id: str):
         """
-        ✅ QI 500: Executa step do fluxo de forma assíncrona (via RQ)
+        # ✅ QI 500: Executa step do fluxo de forma assíncrona (via RQ)
         
-        ✅ ASSÍNCRONO: Pode ser pesado (access pode enviar múltiplas mensagens)
-        ✅ SNAPSHOT: Busca snapshot do Redis para manter consistência
-        ✅ IDEMPOTÊNCIA: Verifica se step já foi executado (evita duplicação)
+        # ✅ ASSÍNCRONO: Pode ser pesado (access pode enviar múltiplas mensagens)
+        # ✅ SNAPSHOT: Busca snapshot do Redis para manter consistência
+        # ✅ IDEMPOTÊNCIA: Verifica se step já foi executado (evita duplicação)
         """
         try:
             from app import app, db
@@ -4152,7 +4152,7 @@ class BotManager:
     
     def _reset_user_funnel(self, bot_id: int, chat_id: int, telegram_user_id: str, db_session=None):
         """
-        ✅ QI 500: RESET ABSOLUTO DO FUNIL
+        # ✅ QI 500: RESET ABSOLUTO DO FUNIL
         
         Limpa TODOS os estados e sessões do funil:
         - Sessões de order bump
@@ -4232,13 +4232,13 @@ class BotManager:
         """
         Processa comando /start - FAST RESPONSE MODE (QI 200)
         
-        ✅ REGRA ABSOLUTA QI 200: /start SEMPRE reinicia o funil
+        # ✅ REGRA ABSOLUTA QI 200: /start SEMPRE reinicia o funil
         - Ignora conversa ativa
         - Ignora histórico
         - Ignora steps anteriores
         - Zera tudo e começa do zero
         
-        ✅ OTIMIZAÇÃO QI 200: Resposta <50ms
+        # ✅ OTIMIZAÇÃO QI 200: Resposta <50ms
         - Envia mensagem IMEDIATAMENTE
         - Processa tarefas pesadas em background via RQ
         
@@ -7572,7 +7572,7 @@ Seu pagamento ainda não foi confirmado.
             customer_username: Username do Telegram
             customer_user_id: ID do usuário no Telegram
             
-        ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
+        # ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
         """
         # 🔒 LOCK DISTRIBUÍDO PARA EVITAR REQUISIÇÕES SIMULTÂNEAS DO MESMO USUÁRIO/BOT
         lock_key = None
@@ -10095,7 +10095,7 @@ Seu pagamento ainda não foi confirmado.
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
         """
-        ✅ MIGRAÇÃO RQ: Agenda downsells usando RQ (Redis Queue) em vez de APScheduler
+        # ✅ MIGRAÇÃO RQ: Agenda downsells usando RQ (Redis Queue) em vez de APScheduler
         
         Args:
             bot_id: ID do bot
@@ -10465,7 +10465,7 @@ Seu pagamento ainda não foi confirmado.
         """
         Agenda upsells para um pagamento aprovado
         
-        ✅ DIFERENÇA CRÍTICA vs downsells:
+        # ✅ DIFERENÇA CRÍTICA vs downsells:
         - Upsells são enviados quando payment.status == 'paid'
         - Downsells são enviados quando payment.status == 'pending'
         
@@ -10557,7 +10557,7 @@ Seu pagamento ainda não foi confirmado.
         """
         Envia upsell agendado
         
-        ✅ DIFERENÇA CRÍTICA vs downsell:
+        # ✅ DIFERENÇA CRÍTICA vs downsell:
         - Upsells são enviados quando payment.status == 'paid'
         - Downsells são enviados quando payment.status == 'pending'
         
@@ -12113,8 +12113,8 @@ Seu pagamento ainda não foi confirmado.
         """
         Ativa subscription quando usuário entra no grupo VIP
         
-        ✅ LOCK PESSIMISTA para evitar race condition
-        ✅ Calcula expires_at usando dateutil.relativedelta para meses
+        # ✅ LOCK PESSIMISTA para evitar race condition
+        # ✅ Calcula expires_at usando dateutil.relativedelta para meses
         
         Retorna: True se ativada com sucesso, False caso contrário
         """
@@ -12201,7 +12201,7 @@ Seu pagamento ainda não foi confirmado.
         """
         Processa quando novo membro entra no grupo
         
-        ✅ Ativa subscriptions pendentes para este usuário neste grupo
+        # ✅ Ativa subscriptions pendentes para este usuário neste grupo
         """
         from app import app, db
         from models import Subscription
