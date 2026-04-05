@@ -1319,6 +1319,7 @@ class BotManager:
         Args:
             bot_id: ID do bot
             token: Token do bot
+        """
         # ✅ REDIS BRAIN: Verificar se bot está ativo no Redis
         bot_data = self.bot_state.get_bot_data(bot_id)
         if not bot_data or bot_data.get('status') != 'running':
