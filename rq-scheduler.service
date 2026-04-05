@@ -11,8 +11,8 @@ Environment=PYTHONPATH=/root/grimbots
 Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=REDIS_URL=redis://localhost:6379/0
 
-# ✅ Comando NATIVO RQ: O scheduler é built-in no RQ 2.7.0+
-ExecStart=/root/grimbots/venv/bin/rq scheduler --url redis://localhost:6379/0
+# ✅ Comando NATIVO RQ: Worker com scheduler integrado (RQ 2.7.0+)
+ExecStart=/root/grimbots/venv/bin/rq worker --with-scheduler --queue marathon --name scheduler-manager --url redis://localhost:6379/0
 
 # ✅ RESILIÊNCIA MÁXIMA
 Restart=always
