@@ -86,35 +86,43 @@ if [[ -n "$PORT_PID" ]]; then
     sleep 1
 fi
 
-# ENCERRAR WORKERS RQ
-echo " Encerrando workers RQ..."
-if pgrep -f start_rq_worker.py >/dev/null 2>&1; then
-    pgrep -f start_rq_worker.py | xargs -r kill -9 2>/dev/null || true
-fi
+# REINICIAR WORKERS VIA SYSTEMD (SRE: Resiliência garantida pelo systemd)
+echo "🔄 Reiniciando workers RQ via systemctl..."
 
-# INICIAR WORKERS RQ
-echo " Iniciando workers RQ..."
-mkdir -p logs
+# Parar todas as instâncias de workers primeiro
+for i in gateway-1 gateway-2 webhook-1 webhook-2 tasks-1 tasks-2 marathon-1 marathon-2 marathon-3 marathon-4; do
+    systemctl stop rq-worker@$i 2>/dev/null || true
+done
 
-# Workers de Infra
-nohup python3 start_rq_worker.py gateway > logs/rq-gateway.log 2>&1 &
-nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
+# Pequena pausa para garantir liberação de recursos
+sleep 2
 
-# Via Expressa (Alta Prioridade)
-nohup python3 start_rq_worker.py tasks > logs/rq-tasks-1.log 2>&1 &
-nohup python3 start_rq_worker.py tasks > logs/rq-tasks-2.log 2>&1 &
+# Iniciar workers na ordem correta: Infra → Via Expressa → Trem de Carga
+systemctl start rq-worker@gateway-1
+systemctl start rq-worker@gateway-2
+systemctl start rq-worker@webhook-1
+systemctl start rq-worker@webhook-2
+systemctl start rq-worker@tasks-1
+systemctl start rq-worker@tasks-2
+systemctl start rq-worker@marathon-1
+systemctl start rq-worker@marathon-2
+systemctl start rq-worker@marathon-3
+systemctl start rq-worker@marathon-4
 
-# Trem de Carga (Remarketing)
-nohup python3 start_rq_worker.py marathon > logs/rq-marathon-1.log 2>&1 &
-nohup python3 start_rq_worker.py marathon > logs/rq-marathon-2.log 2>&1 &
-nohup python3 start_rq_worker.py marathon > logs/rq-marathon-3.log 2>&1 &
-nohup python3 start_rq_worker.py marathon > logs/rq-marathon-4.log 2>&1 &
+# Recarregar daemon do systemd (caso o arquivo .service tenha mudado)
+systemctl daemon-reload 2>/dev/null || true
+
+# Habilitar auto-start no boot
+for i in gateway-1 gateway-2 webhook-1 webhook-2 tasks-1 tasks-2 marathon-1 marathon-2 marathon-3 marathon-4; do
+    systemctl enable rq-worker@$i 2>/dev/null || true
+done
 
 echo ""
-echo " Workers RQ reiniciados com sucesso!"
+echo "✅ Workers RQ reiniciados via systemctl!"
 echo ""
-echo " Comandos úteis:"
-echo "   sudo systemctl status grimbots    # Status do serviço"
-echo "   tail -f logs/rq-*.log             # Logs dos workers"
-echo "   curl http://localhost:5000/health # Health check"
+echo "📋 Comandos úteis:"
+echo "   sudo systemctl status rq-worker@tasks-1   # Status de um worker"
+echo "   sudo journalctl -u rq-worker@marathon-1 -f # Logs em tempo real"
+echo "   sudo systemctl list-units 'rq-worker@*'    # Listar todos os workers"
+echo "   curl http://localhost:5000/health         # Health check da API"
 echo ""
