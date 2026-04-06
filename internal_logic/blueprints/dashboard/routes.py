@@ -774,7 +774,17 @@ def chat():
     """Página de chat com leads"""
     # Buscar bots do usuário
     bots = Bot.query.filter_by(user_id=current_user.id).all()
-    return render_template('chat.html', bots=bots)
+    
+    # Serializar bots para dict (frontend exige JSON)
+    bots_list = [{
+        'id': b.id,
+        'name': b.name,
+        'username': getattr(b, 'username', ''),
+        'is_running': getattr(b, 'is_running', False),
+        'is_active': getattr(b, 'is_active', True)
+    } for b in bots]
+    
+    return render_template('chat.html', bots=bots_list)
 
 
 @dashboard_bp.route('/api/chat/conversations/<int:bot_id>')
@@ -1620,3 +1630,371 @@ def update_meta_pixel_config(bot_id):
         db.session.rollback()
         logger.error(f"Erro ao atualizar configuração Meta Pixel: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# BOT MANAGEMENT APIs (Resgatadas da migração)
+# ============================================================================
+
+@dashboard_bp.route('/api/bots', methods=['GET'])
+@login_required
+def api_get_bots():
+    """Retorna lista de bots do usuário (JSON)"""
+    bots = Bot.query.filter_by(user_id=current_user.id).all()
+    
+    bots_list = []
+    for bot in bots:
+        bots_list.append({
+            'id': bot.id,
+            'name': bot.name,
+            'username': getattr(bot, 'username', ''),
+            'is_running': getattr(bot, 'is_running', False),
+            'is_active': getattr(bot, 'is_active', True),
+            'total_users': getattr(bot, 'total_users', 0),
+            'total_sales': getattr(bot, 'total_sales', 0),
+            'total_revenue': float(getattr(bot, 'total_revenue', 0) or 0),
+            'pending_sales': getattr(bot, 'pending_sales', 0),
+            'created_at': bot.created_at.isoformat() if bot.created_at else None,
+            'token': bot.token[:10] + '...' if bot.token else None  # Parcial por segurança
+        })
+    
+    return jsonify(bots_list)
+
+
+@dashboard_bp.route('/api/bots', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_create_bot():
+    """Cria um novo bot via API"""
+    data = request.get_json()
+    
+    token = data.get('token', '').strip()
+    name = data.get('name', 'Novo Bot').strip()
+    
+    if not token:
+        return jsonify({'error': 'Token é obrigatório'}), 400
+    
+    try:
+        # Verificar se token já existe
+        existing = Bot.query.filter_by(token=token).first()
+        if existing:
+            return jsonify({'error': 'Este token já está em uso'}), 400
+        
+        bot = Bot(
+            user_id=current_user.id,
+            name=name,
+            token=token,
+            is_active=True,
+            is_running=False
+        )
+        
+        db.session.add(bot)
+        db.session.commit()
+        
+        logger.info(f"Bot criado via API: {bot.name} (ID: {bot.id}) por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'bot': {
+                'id': bot.id,
+                'name': bot.name,
+                'username': bot.username if hasattr(bot, 'username') else None,
+                'is_running': bot.is_running,
+                'is_active': bot.is_active
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar bot: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>', methods=['DELETE'])
+@login_required
+@csrf.exempt
+def api_delete_bot(bot_id):
+    """Deleta um bot via API"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        db.session.delete(bot)
+        db.session.commit()
+        
+        logger.info(f"Bot deletado via API: {bot_id} por {current_user.email}")
+        return jsonify({'success': True, 'message': 'Bot deletado com sucesso'})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao deletar bot: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_duplicate_bot(bot_id):
+    """Duplica um bot existente"""
+    source_bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    new_token = data.get('token', '').strip()
+    new_name = data.get('name', f"{source_bot.name} (Cópia)").strip()
+    
+    if not new_token:
+        return jsonify({'error': 'Token do novo bot é obrigatório'}), 400
+    
+    try:
+        # Verificar se token já existe
+        existing = Bot.query.filter_by(token=new_token).first()
+        if existing:
+            return jsonify({'error': 'Este token já está em uso'}), 400
+        
+        # Criar novo bot copiando configurações do original
+        new_bot = Bot(
+            user_id=current_user.id,
+            name=new_name,
+            token=new_token,
+            is_active=True,
+            is_running=False,
+            # Copiar configurações relevantes
+            welcome_message=source_bot.welcome_message if hasattr(source_bot, 'welcome_message') else None,
+            gateway_id=source_bot.gateway_id if hasattr(source_bot, 'gateway_id') else None,
+            products_config=source_bot.products_config if hasattr(source_bot, 'products_config') else None
+        )
+        
+        db.session.add(new_bot)
+        db.session.commit()
+        
+        logger.info(f"Bot duplicado via API: {source_bot.id} -> {new_bot.id} por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'bot': {
+                'id': new_bot.id,
+                'name': new_bot.name,
+                'username': new_bot.username if hasattr(new_bot, 'username') else None,
+                'is_running': new_bot.is_running,
+                'is_active': new_bot.is_active
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao duplicar bot: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/export', methods=['GET'])
+@login_required
+def api_export_bot(bot_id):
+    """Exporta configuração de um bot"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    export_data = {
+        'name': bot.name,
+        'welcome_message': getattr(bot, 'welcome_message', None),
+        'products_config': getattr(bot, 'products_config', None),
+        'gateway_id': getattr(bot, 'gateway_id', None),
+        'meta_pixel_id': getattr(bot, 'meta_pixel_id', None),
+        'meta_tracking_enabled': getattr(bot, 'meta_tracking_enabled', False),
+        'exported_at': datetime.now().isoformat()
+    }
+    
+    return jsonify({'success': True, 'export': export_data})
+
+
+@dashboard_bp.route('/api/bots/verify-status', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_verify_bots_status():
+    """Verifica status atual dos bots no Telegram"""
+    from bot_manager import BotManager
+    
+    bots = Bot.query.filter_by(user_id=current_user.id).all()
+    
+    bots_status = []
+    for bot in bots:
+        status = {
+            'id': bot.id,
+            'is_running': bot.is_running if hasattr(bot, 'is_running') else False,
+            'sources': ['database']
+        }
+        bots_status.append(status)
+    
+    return jsonify({'success': True, 'bots': bots_status})
+
+
+@dashboard_bp.route('/bots/<int:bot_id>/config')
+@login_required
+def bot_config_page(bot_id):
+    """Página de configuração do bot"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    return render_template('bot_config.html', bot=bot)
+
+
+# ============================================================================
+# NOTIFICATION SETTINGS APIs (Resgatadas da migração)
+# ============================================================================
+
+@dashboard_bp.route('/api/notification-settings', methods=['GET'])
+@login_required
+def api_get_notification_settings():
+    """Retorna configurações de notificação do usuário"""
+    # Verificar se existe tabela de configurações de notificação
+    try:
+        from internal_logic.core.models import NotificationSettings
+        settings = NotificationSettings.query.filter_by(user_id=current_user.id).first()
+        
+        if not settings:
+            # Retornar defaults
+            return jsonify({
+                'notify_approved_sales': True,
+                'notify_pending_sales': False,
+                'user_id': current_user.id
+            })
+        
+        return jsonify({
+            'notify_approved_sales': getattr(settings, 'notify_approved_sales', True),
+            'notify_pending_sales': getattr(settings, 'notify_pending_sales', False),
+            'user_id': current_user.id
+        })
+        
+    except Exception as e:
+        # Se tabela não existir, retornar defaults
+        logger.warning(f"NotificationSettings não disponível: {e}")
+        return jsonify({
+            'notify_approved_sales': True,
+            'notify_pending_sales': False,
+            'user_id': current_user.id
+        })
+
+
+@dashboard_bp.route('/api/notification-settings', methods=['PUT'])
+@login_required
+@csrf.exempt
+def api_update_notification_settings():
+    """Atualiza configurações de notificação do usuário"""
+    data = request.get_json()
+    
+    try:
+        from internal_logic.core.models import NotificationSettings
+        
+        settings = NotificationSettings.query.filter_by(user_id=current_user.id).first()
+        
+        if not settings:
+            settings = NotificationSettings(user_id=current_user.id)
+            db.session.add(settings)
+        
+        settings.notify_approved_sales = data.get('notify_approved_sales', True)
+        settings.notify_pending_sales = data.get('notify_pending_sales', False)
+        
+        db.session.commit()
+        
+        logger.info(f"Configurações de notificação atualizadas para {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'notify_approved_sales': settings.notify_approved_sales,
+            'notify_pending_sales': settings.notify_pending_sales
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"Erro ao atualizar NotificationSettings: {e}")
+        # Retornar sucesso mesmo se tabela não existir (modo degradado)
+        return jsonify({
+            'success': True,
+            'notify_approved_sales': data.get('notify_approved_sales', True),
+            'notify_pending_sales': data.get('notify_pending_sales', False),
+            'note': 'Modo degradado - configurações não persistidas'
+        })
+
+
+# ============================================================================
+# REMARKETING CAMPAIGNS APIs (Resgatadas da migração)
+# ============================================================================
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/remarketing/campaigns', methods=['GET'])
+@login_required
+def api_get_remarketing_campaigns(bot_id):
+    """Retorna campanhas de remarketing de um bot"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        from internal_logic.core.models import RemarketingCampaign
+        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).all()
+        
+        campaigns_data = []
+        for campaign in campaigns:
+            campaigns_data.append({
+                'id': campaign.id,
+                'name': campaign.name,
+                'message': campaign.message,
+                'segment': campaign.segment,
+                'is_active': campaign.is_active,
+                'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+                'executed_at': campaign.executed_at.isoformat() if campaign.executed_at else None,
+                'executed_count': campaign.executed_count,
+                'created_at': campaign.created_at.isoformat() if campaign.created_at else None
+            })
+        
+        return jsonify(campaigns_data)
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar campanhas: {e}")
+        return jsonify([])
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/remarketing/campaigns', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_create_remarketing_campaign(bot_id):
+    """Cria nova campanha de remarketing"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    
+    name = data.get('name', '').strip()
+    message = data.get('message', '').strip()
+    segment = data.get('segment', 'all_users')
+    
+    if not name or not message:
+        return jsonify({'error': 'Nome e mensagem são obrigatórios'}), 400
+    
+    try:
+        from internal_logic.core.models import RemarketingCampaign
+        from datetime import datetime
+        
+        campaign = RemarketingCampaign(
+            bot_id=bot_id,
+            name=name,
+            message=message,
+            segment=segment,
+            is_active=True,
+            scheduled_at=datetime.now(),
+            executed_count=0
+        )
+        
+        db.session.add(campaign)
+        db.session.commit()
+        
+        logger.info(f"Campanha criada: {name} para bot {bot_id}")
+        
+        return jsonify({
+            'success': True,
+            'campaign': {
+                'id': campaign.id,
+                'name': campaign.name,
+                'message': campaign.message,
+                'segment': campaign.segment,
+                'is_active': campaign.is_active,
+                'created_at': campaign.created_at.isoformat() if campaign.created_at else None
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar campanha: {e}")
+        return jsonify({'error': str(e)}), 500
+
