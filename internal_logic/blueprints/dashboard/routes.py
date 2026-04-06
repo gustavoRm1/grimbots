@@ -1340,6 +1340,58 @@ def get_redirect_pools():
     return jsonify({'success': True, 'pools': pools_data})
 
 
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['GET'])
+@login_required
+def get_redirect_pool_detail(pool_id):
+    """
+    Obtém detalhes de um pool específico com seus relacionamentos
+    (Migrado do laboratório - rota faltante)
+    """
+    from internal_logic.core.models import RedirectPool, PoolBot
+    
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    # Incluir lista de bots (serializados)
+    pool_data = pool.to_dict()
+    pool_data['bots'] = [pb.to_dict() for pb in pool.pool_bots.all()]
+    
+    return jsonify(pool_data)
+
+
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_pool_bot_config(pool_id, pool_bot_id):
+    """
+    Atualiza configurações do bot no pool (weight, priority, enabled)
+    (Migrado do laboratório - rota faltante)
+    """
+    from internal_logic.core.models import RedirectPool, PoolBot
+    
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    pool_bot = PoolBot.query.filter_by(id=pool_bot_id, pool_id=pool_id).first_or_404()
+    
+    data = request.get_json()
+    
+    if 'weight' in data:
+        pool_bot.weight = max(1, int(data['weight']))
+    
+    if 'priority' in data:
+        pool_bot.priority = int(data['priority'])
+    
+    if 'is_active' in data:
+        pool_bot.is_active = data['is_active']
+    
+    db.session.commit()
+    
+    logger.info(f"Configurações do bot {pool_bot.bot_id} no pool {pool_id} atualizadas")
+    
+    return jsonify({
+        'message': 'Configurações atualizadas!',
+        'pool_bot': pool_bot.to_dict()
+    })
+
+
 @dashboard_bp.route('/api/redirect-pools', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -1549,6 +1601,213 @@ def rotate_pool_bot(pool_id):
         'bot_id': selected.bot_id,
         'bot_username': selected.bot.username if selected.bot else None,
         'priority': selected.priority
+    })
+
+
+# ============================================================================
+# META PIXEL POOL ROUTES (Migrado do laboratório)
+# ============================================================================
+
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['GET'])
+@login_required
+def get_pool_meta_pixel_config(pool_id):
+    """
+    Obtém configuração do Meta Pixel do pool
+    (Migrado do laboratório - rota faltante)
+    """
+    from internal_logic.core.models import RedirectPool
+    
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    return jsonify({
+        'pool_id': pool.id,
+        'pool_name': pool.name,
+        'meta_pixel_id': pool.meta_pixel_id if pool.meta_pixel_id else None,
+        'meta_access_token': pool.meta_access_token,  # Criptografado no banco
+        'meta_tracking_enabled': pool.meta_tracking_enabled,
+        'meta_test_event_code': pool.meta_test_event_code if pool.meta_test_event_code else None,
+        'meta_events_pageview': pool.meta_events_pageview,
+        'meta_events_viewcontent': pool.meta_events_viewcontent,
+        'meta_events_purchase': pool.meta_events_purchase,
+        'meta_cloaker_enabled': pool.meta_cloaker_enabled,
+        'meta_cloaker_param_name': 'grim',
+        'meta_cloaker_param_value': pool.meta_cloaker_param_value if pool.meta_cloaker_param_value else None,
+        'utmify_pixel_id': pool.utmify_pixel_id if pool.utmify_pixel_id else None
+    })
+
+
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_pool_meta_pixel_config(pool_id):
+    """
+    Atualiza configuração do Meta Pixel do pool
+    (Migrado do laboratório - rota faltante)
+    """
+    from internal_logic.core.models import RedirectPool
+    
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    
+    # Atualizar campos do Meta Pixel
+    if 'meta_pixel_id' in data:
+        pool.meta_pixel_id = data['meta_pixel_id'].strip() if data['meta_pixel_id'] else None
+    
+    if 'meta_access_token' in data:
+        token = data['meta_access_token'].strip()
+        # Só atualizar se não for o marcador de campo mascarado
+        if token and not token.startswith('...'):
+            pool.meta_access_token = token
+    
+    if 'meta_tracking_enabled' in data:
+        pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
+    
+    if 'meta_test_event_code' in data:
+        pool.meta_test_event_code = data['meta_test_event_code'].strip() if data['meta_test_event_code'] else None
+    
+    if 'meta_events_pageview' in data:
+        pool.meta_events_pageview = bool(data['meta_events_pageview'])
+    
+    if 'meta_events_viewcontent' in data:
+        pool.meta_events_viewcontent = bool(data['meta_events_viewcontent'])
+    
+    if 'meta_events_purchase' in data:
+        pool.meta_events_purchase = bool(data['meta_events_purchase'])
+    
+    if 'meta_cloaker_enabled' in data:
+        pool.meta_cloaker_enabled = bool(data['meta_cloaker_enabled'])
+    
+    if 'meta_cloaker_param_value' in data:
+        pool.meta_cloaker_param_value = data['meta_cloaker_param_value'].strip() if data['meta_cloaker_param_value'] else None
+    
+    if 'utmify_pixel_id' in data:
+        pool.utmify_pixel_id = data['utmify_pixel_id'].strip() if data['utmify_pixel_id'] else None
+    
+    try:
+        db.session.commit()
+        logger.info(f"Configuração Meta Pixel atualizada para pool {pool_id}")
+        return jsonify({
+            'success': True,
+            'pool_id': pool.id,
+            'meta_tracking_enabled': pool.meta_tracking_enabled
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar Meta Pixel do pool: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/meta-pixel/test', methods=['POST'])
+@login_required
+@csrf.exempt
+def test_pool_meta_pixel_connection(pool_id):
+    """
+    Testa conexão com Meta Pixel API
+    (Migrado do laboratório - rota faltante)
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    pixel_id = data.get('pixel_id', '').strip()
+    access_token = data.get('access_token', '').strip()
+    
+    if not pixel_id or not access_token:
+        return jsonify({'error': 'Pixel ID e Access Token são obrigatórios'}), 400
+    
+    # Resposta simulada (em produção, implementar teste real com Meta API)
+    return jsonify({
+        'success': True,
+        'message': 'Conexão testada (modo simulado)',
+        'pixel_id': pixel_id
+    })
+
+
+# ============================================================================
+# UTMIFY ROUTES (Migrado do laboratório)
+# ============================================================================
+
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/generate-utmify-utms', methods=['POST'])
+@login_required
+def generate_utmify_utms(pool_id):
+    """
+    Gera códigos de UTMs Utmify para Meta Ads
+    (Migrado do laboratório - rota faltante)
+    """
+    from internal_logic.core.models import RedirectPool
+    
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    model = data.get('model', 'standard')
+    base_url = data.get('base_url', f"{request.scheme}://{request.host}/go/{pool.slug}")
+    
+    # GARANTIR: base_url não deve conter parâmetros
+    if '?' in base_url:
+        base_url = base_url.split('?')[0]
+    
+    # Obter valor do grim se cloaker estiver ativo
+    grim_value = None
+    if pool.meta_cloaker_enabled and pool.meta_cloaker_param_value:
+        grim_value = pool.meta_cloaker_param_value
+    
+    # Base dos UTMs (formato Utmify)
+    base_utms = (
+        "utm_source=FB"
+        "&utm_campaign={{campaign.name}}|{{campaign.id}}"
+        "&utm_medium={{adset.name}}|{{adset.id}}"
+        "&utm_content={{ad.name}}|{{ad.id}}"
+        "&utm_term={{placement}}"
+    )
+    
+    utm_params = base_utms
+    
+    # Modelos específicos
+    if model == "hotmart":
+        xcod = data.get('xcod', '').strip()
+        if not xcod:
+            return jsonify({'error': 'xcod é obrigatório para modelo Hotmart'}), 400
+        xcod_param = f"&xcod={xcod}{{campaign.name}}|{{campaign.id}}{xcod}{{adset.name}}|{{adset.id}}{xcod}{{ad.name}}|{{ad.id}}{xcod}{{placement}}"
+        utm_params = f"{base_utms}{xcod_param}"
+    elif model == "cartpanda":
+        cid = data.get('cid', '').strip()
+        if not cid:
+            return jsonify({'error': 'cid é obrigatório para modelo Cartpanda'}), 400
+        utm_params = f"{base_utms}&cid={cid}"
+    elif model == "custom":
+        utm_source = data.get('utm_source', 'FB').strip()
+        utm_campaign = data.get('utm_campaign', '').strip()
+        utm_medium = data.get('utm_medium', '').strip()
+        utm_content = data.get('utm_content', '').strip()
+        utm_term = data.get('utm_term', '').strip()
+        utm_id = data.get('utm_id', '').strip()
+        
+        utm_parts = [f"utm_source={utm_source}"]
+        if utm_campaign:
+            utm_parts.append(f"utm_campaign={utm_campaign}")
+        if utm_medium:
+            utm_parts.append(f"utm_medium={utm_medium}")
+        if utm_content:
+            utm_parts.append(f"utm_content={utm_content}")
+        if utm_term:
+            utm_parts.append(f"utm_term={utm_term}")
+        if utm_id:
+            utm_parts.append(f"utm_id={utm_id}")
+        
+        utm_params = "&".join(utm_parts)
+    
+    # Adicionar grim se cloaker estiver ativo
+    if grim_value:
+        utm_params = f"{utm_params}&grim={grim_value}"
+    
+    return jsonify({
+        'success': True,
+        'model': model,
+        'base_url': base_url,
+        'website_url': base_url,
+        'url_params': utm_params,
+        'utm_params': utm_params,
+        'grim': grim_value
     })
 
 
