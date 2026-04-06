@@ -2254,3 +2254,139 @@ def api_create_remarketing_campaign(bot_id):
         logger.error(f"Erro ao criar campanha: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# ============================================================================
+# GATEWAY APIs (Integração de Pagamentos)
+# ============================================================================
+
+@dashboard_bp.route('/api/gateways', methods=['GET'])
+@login_required
+def api_get_gateways():
+    """Retorna todos os gateways do usuário atual"""
+    try:
+        gateways = Gateway.query.filter_by(user_id=current_user.id).all()
+        
+        gateways_data = []
+        for gateway in gateways:
+            # Mascarar credenciais para segurança no frontend
+            api_key_masked = None
+            if gateway.api_key:
+                api_key_masked = f"****{gateway.api_key[-4:]}" if len(gateway.api_key) > 4 else "****"
+            
+            gateways_data.append({
+                'id': gateway.id,
+                'gateway_type': gateway.gateway_type,
+                'store_id': gateway.store_id,
+                'producer_hash': gateway.producer_hash,
+                'is_active': gateway.is_active,
+                'is_verified': gateway.is_verified,
+                'api_key_masked': api_key_masked,
+                'split_percentage': gateway.split_percentage,
+                'total_transactions': gateway.total_transactions,
+                'successful_transactions': gateway.successful_transactions,
+                'created_at': gateway.created_at.isoformat() if gateway.created_at else None,
+                'verified_at': gateway.verified_at.isoformat() if gateway.verified_at else None
+            })
+        
+        return jsonify(gateways_data)
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar gateways: {e}")
+        return jsonify({'error': 'Erro ao carregar gateways'}), 500
+
+
+@dashboard_bp.route('/api/gateways', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_create_gateway():
+    """Cria um novo gateway de pagamento"""
+    data = request.get_json()
+    
+    gateway_type = data.get('gateway_type', '').strip().lower()
+    api_key = data.get('api_key', '').strip()
+    client_secret = data.get('client_secret', '').strip()
+    store_id = data.get('store_id', '').strip()
+    
+    if not gateway_type:
+        return jsonify({'error': 'Tipo de gateway é obrigatório'}), 400
+    
+    try:
+        # Criar novo gateway
+        gateway = Gateway(
+            user_id=current_user.id,
+            gateway_type=gateway_type,
+            store_id=store_id,
+            is_active=True,  # Novo gateway começa ativo
+            is_verified=False,
+            split_percentage=2.0  # Padrão 2%
+        )
+        
+        # Definir credenciais (serão criptografadas automaticamente pelos setters)
+        if api_key:
+            gateway.api_key = api_key
+        if client_secret:
+            gateway.client_secret = client_secret
+        
+        # Campos específicos por gateway
+        if gateway_type == 'paradise':
+            gateway._product_hash = data.get('product_hash', '').strip()
+            gateway._offer_hash = data.get('offer_hash', '').strip()
+        elif gateway_type == 'hoopay':
+            gateway._organization_id = data.get('organization_id', '').strip()
+        elif gateway_type == 'wiinpay':
+            gateway._split_user_id = data.get('split_user_id', '').strip()
+        elif gateway_type == 'atomo':
+            gateway.producer_hash = data.get('producer_hash', '').strip()
+        
+        # REGRA DE NEGÓCIO: Desativar outros gateways do usuário
+        # (apenas 1 gateway ativo por vez)
+        existing_gateways = Gateway.query.filter_by(
+            user_id=current_user.id, 
+            is_active=True
+        ).all()
+        
+        for existing in existing_gateways:
+            existing.is_active = False
+        
+        db.session.add(gateway)
+        db.session.commit()
+        
+        logger.info(f"Gateway criado: {gateway_type} (ID: {gateway.id}) por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'gateway': {
+                'id': gateway.id,
+                'gateway_type': gateway.gateway_type,
+                'store_id': gateway.store_id,
+                'is_active': gateway.is_active,
+                'is_verified': gateway.is_verified,
+                'created_at': gateway.created_at.isoformat() if gateway.created_at else None
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar gateway: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
+@login_required
+@csrf.exempt
+def api_delete_gateway(gateway_id):
+    """Deleta um gateway de pagamento"""
+    gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        db.session.delete(gateway)
+        db.session.commit()
+        
+        logger.info(f"Gateway deletado: {gateway_id} por {current_user.email}")
+        return jsonify({'success': True, 'message': 'Gateway deletado com sucesso'})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao deletar gateway: {e}")
+        return jsonify({'error': str(e)}), 500
+
