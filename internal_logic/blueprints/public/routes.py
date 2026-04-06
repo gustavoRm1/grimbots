@@ -3,13 +3,15 @@ Public Blueprint - GrimBots
 Rotas públicas para redirecionamento de tráfego (/go/<slug>) com Cloaker e Load Balancing
 """
 import logging
-import json
-import random
 import time
 from datetime import datetime
-from flask import Blueprint, request, redirect, jsonify, current_app
-from internal_logic.core.models import RedirectPool, PoolBot, Bot, db
+from flask import Blueprint, request, redirect, jsonify
+from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
+from internal_logic.core.metrics import MetricsService
+from internal_logic.services.cloaker_service import CloakerService
+from internal_logic.services.tracking_service import TrackingService
+from internal_logic.services.bot_intelligence import BotIntelligenceService
 from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
@@ -17,173 +19,107 @@ logger = logging.getLogger(__name__)
 public_bp = Blueprint('public', __name__, url_prefix='')
 
 
-def log_cloaker_event_json(event_type, details):
-    """Log estruturado para eventos do cloaker (auditoria e compliance)"""
-    log_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'event_type': event_type,
-        **details
-    }
-    logger.info(f"CLOAKER_EVENT: {json.dumps(log_entry, ensure_ascii=False)}")
-
-
-def validate_cloaker_access(request, pool, slug):
-    """
-    🔐 CLOAKER V2.0 - Validação de acesso ao redirecionamento
-    
-    Lógica de proteção:
-    1. Se cloaker desativado → sempre permitir
-    2. Se cloaker ativo → verificar parâmetro 'grim' contra valor configurado
-    3. Se UTMs do Facebook presentes (fbclid) → aplicar regras adicionais
-    
-    Returns:
-        tuple: (allowed: bool, reason: str, log_data: dict)
-    """
-    # Cloaker desativado → sempre permitir
-    if not pool.meta_cloaker_enabled:
-        return True, 'cloaker_disabled', {'check': 'disabled'}
-    
-    # Parâmetros da requisição
-    grim_param = request.args.get('grim', '').strip()
-    fbclid = request.args.get('fbclid', '').strip()
-    utm_source = request.args.get('utm_source', '').strip()
-    
-    # Valor esperado do grim
-    expected_grim = pool.meta_cloaker_param_value or ''
-    
-    # Se não houver valor configurado para grim, permitir (configuração incompleta)
-    if not expected_grim:
-        return True, 'grim_not_configured', {
-            'check': 'configured',
-            'grim_received': grim_param,
-            'fbclid_present': bool(fbclid)
-        }
-    
-    # Validar grim
-    if grim_param != expected_grim:
-        log_cloaker_event_json('access_denied', {
-            'slug': slug,
-            'pool_id': pool.id,
-            'reason': 'invalid_grim',
-            'grim_received': grim_param,
-            'grim_expected_prefix': expected_grim[:10] if expected_grim else None,
-            'fbclid_present': bool(fbclid),
-            'ip': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent', '')[:100]
-        })
-        return False, 'invalid_grim', {
-            'check': 'grim_mismatch',
-            'grim_received': grim_param,
-            'fbclid_present': bool(fbclid)
-        }
-    
-    # Grim válido → permitir acesso
-    log_cloaker_event_json('access_granted', {
-        'slug': slug,
-        'pool_id': pool.id,
-        'reason': 'valid_grim',
-        'fbclid_present': bool(fbclid),
-        'utm_source': utm_source,
-        'ip': request.remote_addr
-    })
-    
-    return True, 'valid_grim', {
-        'check': 'passed',
-        'grim_matched': True,
-        'fbclid_present': bool(fbclid),
-        'utm_source': utm_source
-    }
-
-
 @public_bp.route('/go/<slug>')
-@limiter.limit("60 per minute", key_func=lambda: request.remote_addr)  # Limite por IP para proteger contra DDoS
+@limiter.limit("60 per minute", key_func=lambda: request.remote_addr)
 def public_redirect(slug):
     """
-    Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking + Cloaker
+    🚀 Endpoint PROFISSIONAL de Redirecionamento
     
-    Fluxo:
-    1. Busca pool pelo slug
-    2. Valida cloaker (se ativo)
-    3. Seleciona bot baseado na estratégia do pool
-    4. Redireciona para o link do bot
+    Pipeline de Tráfego:
+    1. Busca Otimizada (Eager Load)
+    2. Escudo (Cloaker V2.0)
+    3. Rastreio (Meta CAPI)
+    4. Inteligência (Seleção de Bot)
+    5. Métricas Atômicas
+    6. Redirect
+    
+    ⚠️ Serviços secundários NÃO bloqueiam o redirect
     """
-    from internal_logic.core.models import get_brazil_time
+    pipeline_start = time.time()
     
-    # Buscar pool pelo slug com eager loading dos bots (elimina N+1)
-    pool = RedirectPool.query.options(
-        joinedload(RedirectPool.pool_bots).joinedload(PoolBot.bot)
-    ).filter_by(slug=slug, is_active=True).first()
-    
-    if not pool:
-        logger.warning(f"🚫 Pool não encontrado ou inativo: slug={slug}")
-        return jsonify({'error': 'Pool not found'}), 404
-    
-    # 🔐 CLOAKER CHECK
-    allowed, reason, log_data = validate_cloaker_access(request, pool, slug)
-    
-    if not allowed:
-        # Retornar 404 disfarçado como HTML (não revelar que é proteção)
-        fake_404_html = '''<!DOCTYPE html>
-<html>
-<head><title>404 Not Found</title></head>
-<body>
-<h1>Not Found</h1>
-<p>The requested URL was not found on this server.</p>
-</body>
-</html>'''
-        return fake_404_html, 404
-    
-    # Selecionar bot do pool
-    selected_bot = pool.select_bot()
-    
-    # Fallback: se nenhum bot online, tentar URL de fallback ou primeiro bot
-    if not selected_bot:
-        logger.warning(f"⚠️ Nenhum bot online no pool {pool.id}, tentando fallback")
-        
-        # Tentar URL de fallback configurada no pool
-        if hasattr(pool, 'fallback_url') and pool.fallback_url:
-            logger.info(f"🔄 Redirecionando para URL fallback: {pool.fallback_url}")
-            return redirect(pool.fallback_url, code=302)
-        
-        # Fallback: usar primeiro bot do pool (mesmo offline)
-        all_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
-        if all_bots:
-            selected_bot = all_bots[0]
-            logger.info(f"🔄 Usando primeiro bot como fallback (bot_id={selected_bot.bot_id}, status={selected_bot.status})")
-        else:
-            logger.error(f"❌ Pool {pool.id} não tem nenhum bot configurado")
-            return jsonify({'error': 'No bots configured'}), 503
-    
-    # Obter URL do bot (deep link para Telegram)
-    bot_url = f"https://t.me/{selected_bot.bot.username}" if selected_bot.bot and selected_bot.bot.username else None
-    
-    if not bot_url:
-        # Fallback: tentar obter do token
-        if selected_bot.bot and selected_bot.bot.token:
-            # Extrair username do token (formato: numbers:username-hash)
-            token_parts = selected_bot.bot.token.split(':')
-            if len(token_parts) > 1:
-                username = token_parts[1].split('-')[0]
-                bot_url = f"https://t.me/{username}"
-        
-        if not bot_url:
-            logger.error(f"❌ Bot {selected_bot.bot_id} sem username configurado")
-            return jsonify({'error': 'Bot not configured'}), 503
-    
-    # Incrementar contadores
-    pool.total_redirects += 1
-    selected_bot.total_redirects += 1
-    
+    # ═══════════════════════════════════════════════════════════
+    # 1. BUSCA OTIMIZADA (Eager Loading)
+    # ═══════════════════════════════════════════════════════════
     try:
-        db.session.commit()
+        pool = RedirectPool.query.options(
+            joinedload(RedirectPool.pool_bots).joinedload(PoolBot.bot)
+        ).filter_by(slug=slug, is_active=True).first()
+        
+        if not pool:
+            logger.warning(f"🚫 Pool não encontrado: slug={slug}")
+            return jsonify({'error': 'Not found'}), 404
     except Exception as e:
-        logger.warning(f"⚠️ Erro ao atualizar contadores: {e}")
-        db.session.rollback()
+        logger.error(f"❌ Erro ao buscar pool: {e}")
+        return jsonify({'error': 'Service unavailable'}), 503
     
-    # Log de redirecionamento
-    logger.info(f"🔄 Redirect: pool={pool.slug} → bot={selected_bot.bot_id} (strategy={pool.distribution_strategy})")
+    # ═══════════════════════════════════════════════════════════
+    # 2. ESCUDO (Cloaker V2.0) - BLOQUEANTE
+    # ═══════════════════════════════════════════════════════════
+    try:
+        allowed, reason, log_data = CloakerService.validate_access(request, pool)
+        if not allowed:
+            safe_page, status = CloakerService.get_safe_page()
+            return safe_page, status
+    except Exception as e:
+        logger.error(f"❌ Erro no cloaker: {e}")
+        # Em caso de falha no cloaker, permitir acesso (fail-open)
+        pass
     
-    # Redirecionar
+    # ═══════════════════════════════════════════════════════════
+    # 3. RASTREIO (Meta CAPI) - NÃO BLOQUEANTE
+    # ═══════════════════════════════════════════════════════════
+    try:
+        if getattr(pool, 'meta_tracking_enabled', False):
+            TrackingService.fire_pageview(pool, request, async_mode=True)
+    except Exception as e:
+        # Tracking nunca bloqueia o redirect
+        logger.debug(f"📊 Tracking não disparado: {e}")
+        pass
+    
+    # ═══════════════════════════════════════════════════════════
+    # 4. INTELIGÊNCIA (Seleção de Bot)
+    # ═══════════════════════════════════════════════════════════
+    try:
+        selected_bot = BotIntelligenceService.select_bot(pool)
+        
+        if not selected_bot:
+            # Fallback: tentar URL de fallback ou primeiro bot
+            logger.warning(f"⚠️ Nenhum bot online no pool {pool.id}")
+            
+            if hasattr(pool, 'fallback_url') and pool.fallback_url:
+                return redirect(pool.fallback_url, code=302)
+            
+            all_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
+            if all_bots:
+                selected_bot = all_bots[0]
+                logger.info(f"🔄 Fallback para bot offline: {selected_bot.bot_id}")
+            else:
+                return jsonify({'error': 'No bots configured'}), 503
+        
+        bot_url = BotIntelligenceService.get_bot_telegram_url(selected_bot)
+        if not bot_url:
+            return jsonify({'error': 'Bot not configured'}), 503
+            
+    except Exception as e:
+        logger.error(f"❌ Erro na seleção de bot: {e}")
+        return jsonify({'error': 'Selection error'}), 503
+    
+    # ═══════════════════════════════════════════════════════════
+    # 5. MÉTRICAS ATÔMICAS - NÃO BLOQUEANTE
+    # ═══════════════════════════════════════════════════════════
+    try:
+        MetricsService.increment_redirect_counters(pool.id, selected_bot.bot_id)
+    except Exception as e:
+        # Métricas nunca bloqueiam o redirect
+        logger.debug(f"📊 Métricas não incrementadas: {e}")
+        pass
+    
+    # ═══════════════════════════════════════════════════════════
+    # 6. REDIRECT
+    # ═══════════════════════════════════════════════════════════
+    pipeline_duration = (time.time() - pipeline_start) * 1000
+    logger.info(f"🔄 Redirect: pool={pool.slug} → bot={selected_bot.bot_id} ({pipeline_duration:.1f}ms)")
+    
     return redirect(bot_url, code=302)
 
 
