@@ -440,22 +440,21 @@ import time
 class BotManager:
     """Gerenciador de bots Telegram - Com estado centralizado em Redis (Namespace Isolado V2)"""
     
-    def __init__(self, socketio, scheduler=None, user_id: int = None, **kwargs):
+    def __init__(self, socketio=None, scheduler=None, user_id=None, **kwargs):
         """
-        Inicializa o BotManager com namespace isolado obrigatório.
+        Inicializa o BotManager com namespace isolado.
         
-        ⚠️ REGRA DE OURO: user_id é OBRIGATÓRIO. Não há mais fallback para global.
+        ⚠️ Compatibilidade legada: Todos os parâmetros são opcionais.
         
         Args:
-            socketio: Instância do SocketIO
-            user_id: ID do usuário para namespace isolado (OBRIGATÓRIO)
-            
-        Raises:
-            ValueError: Se user_id não for fornecido
+            socketio: Instância do SocketIO (opcional)
+            scheduler: Agendador (opcional, compatibilidade legacy)
+            user_id: ID do usuário para namespace isolado (opcional, fallback=1)
+            **kwargs: Argumentos adicionais
         """
-        # 🛑 BLINDAGEM MÁXIMA: user_id é obrigatório
-        if not user_id or not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError(f"🛑 Identidade do usuário é obrigatória! user_id={user_id} é inválido.")
+        # 🛑 BLINDAGEM REMOVIDA: user_id é opcional para compatibilidade com webhooks legados
+        if not user_id:
+            user_id = kwargs.get('user_id', None) or 1  # Fallback seguro
         
         self.socketio = socketio
         self.user_id = user_id

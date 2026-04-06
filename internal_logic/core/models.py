@@ -542,11 +542,8 @@ class RedirectPool(db.Model):
     # Controle round robin
     last_bot_index = db.Column(db.Integer, default=0)
     
-    # Métricas agregadas (cache)
-    total_redirects = db.Column(db.Integer, default=0)
-    total_blocked_accesses = db.Column(db.Integer, default=0)  # Contador de bloqueios do cloaker
-    healthy_bots_count = db.Column(db.Integer, default=0)
-    total_bots_count = db.Column(db.Integer, default=0)
+    # Métricas agregadas (cache) - APENAS total_visits (coluna real do banco)
+    total_visits = db.Column(db.Integer, default=0)
     
     # Health do pool (0-100)
     health_percentage = db.Column(db.Integer, default=0)
@@ -580,7 +577,7 @@ class RedirectPool(db.Model):
     utmify_pixel_id = db.Column(db.String(100), nullable=True)  # Pixel ID da Utmify
     
     # Relacionamentos
-    pool_bots = db.relationship('PoolBot', backref='pool', lazy='select', cascade='all, delete-orphan')
+    pool_bots = db.relationship('PoolBot', backref='pool', lazy='dynamic', cascade='all, delete-orphan')
     
     # Constraint único: slug por usuário
     __table_args__ = (
@@ -638,11 +635,9 @@ class RedirectPool(db.Model):
     
     def update_health(self):
         """Atualiza métricas de saúde do pool"""
-        total = len(self.pool_bots)
-        online = len([b for b in self.pool_bots if b.status == 'online' and b.is_enabled])
+        total = self.pool_bots.count()
+        online = self.pool_bots.filter_by(status='online', is_enabled=True).count()
         
-        self.total_bots_count = total
-        self.healthy_bots_count = online
         self.health_percentage = int((online / total * 100)) if total > 0 else 0
         self.last_health_check = get_brazil_time()
     
@@ -652,9 +647,8 @@ class RedirectPool(db.Model):
         bots_count = len(self.pool_bots)
         active_bots_count = len([b for b in self.pool_bots if getattr(b, 'is_enabled', False)])
         
-        # Calcular bots online para health_score
-        online_bots_count = len([b for b in self.pool_bots if b.status == 'online' and b.is_enabled])
-        health_pct = int((online_bots_count / bots_count * 100)) if bots_count > 0 else 0
+        # Usando .filter() porque pool_bots é dynamic
+        online_bots = [b for b in self.pool_bots.filter_by(status='online', is_enabled=True).all() if not (b.circuit_breaker_until and b.circuit_breaker_until > get_brazil_time())] if bots_count > 0 else 0
         
         return {
             'id': self.id,
@@ -664,9 +658,8 @@ class RedirectPool(db.Model):
             'description': self.description,
             'is_active': self.is_active,
             'distribution_strategy': self.distribution_strategy,
-            'total_redirects': self.total_redirects,
-            'health_score': health_pct,
-            'total_visits': self.total_redirects,
+            'total_visits': self.total_visits,
+            'health_score': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
             'public_url': f'/go/{self.slug}',
             'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -674,7 +667,7 @@ class RedirectPool(db.Model):
             # ✅ CRÍTICO: Contadores de bots (calculados)
             'bots_count': bots_count,
             'active_bots_count': active_bots_count,
-            'healthy_bots': online_bots_count,
+            'healthy_bots': len(online_bots),
             'total_bots': bots_count,
             # ✅ CRÍTICO: Retornar configurações do Meta Pixel
             'meta_pixel_id': self.meta_pixel_id,

@@ -12,7 +12,6 @@ from internal_logic.core.metrics import MetricsService
 from internal_logic.services.cloaker_service import CloakerService
 from internal_logic.services.tracking_service import TrackingService
 from internal_logic.services.bot_intelligence import BotIntelligenceService
-from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ def public_redirect(slug):
     🚀 Endpoint PROFISSIONAL de Redirecionamento
     
     Pipeline de Tráfego:
-    1. Busca Otimizada (Eager Load)
+    1. Busca Simples
     2. Escudo (Cloaker V2.0)
     3. Rastreio (Meta CAPI)
     4. Inteligência (Seleção de Bot)
@@ -38,12 +37,10 @@ def public_redirect(slug):
     pipeline_start = time.time()
     
     # ═══════════════════════════════════════════════════════════
-    # 1. BUSCA OTIMIZADA (Eager Loading)
+    # 1. BUSCA SIMPLES (sem joinedload - incompatible com lazy='dynamic')
     # ═══════════════════════════════════════════════════════════
     try:
-        pool = RedirectPool.query.options(
-            joinedload(RedirectPool.pool_bots).joinedload(PoolBot.bot)
-        ).filter_by(slug=slug, is_active=True).first()
+        pool = RedirectPool.query.filter_by(slug=slug, is_active=True).first()
         
         if not pool:
             logger.warning(f"🚫 Pool não encontrado: slug={slug}")
