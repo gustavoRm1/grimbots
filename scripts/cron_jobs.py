@@ -38,13 +38,13 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
-# ✅ CONEXÃO DIRETA: Importar app já inicializado
-from app import app
-from internal_logic.core.extensions import db
+# ✅ CONEXÃO VIA FACTORY: Criar app para contexto
+from internal_logic.core.extensions import create_app, db
 
 
 def run_with_context(func, job_name):
     """Executa função com contexto Flask e tratamento de erros"""
+    app = create_app()
     try:
         with app.app_context():
             logger.info(f"🚀 Iniciando job: {job_name}")
