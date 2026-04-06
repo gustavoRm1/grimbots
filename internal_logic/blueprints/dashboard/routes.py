@@ -1328,12 +1328,12 @@ def get_redirect_pools():
             'name': pool.name,
             'slug': pool.slug,
             'is_active': pool.is_active,
-            'rotation_mode': pool.rotation_mode,
+            'rotation_mode': pool.distribution_strategy,
             'total_bots': len(bots_in_pool),
             'bots': [{
                 'bot_id': pb.bot_id,
                 'priority': pb.priority,
-                'is_active': pb.is_active
+                'is_active': pb.is_enabled
             } for pb in bots_in_pool]
         })
     
@@ -1380,7 +1380,7 @@ def update_pool_bot_config(pool_id, pool_bot_id):
         pool_bot.priority = int(data['priority'])
     
     if 'is_active' in data:
-        pool_bot.is_active = data['is_active']
+        pool_bot.is_enabled = data['is_active']
     
     db.session.commit()
     
@@ -1421,7 +1421,7 @@ def create_redirect_pool():
             name=name,
             slug=slug,
             is_active=True,
-            rotation_mode=data.get('rotation_mode', 'round_robin')
+            distribution_strategy=data.get('rotation_mode', 'round_robin')
         )
         db.session.add(pool)
         db.session.commit()
@@ -1458,7 +1458,7 @@ def update_redirect_pool(pool_id):
         if 'is_active' in data:
             pool.is_active = data['is_active']
         if 'rotation_mode' in data:
-            pool.rotation_mode = data['rotation_mode']
+            pool.distribution_strategy = data['rotation_mode']
         if 'meta_pixel_id' in data:
             pool.meta_pixel_id = data['meta_pixel_id']
         if 'meta_tracking_enabled' in data:
@@ -1527,7 +1527,7 @@ def add_bot_to_pool(pool_id):
             pool_id=pool_id,
             bot_id=bot_id,
             priority=data.get('priority', 1),
-            is_active=True
+            is_enabled=True
         )
         db.session.add(pool_bot)
         db.session.commit()
@@ -1576,7 +1576,7 @@ def rotate_pool_bot(pool_id):
     # Buscar bots ativos no pool
     pool_bots = PoolBot.query.filter_by(
         pool_id=pool_id,
-        is_active=True
+        is_enabled=True
     ).join(Bot).filter(
         Bot.is_active == True,
         Bot.token.isnot(None)
@@ -1586,7 +1586,7 @@ def rotate_pool_bot(pool_id):
         return jsonify({'error': 'Nenhum bot ativo no pool'}), 404
     
     # Rotacionar baseado no modo
-    if pool.rotation_mode == 'round_robin':
+    if pool.distribution_strategy == 'round_robin':
         # Implementação simples: usar timestamp para determinar índice
         import time
         idx = int(time.time()) % len(pool_bots)
