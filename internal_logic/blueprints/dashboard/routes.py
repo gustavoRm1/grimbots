@@ -610,7 +610,7 @@ def ranking():
     next_user = None
     if my_position_number and my_position_number > 1:
         next_seller = top_sellers[my_position_number - 2]  # -2 porque índice começa em 0
-        my_monthly = next(s.revenue for s in ranking_data if s['user_id'] == current_user.id)
+        my_monthly = next(s['revenue'] for s in ranking_data if s['user_id'] == current_user.id)
         next_user = {
             'position': my_position_number - 1,
             'name': next_seller.ranking_display_name or next_seller.username,
