@@ -33,54 +33,156 @@ def get_brazil_time():
 @dashboard_bp.route('/dashboard')
 @login_required
 def dashboard():
-    """Dashboard principal com modo simples/avançado"""
+    """Dashboard principal com modo simples/avançado - Analytics V2.0"""
     from sqlalchemy import func
     from internal_logic.core.models import BotUser
     
     # Obter modo (simples ou avançado)
     mode = request.args.get('mode', 'advanced')
     
-    # Estatísticas básicas
-    bots_count = Bot.query.filter_by(user_id=current_user.id).count()
-    active_bots = Bot.query.filter_by(user_id=current_user.id, is_active=True).count()
+    # Buscar bots do usuário
+    bots = Bot.query.filter_by(user_id=current_user.id).all()
+    bot_ids = [b.id for b in bots] if bots else []
     
-    # Vendas hoje
+    # Períodos de tempo
     today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_sales = Payment.query.join(Bot).filter(
-        Bot.user_id == current_user.id,
-        Payment.status == 'paid',
-        Payment.created_at >= today_start
-    ).count()
+    month_start = get_brazil_time().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Receita total
-    total_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
-        Bot.user_id == current_user.id,
+    # Estatísticas básicas
+    total_bots = len(bots)
+    active_bots = sum(1 for b in bots if b.is_active)
+    running_bots = sum(1 for b in bots if b.is_running)
+    
+    # Total de usuários (leads) across all bots
+    total_users = BotUser.query.filter(
+        BotUser.bot_id.in_(bot_ids),
+        BotUser.archived == False
+    ).count() if bot_ids else 0
+    
+    # Total de vendas e receita
+    total_sales = Payment.query.filter(
+        Payment.bot_id.in_(bot_ids),
         Payment.status == 'paid'
-    ).scalar() or 0.0
+    ).count() if bot_ids else 0
+    
+    total_revenue = db.session.query(func.sum(Payment.amount)).filter(
+        Payment.bot_id.in_(bot_ids),
+        Payment.status == 'paid'
+    ).scalar() or 0.0 if bot_ids else 0.0
+    
+    # Vendas pendentes
+    pending_sales = Payment.query.filter(
+        Payment.bot_id.in_(bot_ids),
+        Payment.status == 'pending'
+    ).count() if bot_ids else 0
     
     # Taxa de conversão
-    user_bot_ids = [bot.id for bot in current_user.bots]
-    total_clicks = BotUser.query.filter(BotUser.bot_id.in_(user_bot_ids)).count() if user_bot_ids else 0
+    total_clicks = BotUser.query.filter(BotUser.bot_id.in_(bot_ids)).count() if bot_ids else 0
     total_purchases = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
+        Payment.bot_id.in_(bot_ids),
         Payment.status == 'paid'
-    ).count() if user_bot_ids else 0
+    ).count() if bot_ids else 0
     conversion_rate = (total_purchases / total_clicks * 100) if total_clicks > 0 else 0
     
     # Streak
     streak = current_user.current_streak or 0
     
+    # ============================================================================
+    # V2.0 METRICS - HOJE E MÊS
+    # ============================================================================
+    if bot_ids:
+        # Vendas e receita de HOJE
+        today_sales = db.session.query(func.count(Payment.id)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'paid',
+            Payment.created_at >= today_start
+        ).scalar() or 0
+        
+        today_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'paid',
+            Payment.created_at >= today_start
+        ).scalar() or 0.0
+        
+        # Vendas e receita do MÊS
+        month_sales = db.session.query(func.count(Payment.id)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'paid',
+            Payment.created_at >= month_start
+        ).scalar() or 0
+        
+        month_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'paid',
+            Payment.created_at >= month_start
+        ).scalar() or 0.0
+        
+        # Vendas pendentes (HOJE e MÊS)
+        today_pending_sales = db.session.query(func.count(Payment.id)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'pending',
+            Payment.created_at >= today_start
+        ).scalar() or 0
+        
+        month_pending_sales = db.session.query(func.count(Payment.id)).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'pending',
+            Payment.created_at >= month_start
+        ).scalar() or 0
+        
+        # Novos usuários (HOJE e MÊS)
+        today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+            BotUser.bot_id.in_(bot_ids),
+            BotUser.archived == False,
+            BotUser.first_interaction >= today_start
+        ).scalar() or 0
+        
+        month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+            BotUser.bot_id.in_(bot_ids),
+            BotUser.archived == False,
+            BotUser.first_interaction >= month_start
+        ).scalar() or 0
+    else:
+        today_sales = today_revenue = month_sales = month_revenue = 0
+        today_pending_sales = month_pending_sales = today_users = month_users = 0
+    
+    # ============================================================================
+    # MONTAR DICIONÁRIO STATS V2.0
+    # ============================================================================
+    stats = {
+        # Métricas básicas
+        'total_bots': total_bots,
+        'active_bots': active_bots,
+        'running_bots': running_bots,
+        'total_users': total_users,
+        'total_sales': total_sales,
+        'total_revenue': float(total_revenue),
+        'pending_sales': pending_sales,
+        'conversion_rate': round(conversion_rate, 2),
+        'streak': streak,
+        
+        # Permissões e comissões
+        'can_add_bot': getattr(current_user, 'can_add_bot', lambda: True)() if hasattr(current_user, 'can_add_bot') else True,
+        'commission_percentage': getattr(current_user, 'commission_percentage', 2.0),
+        'commission_balance': current_user.get_commission_balance() if hasattr(current_user, 'get_commission_balance') else 0,
+        'total_commission_owed': getattr(current_user, 'total_commission_owed', 0),
+        'total_commission_paid': getattr(current_user, 'total_commission_paid', 0),
+        
+        # ✅ V2.0 METRICS OBRIGATÓRIAS
+        'today_sales': today_sales,
+        'today_revenue': float(today_revenue),
+        'month_sales': month_sales,
+        'month_revenue': float(month_revenue),
+        'today_pending_sales': today_pending_sales,
+        'month_pending_sales': month_pending_sales,
+        'today_users': today_users,
+        'month_users': month_users
+    }
+    
     return render_template(
         'dashboard.html',
         mode=mode,
-        stats={
-            'bots_count': bots_count,
-            'active_bots': active_bots,
-            'today_sales': today_sales,
-            'total_revenue': total_revenue,
-            'conversion_rate': round(conversion_rate, 2),
-            'streak': streak
-        },
+        stats=stats,
         user=current_user
     )
 
