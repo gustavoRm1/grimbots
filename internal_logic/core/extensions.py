@@ -62,11 +62,13 @@ def create_app():
     from internal_logic.blueprints.dashboard.routes import dashboard_bp
     from internal_logic.blueprints.webhooks.payments import webhooks_bp
     from internal_logic.blueprints.webhooks.telegram import telegram_bp
+    from internal_logic.blueprints.admin.routes import admin_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(webhooks_bp)
     app.register_blueprint(telegram_bp)
+    app.register_blueprint(admin_bp)
     
     # ============================================================================
     # REGISTRAR BLUEPRINT DE GAMIFICAÇÃO (se disponível)
@@ -96,6 +98,10 @@ def create_app():
         app.add_url_rule('/chat', endpoint='chat', view_func=app.view_functions.get('dashboard.chat'))
     if app.view_functions.get('dashboard.redirect_pools_page'):
         app.add_url_rule('/redirect-pools', endpoint='redirect_pools_page', view_func=app.view_functions.get('dashboard.redirect_pools_page'))
+    
+    # Alias para admin
+    if app.view_functions.get('admin.admin_dashboard'):
+        app.add_url_rule('/admin', endpoint='admin_dashboard', view_func=app.view_functions.get('admin.admin_dashboard'))
     
     # ============================================================================
     # REGISTRAR USER LOADER DO FLASK-LOGIN
