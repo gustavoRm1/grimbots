@@ -489,101 +489,134 @@ def api_dashboard_analytics():
 @dashboard_bp.route('/ranking')
 @login_required
 def ranking():
-    """Página de ranking de vendedores - Gamificação V2.0"""
-    from internal_logic.core.models import User, Achievement, UserAchievement
+    """Página de ranking de vendedores - Gamificação V2.0 (MENSAL)"""
+    from internal_logic.core.models import User, Achievement, UserAchievement, Payment, Bot
     from sqlalchemy import func
+    from datetime import datetime
     
-    # Período do ranking (default: all_time)
-    period = request.args.get('period', 'all_time')
+    # 🗓️ Cálculo do período mensal
+    now = datetime.now()
+    first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Top vendedores por receita (top 100) - APENAS COLUNAS QUE EXISTEM NO BANCO
+    # ============================================================================
+    # 🔥 QUERY MENSAL - Faturamento do MÊS ATUAL (não total histórico)
+    # ============================================================================
+    # Subquery: SUM de pagamentos 'paid' do mês atual por usuário
+    monthly_revenue_subq = db.session.query(
+        Bot.user_id.label('user_id'),
+        func.sum(Payment.amount).label('monthly_revenue'),
+        func.count(Payment.id).label('monthly_sales')
+    ).join(
+        Payment, Payment.bot_id == Bot.id
+    ).filter(
+        Payment.status == 'paid',
+        Payment.created_at >= first_day_of_month
+    ).group_by(
+        Bot.user_id
+    ).subquery()
+    
+    # Query principal: JOIN com User + filtros de admin e faturamento > 0
     top_sellers = db.session.query(
         User.id,
         User.username,
         User.full_name,
-        User.total_revenue,
-        User.total_sales,
         User.ranking_display_name,
-        User.commission_percentage
+        User.commission_percentage,
+        User.total_revenue,  # Mantido para placas/conquistas (histórico)
+        User.total_sales,    # Mantido para placas/conquistas (histórico)
+        func.coalesce(monthly_revenue_subq.c.monthly_revenue, 0).label('monthly_revenue'),
+        func.coalesce(monthly_revenue_subq.c.monthly_sales, 0).label('monthly_sales')
+    ).outerjoin(
+        monthly_revenue_subq, monthly_revenue_subq.c.user_id == User.id
     ).filter(
-        User.is_active == True
+        User.is_active == True,
+        User.is_admin == False,  # 🚫 EXCLUI ADMINISTRADORES
+        User.is_banned == False,   # 🚫 EXCLUI BANIDOS
+        monthly_revenue_subq.c.monthly_revenue > 0  # 🚫 Apenas quem vendeu no mês
     ).order_by(
-        User.total_revenue.desc()
+        monthly_revenue_subq.c.monthly_revenue.desc().nullslast()
     ).limit(100).all()
     
-    # Construir ranking_data com posições - LÓGICA PREMIUM EM PYTHON
+    # ============================================================================
+    # 🏆 CONSTRUÇÃO DO RANKING DATA - Baseado no FATURAMENTO MENSAL
+    # ============================================================================
     ranking_data = []
-    premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}  # Taxas premium por posição
+    premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}  # Taxas premium por posição (MENSAL)
     
     for idx, seller in enumerate(top_sellers):
         position = idx + 1
-        # Premium é calculado dinamicamente: top 3 OU commission_percentage < 2.0
-        is_premium = position <= 3 or (seller.commission_percentage or 2.0) < 2.0
-        premium_rate = premium_rates.get(position, None) if position <= 3 else None
+        # Premium é baseado na POSIÇÃO MENSAL (Top 3 do mês)
+        is_premium = position <= 3
+        premium_rate = premium_rates.get(position) if position <= 3 else None
         has_premium_rate = (seller.commission_percentage or 2.0) < 2.0
+        
+        # Faturamento mensal para ranking, total para placas
+        monthly_revenue = float(seller.monthly_revenue or 0)
+        total_revenue_hist = float(seller.total_revenue or 0)
         
         ranking_data.append({
             'position': position,
-            'user': seller,  # Objeto/row do usuário para acesso a id, ranking_display_name
+            'user': seller,
             'user_id': seller.id,
             'display_name': seller.ranking_display_name or seller.full_name or seller.username or f'usuario{seller.id}',
             'name': seller.ranking_display_name or seller.full_name or seller.username,
             'username': seller.username,
             'avatar': {
                 'gradient': 'background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                'logo_path': f'img/logotop{position}.png' if position <= 3 else 'img/logo.png'  # 🖼️ Top 3 usa imagens específicas
+                'logo_path': f'img/logotop{position}.png' if position <= 3 else 'img/logo.png'
             },
-            'is_premium': is_premium,
-            'premium_rate': premium_rate,
+            'is_premium': is_premium,  # 🏆 Baseado na posição MENSAL
+            'premium_rate': premium_rate,  # 🏆 Taxa pela posição MENSAL
             'current_rate': seller.commission_percentage or 2.0,
             'has_premium_rate': has_premium_rate,
             'is_current_user': seller.id == current_user.id,
-            'revenue': float(seller.total_revenue or 0),
-            'total_revenue': float(seller.total_revenue or 0),
-            'sales': int(seller.total_sales or 0),
-            'total_sales': seller.total_sales or 0,
+            'revenue': monthly_revenue,  # 💰 Faturamento do MÊS (para ranking)
+            'total_revenue': total_revenue_hist,  # 💰 Faturamento HISTÓRICO (para placas)
+            'sales': int(seller.monthly_sales or 0),  # 📦 Vendas do MÊS
+            'total_sales': seller.total_sales or 0,  # 📦 Vendas TOTAIS (histórico)
             'streak': getattr(seller, 'current_streak', 0)
         })
     
-    # Calcular posição do usuário atual
+    # Calcular posição do usuário atual (baseado no MÊS)
     my_position_number = None
     for idx, seller in enumerate(top_sellers):
         if seller.id == current_user.id:
             my_position_number = idx + 1
             break
     
-    # Se não está no top 100, buscar posição separadamente
+    # Se não está no top 100, buscar posição separadamente (baseada no mês)
     if my_position_number is None:
-        my_position_number = db.session.query(
-            func.count(User.id)
-        ).filter(
-            User.total_revenue > current_user.total_revenue,
-            User.is_active == True
+        my_monthly_revenue = db.session.query(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= first_day_of_month
         ).scalar() or 0
-        my_position_number += 1
+        
+        if my_monthly_revenue > 0:
+            my_position_number = db.session.query(
+                func.count(db.distinct(Bot.user_id))
+            ).join(Payment).filter(
+                Payment.status == 'paid',
+                Payment.created_at >= first_day_of_month,
+                Payment.amount > my_monthly_revenue
+            ).scalar() or 0
+            my_position_number += 1
+        else:
+            my_position_number = None  # Sem vendas no mês = sem posição
     
-    # Próximo usuário acima no ranking (para mostrar quanto falta)
+    # Próximo usuário acima no ranking (quanto falta para subir)
     next_user = None
     if my_position_number and my_position_number > 1:
-        next_user_query = db.session.query(
-            User.id,
-            User.username,
-            User.ranking_display_name,
-            User.total_revenue
-        ).filter(
-            User.total_revenue > current_user.total_revenue,
-            User.is_active == True
-        ).order_by(
-            User.total_revenue.asc()
-        ).first()
-        
-        if next_user_query:
-            next_user = {
-                'position': my_position_number - 1,
-                'name': next_user_query.ranking_display_name or next_user_query.username,
-                'revenue': float(next_user_query.total_revenue or 0),
-                'gap': float(next_user_query.total_revenue or 0) - float(current_user.total_revenue or 0)
-            }
+        next_seller = top_sellers[my_position_number - 2]  # -2 porque índice começa em 0
+        my_monthly = next(s.revenue for s in ranking_data if s['user_id'] == current_user.id)
+        next_user = {
+            'position': my_position_number - 1,
+            'name': next_seller.ranking_display_name or next_seller.username,
+            'revenue': float(next_seller.monthly_revenue or 0),
+            'gap': float(next_seller.monthly_revenue or 0) - my_monthly
+        }
     
     # Total de receita do usuário
     total_revenue_float = float(current_user.total_revenue or 0)
