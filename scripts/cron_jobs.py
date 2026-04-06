@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+
 """
 Cron Jobs - GrimBots SRE Architecture
 Script CLI para executar jobs periódicos via crontab.
