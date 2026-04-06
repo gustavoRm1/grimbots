@@ -1419,7 +1419,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
 def reconcile_paradise_payments_async():
     """Reconciliador Paradise em fila async"""
     try:
-        from app import reconcile_paradise_payments
+        from internal_logic.services.payment_processor import reconcile_paradise_payments
         reconcile_paradise_payments()
     except Exception as e:
         logger.error(f"❌ Erro em reconcile_paradise_payments_async: {e}", exc_info=True)
@@ -1427,7 +1427,7 @@ def reconcile_paradise_payments_async():
 def reconcile_pushynpay_payments_async():
     """Reconciliador PushynPay em fila async"""
     try:
-        from app import reconcile_pushynpay_payments
+        from internal_logic.services.payment_processor import reconcile_pushynpay_payments
         reconcile_pushynpay_payments()
     except Exception as e:
         logger.error(f"❌ Erro em reconcile_pushynpay_payments_async: {e}", exc_info=True)

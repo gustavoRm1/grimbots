@@ -5,7 +5,6 @@ SaaS Bot Manager - Aplicação Principal (Factory Pattern)
 
 import logging
 from internal_logic.core.extensions import create_app
-from bot_manager import BotManager
 
 # Configuração de logging
 logging.basicConfig(
@@ -17,11 +16,6 @@ logger = logging.getLogger(__name__)
 
 # ✅ FACTORY PATTERN: Criar app via factory
 app = create_app()
-
-# ✅ INJEÇÃO DO BOTMANAGER GLOBAL (para compatibilidade)
-bot_manager = BotManager(socketio=None, scheduler=None, user_id=None)
-app.config['BOT_MANAGER'] = bot_manager
-logger.info("✅ BotManager injetado no app.config")
 
 # ✅ EXPORTS PARA WSGI/CRON
 application = app
