@@ -26,12 +26,14 @@ limiter = Limiter(
 def create_app():
     """
     Application Factory Pattern — Cria e configura a aplicação Flask
-    
-    Retorna:
-        app: Instância Flask configurada com todas as extensões e blueprints
     """
-    # Criar app Flask
-    app = Flask(__name__)
+    # Mapeamento absoluto da raiz do projeto (dois níveis acima de 'core')
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    template_dir = os.path.join(base_dir, 'templates')
+    static_dir = os.path.join(base_dir, 'static')
+    
+    # Inicializa o Flask apontando explicitamente para as pastas front-end da raiz
+    app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
     
     # ============================================================================
     # APLICAR CONFIGURAÇÕES CENTRALIZADAS
