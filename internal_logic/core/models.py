@@ -664,7 +664,7 @@ class RedirectPool(db.Model):
             'is_active': self.is_active,
             'distribution_strategy': self.distribution_strategy,
             'total_redirects': self.total_redirects,
-            'health_score': self.health_percentage,
+            'health_score': self.health_percentage if self.health_percentage is not None else 0,
             'total_visits': self.total_redirects,
             'public_url': f'/go/{self.slug}',
             'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,

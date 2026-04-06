@@ -1,0 +1,47 @@
+[Unit]
+Description=GrimBots Async Health Worker
+Documentation=https://github.com/grimbots/grimbots
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+
+[Service]
+Type=simple
+User=grimbots
+Group=grimbots
+WorkingDirectory=/opt/grimbots
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=EVENTLET_NO_GREENDNS=yes
+EnvironmentFile=/opt/grimbots/.env
+
+# Exec
+ExecStart=/opt/grimbots/venv/bin/python scripts/async_health_worker.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy: sempre ressuscitar se morrer
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Logging
+StandardOutput=append:/var/log/grimbots/health-worker.log
+StandardError=append:/var/log/grimbots/health-worker-error.log
+SyslogIdentifier=grimbots-health
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/grimbots/logs /var/log/grimbots
+
+# Resource limits (evitar OOM kill do sistema)
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=50%
+TasksMax=50
+
+[Install]
+WantedBy=multi-user.target

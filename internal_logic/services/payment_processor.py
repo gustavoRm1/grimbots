@@ -1057,14 +1057,68 @@ def update_ranking_premium_rates():
 
 
 def health_check_all_pools():
-    """Health Check de todos os bots em todos os pools ativos."""
+    """
+    Health Check de todos os bots em todos os pools ativos
+    
+    Executa a cada 15 segundos via cron/scheduler
+    """
     try:
         with current_app.app_context():
-            logger.info("🔄 Health check de pools")
-            # Código implementado aqui
-            pass
+            from internal_logic.core.models import RedirectPool, get_brazil_time
+            
+            logger.info("🔄 Iniciando health check de pools")
+            
+            # Buscar todos os pools ativos
+            pools = RedirectPool.query.filter_by(is_active=True).all()
+            
+            checked_count = 0
+            updated_count = 0
+            
+            for pool in pools:
+                try:
+                    # Verificar cada bot do pool
+                    pool_bots = pool.pool_bots.all() if hasattr(pool.pool_bots, 'all') else list(pool.pool_bots)
+                    
+                    for pool_bot in pool_bots:
+                        try:
+                            # Verificar se o bot está online
+                            if pool_bot.bot and pool_bot.bot.token:
+                                # Bot tem token = considerado online para este health check básico
+                                if pool_bot.status != 'online':
+                                    pool_bot.status = 'online'
+                                    pool_bot.last_health_check = get_brazil_time()
+                                    updated_count += 1
+                            else:
+                                # Bot sem token = offline
+                                if pool_bot.status != 'offline':
+                                    pool_bot.status = 'offline'
+                                    pool_bot.consecutive_failures += 1
+                                    pool_bot.last_health_check = get_brazil_time()
+                                    updated_count += 1
+                            
+                            checked_count += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao verificar bot {pool_bot.bot_id}: {e}")
+                            continue
+                    
+                    # Atualizar métricas do pool
+                    pool.update_health()
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro no health check do pool {pool.id}: {e}")
+                    continue
+            
+            # Commit das alterações
+            try:
+                db.session.commit()
+                logger.info(f"✅ Health check concluído: {checked_count} bots verificados, {updated_count} atualizados")
+            except Exception as e:
+                logger.error(f"❌ Erro ao salvar health check: {e}")
+                db.session.rollback()
+                
     except Exception as e:
-        logger.error(f"❌ Erro health_check_all_pools: {e}")
+        logger.error(f"❌ Erro crítico no health_check_all_pools: {e}", exc_info=True)
 
 
 def check_scheduled_remarketing_campaigns():
