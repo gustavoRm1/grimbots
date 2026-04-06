@@ -586,8 +586,7 @@ def ranking():
     # Buscar conquistas do usuário
     my_achievements = []
     user_achievements = UserAchievement.query.filter_by(
-        user_id=current_user.id,
-        is_unlocked=True
+        user_id=current_user.id
     ).all()
     
     for ua in user_achievements:
