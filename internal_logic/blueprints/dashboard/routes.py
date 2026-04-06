@@ -489,51 +489,160 @@ def api_dashboard_analytics():
 @dashboard_bp.route('/ranking')
 @login_required
 def ranking():
-    """Página de ranking de vendedores"""
-    from internal_logic.core.models import User
+    """Página de ranking de vendedores - Gamificação V2.0"""
+    from internal_logic.core.models import User, Achievement, UserAchievement
     from sqlalchemy import func
     
-    # Top vendedores por receita
+    # Período do ranking (default: all_time)
+    period = request.args.get('period', 'all_time')
+    
+    # Top vendedores por receita (top 100)
     top_sellers = db.session.query(
         User.id,
         User.username,
         User.full_name,
         User.total_revenue,
         User.total_sales,
-        User.ranking_display_name
+        User.ranking_display_name,
+        User.is_premium,
+        User.avatar_url
     ).filter(
         User.is_active == True
     ).order_by(
         User.total_revenue.desc()
     ).limit(100).all()
     
+    # Construir ranking_data com posições
+    ranking_data = []
+    for idx, seller in enumerate(top_sellers):
+        ranking_data.append({
+            'position': idx + 1,
+            'user_id': seller.id,
+            'name': seller.ranking_display_name or seller.full_name or seller.username,
+            'username': seller.username,
+            'avatar': seller.avatar_url or '/static/img/default-avatar.png',
+            'is_premium': seller.is_premium or False,
+            'is_current_user': seller.id == current_user.id,
+            'total_revenue': float(seller.total_revenue or 0),
+            'total_sales': seller.total_sales or 0
+        })
+    
     # Calcular posição do usuário atual
-    user_position = None
+    my_position_number = None
     for idx, seller in enumerate(top_sellers):
         if seller.id == current_user.id:
-            user_position = idx + 1
+            my_position_number = idx + 1
             break
     
     # Se não está no top 100, buscar posição separadamente
-    if user_position is None:
-        user_position = db.session.query(
+    if my_position_number is None:
+        my_position_number = db.session.query(
             func.count(User.id)
         ).filter(
             User.total_revenue > current_user.total_revenue,
             User.is_active == True
         ).scalar() or 0
-        user_position += 1
+        my_position_number += 1
     
-    return render_template(
-        'ranking.html',
-        top_sellers=top_sellers,
-        user_position=user_position,
-        current_user_ranking={
-            'total_revenue': current_user.total_revenue,
-            'total_sales': current_user.total_sales,
-            'display_name': current_user.ranking_display_name or current_user.username
+    # Próximo usuário acima no ranking (para mostrar quanto falta)
+    next_user = None
+    if my_position_number and my_position_number > 1:
+        next_user_query = db.session.query(
+            User.id,
+            User.username,
+            User.ranking_display_name,
+            User.total_revenue
+        ).filter(
+            User.total_revenue > current_user.total_revenue,
+            User.is_active == True
+        ).order_by(
+            User.total_revenue.asc()
+        ).first()
+        
+        if next_user_query:
+            next_user = {
+                'position': my_position_number - 1,
+                'name': next_user_query.ranking_display_name or next_user_query.username,
+                'revenue': float(next_user_query.total_revenue or 0),
+                'gap': float(next_user_query.total_revenue or 0) - float(current_user.total_revenue or 0)
+            }
+    
+    # Total de receita do usuário
+    total_revenue_float = float(current_user.total_revenue or 0)
+    
+    # Verificar se deve mostrar modal de nome (se ainda não definiu)
+    show_name_modal = not current_user.ranking_display_name
+    
+    # Buscar conquistas do usuário
+    my_achievements = []
+    user_achievements = UserAchievement.query.filter_by(
+        user_id=current_user.id,
+        is_unlocked=True
+    ).all()
+    
+    for ua in user_achievements:
+        achievement = Achievement.query.get(ua.achievement_id)
+        if achievement:
+            my_achievements.append({
+                'id': achievement.id,
+                'name': achievement.name,
+                'description': achievement.description,
+                'icon': achievement.icon or 'fa-trophy',
+                'unlocked_at': ua.unlocked_at.isoformat() if ua.unlocked_at else None
+            })
+    
+    # Buscar todas as conquistas disponíveis
+    all_achievements = Achievement.query.all()
+    achievements_data = []
+    categories = {}
+    
+    for achievement in all_achievements:
+        is_unlocked = any(ua.achievement_id == achievement.id for ua in user_achievements)
+        ach_data = {
+            'id': achievement.id,
+            'name': achievement.name,
+            'description': achievement.description,
+            'icon': achievement.icon or 'fa-trophy',
+            'category': achievement.category or 'Geral',
+            'points': achievement.points or 0,
+            'is_unlocked': is_unlocked
         }
-    )
+        achievements_data.append(ach_data)
+        
+        # Agrupar por categoria
+        cat = achievement.category or 'Geral'
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(ach_data)
+    
+    # Prêmios por receita (milestones)
+    revenue_awards = [
+        {'threshold': 1000, 'name': 'Primeira Venda', 'icon': 'fa-star', 'unlocked': total_revenue_float >= 1000},
+        {'threshold': 5000, 'name': 'Vendedor Bronze', 'icon': 'fa-medal', 'unlocked': total_revenue_float >= 5000},
+        {'threshold': 10000, 'name': 'Vendedor Prata', 'icon': 'fa-award', 'unlocked': total_revenue_float >= 10000},
+        {'threshold': 50000, 'name': 'Vendedor Ouro', 'icon': 'fa-crown', 'unlocked': total_revenue_float >= 50000},
+        {'threshold': 100000, 'name': 'Vendedor Diamante', 'icon': 'fa-gem', 'unlocked': total_revenue_float >= 100000},
+        {'threshold': 500000, 'name': 'Mestre das Vendas', 'icon': 'fa-trophy', 'unlocked': total_revenue_float >= 500000},
+    ]
+    
+    unlocked_count = sum(1 for award in revenue_awards if award['unlocked'])
+    total_count = len(revenue_awards)
+    
+    # O RETURN CRÍTICO DO RANKING V2.0
+    return render_template('ranking.html',
+                           ranking=ranking_data,
+                           my_position=my_position_number,
+                           next_user=next_user,
+                           period=period,
+                           my_achievements=my_achievements,
+                           all_achievements_data=achievements_data,
+                           show_name_modal=show_name_modal,
+                           current_ranking_display_name=current_user.ranking_display_name,
+                           achievements_by_category=categories,
+                           revenue_awards=revenue_awards,
+                           total_revenue=total_revenue_float,
+                           unlocked_awards_count=unlocked_count,
+                           total_awards_count=total_count)
 
 
 @dashboard_bp.route('/api/ranking/save-display-name', methods=['POST'])
