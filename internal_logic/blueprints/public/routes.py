@@ -10,6 +10,7 @@ from datetime import datetime
 from flask import Blueprint, request, redirect, jsonify, current_app
 from internal_logic.core.models import RedirectPool, PoolBot, Bot, db
 from internal_logic.core.extensions import limiter
+from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ def validate_cloaker_access(request, pool, slug):
 
 
 @public_bp.route('/go/<slug>')
-@limiter.limit("10000 per hour")  # Endpoint público precisa de limite alto
+@limiter.limit("60 per minute", key_func=lambda: request.remote_addr)  # Limite por IP para proteger contra DDoS
 def public_redirect(slug):
     """
     Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking + Cloaker
@@ -108,8 +109,10 @@ def public_redirect(slug):
     """
     from internal_logic.core.models import get_brazil_time
     
-    # Buscar pool pelo slug
-    pool = RedirectPool.query.filter_by(slug=slug, is_active=True).first()
+    # Buscar pool pelo slug com eager loading dos bots (elimina N+1)
+    pool = RedirectPool.query.options(
+        joinedload(RedirectPool.pool_bots).joinedload(PoolBot.bot)
+    ).filter_by(slug=slug, is_active=True).first()
     
     if not pool:
         logger.warning(f"🚫 Pool não encontrado ou inativo: slug={slug}")
@@ -119,15 +122,37 @@ def public_redirect(slug):
     allowed, reason, log_data = validate_cloaker_access(request, pool, slug)
     
     if not allowed:
-        # Retornar 404 disfarçado (não revelar que é proteção)
-        return jsonify({'error': 'Not found'}), 404
+        # Retornar 404 disfarçado como HTML (não revelar que é proteção)
+        fake_404_html = '''<!DOCTYPE html>
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<h1>Not Found</h1>
+<p>The requested URL was not found on this server.</p>
+</body>
+</html>'''
+        return fake_404_html, 404
     
     # Selecionar bot do pool
     selected_bot = pool.select_bot()
     
+    # Fallback: se nenhum bot online, tentar URL de fallback ou primeiro bot
     if not selected_bot:
-        logger.error(f"❌ Nenhum bot disponível no pool {pool.id} ({pool.name})")
-        return jsonify({'error': 'No bots available'}), 503
+        logger.warning(f"⚠️ Nenhum bot online no pool {pool.id}, tentando fallback")
+        
+        # Tentar URL de fallback configurada no pool
+        if hasattr(pool, 'fallback_url') and pool.fallback_url:
+            logger.info(f"🔄 Redirecionando para URL fallback: {pool.fallback_url}")
+            return redirect(pool.fallback_url, code=302)
+        
+        # Fallback: usar primeiro bot do pool (mesmo offline)
+        all_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
+        if all_bots:
+            selected_bot = all_bots[0]
+            logger.info(f"🔄 Usando primeiro bot como fallback (bot_id={selected_bot.bot_id}, status={selected_bot.status})")
+        else:
+            logger.error(f"❌ Pool {pool.id} não tem nenhum bot configurado")
+            return jsonify({'error': 'No bots configured'}), 503
     
     # Obter URL do bot (deep link para Telegram)
     bot_url = f"https://t.me/{selected_bot.bot.username}" if selected_bot.bot and selected_bot.bot.username else None

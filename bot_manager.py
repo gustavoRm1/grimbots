@@ -440,7 +440,7 @@ import time
 class BotManager:
     """Gerenciador de bots Telegram - Com estado centralizado em Redis (Namespace Isolado V2)"""
     
-    def __init__(self, socketio, scheduler=None, user_id: int = None):
+    def __init__(self, socketio, user_id: int = None):
         """
         Inicializa o BotManager com namespace isolado obrigatório.
         
@@ -448,7 +448,6 @@ class BotManager:
         
         Args:
             socketio: Instância do SocketIO
-            scheduler: Agendador de tarefas (opcional)
             user_id: ID do usuário para namespace isolado (OBRIGATÓRIO)
             
         Raises:
@@ -459,7 +458,6 @@ class BotManager:
             raise ValueError(f"🛑 Identidade do usuário é obrigatória! user_id={user_id} é inválido.")
         
         self.socketio = socketio
-        self.scheduler = scheduler
         self.user_id = user_id
         
         # ✅ ISOLAMENTO NAMESPACE V2: Sempre usar estado isolado
@@ -467,7 +465,6 @@ class BotManager:
         logger.info(f"✅ BotManager inicializado com namespace isolado: gb:{user_id}:*")
         
         self.bot_threads: Dict[int, threading.Thread] = {}
-        self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
         
         # ✅ CACHE DE RATE LIMITING (em memória)
         self.rate_limit_cache = {}  # {user_key: timestamp}
@@ -540,7 +537,6 @@ class BotManager:
         # ✅ RUNNER SERVICE: Ciclo de vida dos bots (start, stop, polling)
         self.runner = BotRunner(
             bot_state=self.bot_state,
-            scheduler=self.scheduler,
             on_update_received=self._process_telegram_update
         )
         logger.info("✅ BotRunner injetado no BotManager")

@@ -27,7 +27,6 @@ class BotRunner:
     def __init__(
         self,
         bot_state,
-        scheduler=None,
         webhook_url: Optional[str] = None,
         on_update_received: Optional[Callable] = None
     ):
@@ -36,18 +35,15 @@ class BotRunner:
         
         Args:
             bot_state: Instância do estado do bot (RedisBrain/BotState)
-            scheduler: Scheduler APScheduler opcional para jobs
             webhook_url: URL base para webhooks
             on_update_received: Callback quando update é recebido (bot_id, update)
         """
         self.bot_state = bot_state
-        self.scheduler = scheduler
         self.webhook_url = webhook_url or os.environ.get('WEBHOOK_URL', '')
         self.on_update_received = on_update_received
         
-        # Tracking de recursos por bot
+        # Tracking de threads por bot
         self.bot_threads: Dict[int, threading.Thread] = {}
-        self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
         
         # Session HTTP para chamadas Telegram
         self._telegram_session = requests.Session()
@@ -130,15 +126,6 @@ class BotRunner:
         """
         # Remover do Redis (todos os workers verão imediatamente)
         self.bot_state.unregister_bot(bot_id)
-        
-        # Remover job do scheduler se existir
-        if bot_id in self.polling_jobs and self.scheduler:
-            try:
-                self.scheduler.remove_job(self.polling_jobs[bot_id])
-                del self.polling_jobs[bot_id]
-                logger.info(f"✅ Polling job removido para bot {bot_id}")
-            except Exception as e:
-                logger.error(f"Erro ao remover job: {e}")
         
         # Thread será encerrada automaticamente
         if bot_id in self.bot_threads:
@@ -299,63 +286,6 @@ class BotRunner:
         except Exception as e:
             logger.error(f"❌ Erro no polling bot {bot_id}: {e}")
             time.sleep(5)  # DEFESA: Evitar loop infinito de CPU
-    
-    def start_polling_job(self, bot_id: int, token: str, interval: int = 1) -> bool:
-        """
-        Inicia um job de polling para o bot via scheduler.
-        
-        Args:
-            bot_id: ID do bot
-            token: Token do bot
-            interval: Intervalo em segundos entre polls
-            
-        Returns:
-            bool: True se job criado com sucesso
-        """
-        if not self.scheduler:
-            logger.warning(f"⚠️ Scheduler não disponível para polling do bot {bot_id}")
-            return False
-        
-        try:
-            job_id = f'bot_polling_{bot_id}'
-            self.scheduler.add_job(
-                id=job_id,
-                func=self._polling_cycle,
-                args=[bot_id, token],
-                trigger='interval',
-                seconds=interval,
-                replace_existing=True
-            )
-            self.polling_jobs[bot_id] = job_id
-            logger.info(f"✅ Polling job criado para bot {bot_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao criar polling job: {e}")
-            return False
-    
-    def stop_polling_job(self, bot_id: int) -> bool:
-        """
-        Para o job de polling de um bot.
-        
-        Args:
-            bot_id: ID do bot
-            
-        Returns:
-            bool: True se job removido com sucesso
-        """
-        if bot_id not in self.polling_jobs or not self.scheduler:
-            return False
-        
-        try:
-            self.scheduler.remove_job(self.polling_jobs[bot_id])
-            del self.polling_jobs[bot_id]
-            logger.info(f"✅ Polling job removido para bot {bot_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao remover polling job: {e}")
-            return False
     
     def is_bot_running(self, bot_id: int) -> bool:
         """
