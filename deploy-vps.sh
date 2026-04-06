@@ -33,8 +33,8 @@ fi
 
 # 3. Parar aplicação
 echo "🛑 Passo 3/5: Parando aplicação..."
-if pgrep -f "gunicorn.*wsgi:app" >/dev/null; then
-    pgrep -f "gunicorn.*wsgi:app" | xargs -r kill -9
+if pgrep -f "gunicorn.*wsgi:application" >/dev/null; then
+    pgrep -f "gunicorn.*wsgi:application" | xargs -r kill -9
     echo "   Gunicorn parado."
 else
     echo "   Gunicorn não estava rodando."
@@ -72,7 +72,7 @@ fi
 source venv/bin/activate
 
 echo "   Iniciando Gunicorn..."
-EVENTLET_NO_GREENDNS=yes nohup gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:app > logs/gunicorn.log 2>&1 &
+EVENTLET_NO_GREENDNS=yes nohup gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:application > logs/gunicorn.log 2>&1 &
 
 echo "   Iniciando workers RQ..."
 nohup python3 start_rq_worker.py gateway > logs/rq-gateway.log 2>&1 &
@@ -86,8 +86,8 @@ sleep 3
 # 6. Verificar status
 echo ""
 echo "📊 Verificando status da aplicação..."
-if pgrep -f "gunicorn.*wsgi:app" >/dev/null; then
-    echo "✅ Gunicorn está rodando (PID: $(pgrep -f 'gunicorn.*wsgi:app'))"
+if pgrep -f "gunicorn.*wsgi:application" >/dev/null; then
+    echo "✅ Gunicorn está rodando (PID: $(pgrep -f 'gunicorn.*wsgi:application'))"
 else
     echo "❌ Gunicorn NÃO está rodando!"
 fi

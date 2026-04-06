@@ -22,7 +22,7 @@ RUN mkdir -p /app/instance
 EXPOSE 5000
 
 # Comando para iniciar a aplicação
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "wsgi:application"]
 
 
 

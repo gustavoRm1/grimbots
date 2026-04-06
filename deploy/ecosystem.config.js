@@ -23,7 +23,7 @@ module.exports = {
       '--log-level', 'info',                   // Nível de log
       '--access-logfile', 'logs/access.log',   // Log de acesso
       '--error-logfile', 'logs/error.log',     // Log de erros
-      'wsgi:app'                               // Entry point (wsgi.py:app)
+      'wsgi:application'                       // Entry point (wsgi.py:application)
     ],
     
     // Interpreter

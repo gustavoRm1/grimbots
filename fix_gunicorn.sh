@@ -51,5 +51,5 @@ echo ""
 echo "7️⃣ Tentando iniciar Gunicorn manualmente (para ver erro real)..."
 echo "   (Pressione Ctrl+C após ver o erro ou sucesso)"
 echo ""
-gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:app 2>&1
+gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:application 2>&1
 

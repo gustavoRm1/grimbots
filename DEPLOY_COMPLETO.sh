@@ -83,7 +83,7 @@ Environment="DATABASE_URL=$DATABASE_URL"
 Environment="REDIS_URL=$REDIS_URL"
 Environment="SECRET_KEY=$SECRET_KEY"
 Environment="FLASK_ENV=production"
-ExecStart=$VENV_PATH/bin/gunicorn -c $CURRENT_DIR/gunicorn_config.py wsgi:app
+ExecStart=$VENV_PATH/bin/gunicorn -c $CURRENT_DIR/gunicorn_config.py wsgi:application
 ExecReload=/bin/kill -s HUP \$MAINPID
 KillMode=mixed
 KillSignal=SIGTERM

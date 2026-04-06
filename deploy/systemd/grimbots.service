@@ -21,7 +21,7 @@ Environment="FLASK_ENV=production"
 # Gunicorn command
 ExecStart=/opt/grimbots/venv/bin/gunicorn \
     -c /opt/grimbots/gunicorn_config.py \
-    wsgi:app
+    wsgi:application
 
 # Reload (graceful restart)
 ExecReload=/bin/kill -s HUP $MAINPID

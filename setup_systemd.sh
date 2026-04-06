@@ -63,7 +63,7 @@ Environment="SECRET_KEY=$SECRET_KEY"
 Environment="FLASK_ENV=production"
 
 # Gunicorn command
-ExecStart=$VENV_PATH/bin/gunicorn -c $CURRENT_DIR/gunicorn_config.py wsgi:app
+ExecStart=$VENV_PATH/bin/gunicorn -c $CURRENT_DIR/gunicorn_config.py wsgi:application
 
 # Reload (graceful restart)
 ExecReload=/bin/kill -s HUP \$MAINPID

@@ -76,9 +76,9 @@ cd ~/grimbots || cd /root/grimbots || pwd
 
 # Usar gunicorn_config.py se existir
 if [ -f "gunicorn_config.py" ]; then
-    nohup gunicorn -c gunicorn_config.py wsgi:app > logs/gunicorn.log 2>&1 &
+    nohup gunicorn -c gunicorn_config.py wsgi:application > logs/gunicorn.log 2>&1 &
 else
-    nohup gunicorn --worker-class eventlet -w 1 --bind 127.0.0.1:5000 --timeout 120 --access-logfile logs/access.log --error-logfile logs/error.log wsgi:app > logs/gunicorn.log 2>&1 &
+    nohup gunicorn --worker-class eventlet -w 1 --bind 127.0.0.1:5000 --timeout 120 --access-logfile logs/access.log --error-logfile logs/error.log wsgi:application > logs/gunicorn.log 2>&1 &
 fi
 
 GUNICORN_PID=$!

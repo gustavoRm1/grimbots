@@ -22,7 +22,7 @@ ExecStartPre=/bin/bash -c 'mkdir -p /root/grimbots/logs && chmod 755 /root/grimb
 ExecStart=/root/grimbots/venv/bin/gunicorn \
     --bind 0.0.0.0:5000 \
     --workers 4 \
-    --worker-class sync \
+    --worker-class eventlet \
     --worker-connections 1000 \
     --timeout 120 \
     --keep-alive 5 \
@@ -33,7 +33,7 @@ ExecStart=/root/grimbots/venv/bin/gunicorn \
     --log-level info \
     --capture-output \
     --enable-stdio-inheritance \
-    wsgi:app
+    wsgi:application
 
 # ✅ Graceful shutdown
 ExecStop=/bin/kill -s TERM $MAINPID

@@ -75,7 +75,7 @@ def restart_gunicorn(env: Dict[str, str]) -> None:
     env.setdefault("EVENTLET_NO_GREENDNS", "yes")
 
     start_background(
-        ["python", "-m", "gunicorn.app.wsgiapp", "-c", "gunicorn_config.py", "wsgi:app"],
+        ["python", "-m", "gunicorn.app.wsgiapp", "-c", "gunicorn_config.py", "wsgi:application"],
         LOG_DIR / "gunicorn.log",
         env,
     )
