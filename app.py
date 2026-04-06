@@ -110,9 +110,26 @@ logger.info("✅ Configurações aplicadas via Config.init_app()")
 # ============================================================================
 # INICIALIZAR EXTENSÕES (Application Factory Pattern)
 # ============================================================================
+
+# Configurar opções do SocketIO
+socketio_options = {
+    'cors_allowed_origins': ALLOWED_ORIGINS,
+    'async_mode': 'eventlet',
+    'cors_credentials': True,
+}
+
+message_queue_url = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
+if message_queue_url:
+    socketio_options['message_queue'] = message_queue_url
+    socketio_options['channel'] = os.environ.get('SOCKETIO_CHANNEL', 'grimbots_socketio')
+
 db.init_app(app)
-socketio.init_app(app, cors_allowed_origins=Config.ALLOWED_ORIGINS, async_mode='eventlet')
-logger.info("✅ Extensões inicializadas via init_app()")
+socketio.init_app(app, **socketio_options)
+logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
+if 'message_queue' in socketio_options:
+    logger.info("✅ Socket.IO message queue: %s", socketio_options['message_queue'])
+else:
+    logger.warning("⚠️ Socket.IO sem message queue configurada – limite workers simultâneos ou defina REDIS_URL/SOCKETIO_MESSAGE_QUEUE")
 
 # ============================================================================
 # REGISTRAR BLUEPRINTS
@@ -161,52 +178,18 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
-socketio_options = {
-    'cors_allowed_origins': ALLOWED_ORIGINS,
-    'async_mode': 'eventlet',
-    'cors_credentials': True,
-}
-
-message_queue_url = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
-if message_queue_url:
-    socketio_options['message_queue'] = message_queue_url
-    socketio_options['channel'] = os.environ.get('SOCKETIO_CHANNEL', 'grimbots_socketio')
-
-socketio = SocketIO(app, **socketio_options)
-logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
-if 'message_queue' in socketio_options:
-    logger.info("✅ Socket.IO message queue: %s", socketio_options['message_queue'])
-else:
-    logger.warning("⚠️ Socket.IO sem message queue configurada – limite workers simultâneos ou defina REDIS_URL/SOCKETIO_MESSAGE_QUEUE")
-
-login_manager = LoginManager()
+# Inicializar extensões (importadas de internal_logic.core.extensions)
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Faça login para acessar esta página.'
 login_manager.login_message_category = 'warning'
+logger.info("✅ LoginManager inicializado")
 
-# ============================================================================
-# CORREÇÃO #2: CSRF PROTECTION
-# ============================================================================
-from flask_wtf.csrf import CSRFProtect
-
-csrf = CSRFProtect(app)
+csrf.init_app(app)
 logger.info("✅ CSRF Protection ativada")
 
-# ============================================================================
-# CORREÇÃO #6: RATE LIMITING
-# ============================================================================
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["1000 per day", "200 per hour"],
-    storage_uri="memory://",  # Em produção: redis://localhost:6379
-    headers_enabled=True
-)
-logger.info("✅ Rate Limiting configurado")
+limiter.init_app(app)
+logger.info("✅ Rate Limiting ativado")
 
 # ✅ MIGRAÇÃO RQ: APScheduler REMOVIDO - Usando RQ para agendamentos
 # A infraestrutura usa RQ (Redis Queue) com workers dedicados

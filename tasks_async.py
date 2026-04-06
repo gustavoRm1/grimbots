@@ -15,6 +15,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from redis_manager import get_redis_connection
+from internal_logic.core.extensions import db
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,6 @@ def _ensure_aux_tables() -> None:
         return
 
     try:
-        from app import db
         from models import WebhookEvent, WebhookPendingMatch
 
         WebhookEvent.__table__.create(db.engine, checkfirst=True)
@@ -67,7 +67,6 @@ def _persist_webhook_event(
     """
     Salva ou atualiza o registro do webhook em webhook_events para auditoria.
     """
-    from app import db
     from models import WebhookEvent, get_brazil_time
 
     _ensure_aux_tables()
@@ -200,7 +199,6 @@ def _clear_pending_match(
     transaction_hash: Optional[str]
 ) -> None:
     """Remove pending match associado ao webhook processado."""
-    from app import db
     from models import WebhookPendingMatch
 
     if not transaction_id and not transaction_hash:
@@ -241,7 +239,7 @@ def process_start_async(
     - Salvar welcome_sent no banco
     """
     try:
-        from app import app, db
+        from app import app
         from models import BotUser, Bot, get_brazil_time
         from bot_manager import send_meta_pixel_viewcontent_event
         import base64
@@ -1440,7 +1438,7 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     Retorna quantidade processada com sucesso.
     """
-    from app import app, db
+    from app import app
     from models import WebhookPendingMatch, get_brazil_time
 
     processed = 0
@@ -2291,7 +2289,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     Job RQ para enviar downsell agendado
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
-    from app import app, db
+    from app import app
     from models import Payment
     
     with app.app_context():
@@ -2336,7 +2334,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     Job RQ para enviar upsell agendado
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
-    from app import app, db
+    from app import app
     from models import Payment
     
     with app.app_context():
