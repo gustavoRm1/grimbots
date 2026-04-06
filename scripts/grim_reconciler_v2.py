@@ -23,8 +23,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app import app
-from internal_logic.core.extensions import db
+# ✅ INJEÇÃO SEGURA: Criar app usando Factory Pattern
+from internal_logic.core.config import Config
+from internal_logic.core.extensions import create_app, db
+
+app = create_app()
+
 from internal_logic.services.payment_processor import send_payment_delivery
 from models import Payment, Gateway
 from gateway_factory import GatewayFactory

@@ -38,11 +38,16 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
+# ✅ INJEÇÃO SEGURA: Criar app usando Factory Pattern
+from internal_logic.core.config import Config
+from internal_logic.core.extensions import create_app
+
+app = create_app()
+
 
 def run_with_context(func, job_name):
     """Executa função com contexto Flask e tratamento de erros"""
     try:
-        from app import app
         with app.app_context():
             logger.info(f"🚀 Iniciando job: {job_name}")
             start_time = datetime.now()

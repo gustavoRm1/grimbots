@@ -30,6 +30,12 @@ from typing import Dict, List
 import requests
 from dotenv import load_dotenv
 
+# ✅ INJEÇÃO SEGURA: Criar app usando Factory Pattern
+from internal_logic.core.config import Config
+from internal_logic.core.extensions import create_app
+
+app = create_app()
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = ROOT_DIR / "logs"
