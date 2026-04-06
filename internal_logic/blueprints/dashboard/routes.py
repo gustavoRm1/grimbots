@@ -1318,7 +1318,20 @@ def get_redirect_pools():
     """Retorna lista de pools do usuário"""
     from internal_logic.core.models import RedirectPool, PoolBot
     
+    # DEBUG: Expor identidade do usuário
+    print(f"DEBUG POOLS: Buscando pools para User ID: {current_user.id} (Tipo: {type(current_user.id)})")
+    print(f"DEBUG POOLS: Telegram User ID do User: {getattr(current_user, 'telegram_user_id', 'N/A')}")
+    print(f"DEBUG POOLS: Email do User: {getattr(current_user, 'email', 'N/A')}")
+    
+    # DEBUG: Verificar TODOS os pools no banco (independentemente de user_id)
+    all_pools = RedirectPool.query.all()
+    print(f"DEBUG POOLS: Total de pools no banco: {len(all_pools)}")
+    for p in all_pools:
+        print(f"DEBUG POOLS: Pool ID={p.id}, name={p.name}, user_id={p.user_id}")
+    
     pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
+    
+    print(f"DEBUG POOLS: Quantidade de pools encontrados para este usuário: {len(pools)}")
     
     pools_data = []
     for pool in pools:

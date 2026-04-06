@@ -37,9 +37,10 @@ def generate_delivery_token(payment: Payment) -> str:
 
 def get_pixel_id_for_payment(payment: Payment) -> Optional[str]:
     """Obtém o ID do pixel Meta para tracking, considerando sticky pixel."""
-    from internal_logic.core.models import get_brazil_time
+    from internal_logic.core.models import get_brazil_time, RedirectPool
     pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-    pool = pool_bot.pool if pool_bot else None
+    # ✅ CORREÇÃO: Usar pool_id diretamente ao invés de backref .pool
+    pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
     
     # Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
     bot_user_for_pixel = BotUser.query.filter_by(
@@ -84,9 +85,10 @@ Aproveite! 🚀
 
 def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optional[str]:
     """Determina qual link enviar baseado na configuração do Meta Pixel."""
-    from internal_logic.core.models import PoolBot
+    from internal_logic.core.models import PoolBot, RedirectPool
     pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-    pool = pool_bot.pool if pool_bot else None
+    # ✅ CORREÇÃO: Usar pool_id diretamente ao invés de backref .pool
+    pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
     
     has_meta_pixel = bool(pool and pool.meta_tracking_enabled and pixel_id_to_use)
     has_access_link = payment.bot.config and payment.bot.config.access_link
@@ -176,7 +178,8 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
         
         # ✅ Buscar pool para verificar Meta Pixel
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-        pool = pool_bot.pool if pool_bot else None
+        # ✅ CORREÇÃO: Usar pool_id diretamente ao invés de backref .pool
+        pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
         
         # ✅ Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
         bot_user_for_pixel = BotUser.query.filter_by(
