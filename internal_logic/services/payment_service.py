@@ -317,20 +317,26 @@ class PaymentService:
         Returns:
             PixPaymentResponse com QR code ou erro
         """
-        self.logger.info(f"PaymentService: Gerando PIX - Bot {bot_id}, Gateway {gateway_id}, Amount {amount}")
+        # 1. Log de início da requisição
+        self.logger.info(f"Gerando PIX - BotID: {bot_id} | Valor: {amount} | UserID: {external_id}")
         
         # 1. Buscar gateway no banco
         try:
             from internal_logic.core.models import Gateway
             gateway_config = Gateway.query.get(gateway_id) if self.db else None
             
-            if not gateway_config:
+            # 2. Log da busca do Gateway
+            if gateway_config:
+                self.logger.info(f"Gateway ativo encontrado: {gateway_config.gateway_type}")
+            else:
+                self.logger.error(f"Nenhum gateway verificado e ativo para o dono do bot {bot_id}")
                 return PixPaymentResponse(
                     success=False,
                     error_message=f"Gateway {gateway_id} não encontrado"
                 )
             
             if not gateway_config.is_active:
+                self.logger.warning(f"Gateway {gateway_id} está inativo")
                 return PixPaymentResponse(
                     success=False,
                     error_message=f"Gateway {gateway_id} está inativo"
@@ -343,9 +349,30 @@ class PaymentService:
                 error_message="Erro interno ao buscar gateway"
             )
         
+        # 3. Verificar criptografia das chaves
+        try:
+            # Testar se conseguimos acessar as chaves (desencriptação automática via @property)
+            api_key = gateway_config.api_key
+            client_secret = gateway_config.client_secret
+            
+            if api_key is None and client_secret is None:
+                # 3. Log de falha na descriptografia
+                self.logger.error("Falha ao descriptografar chaves do gateway. A ENCRYPTION_KEY mudou?")
+                return PixPaymentResponse(
+                    success=False,
+                    error_message="Falha ao descriptografar credenciais do gateway"
+                )
+        except Exception as e:
+            self.logger.error(f"Falha ao descriptografar chaves do gateway. A ENCRYPTION_KEY mudou? - {e}")
+            return PixPaymentResponse(
+                success=False,
+                error_message="Erro ao acessar credenciais do gateway"
+            )
+        
         # 2. Criar instância do gateway via Factory
         gateway = GatewayFactory.create(gateway_config)
         if not gateway:
+            self.logger.error(f"Tipo de gateway '{gateway_config.gateway_type}' não suportado")
             return PixPaymentResponse(
                 success=False,
                 error_message=f"Tipo de gateway '{gateway_config.gateway_type}' não suportado"
@@ -365,6 +392,12 @@ class PaymentService:
         try:
             response = gateway.generate_pix(request)
             
+            # 4. Log do resultado da API externa
+            if response.success:
+                self.logger.info(f"PIX gerado com sucesso via {gateway_config.gateway_type}. Payload: {response.raw_response}")
+            else:
+                self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {response.error_message}")
+            
             # 5. Registrar transação no banco (se sucesso)
             if response.success and self.db:
                 self._register_transaction(
@@ -378,7 +411,7 @@ class PaymentService:
             return response
             
         except Exception as e:
-            self.logger.error(f"PaymentService: Erro ao gerar PIX - {e}")
+            self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {str(e)}")
             return PixPaymentResponse(
                 success=False,
                 error_message=f"Erro ao comunicar com gateway: {str(e)}"

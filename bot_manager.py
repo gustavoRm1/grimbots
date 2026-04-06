@@ -24,6 +24,7 @@ from flow_engine_router_v8 import get_message_router
 from internal_logic.services.bot_messenger import BotMessenger
 from internal_logic.services.bot_runner import BotRunner
 from internal_logic.services.flow_engine import FlowEngine
+from internal_logic.services.payment_service import PaymentService, get_payment_service
 
 logger = logging.getLogger(__name__)
 
@@ -7636,28 +7637,65 @@ Seu pagamento ainda não foi confirmado.
             customer_name: Nome do cliente
             customer_username: Username do Telegram
             customer_user_id: ID do usuário no Telegram
-            
-        # ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
         """
-        # 🔒 LOCK DISTRIBUÍDO PARA EVITAR REQUISIÇÕES SIMULTÂNEAS DO MESMO USUÁRIO/BOT
-        lock_key = None
-        lock_acquired = False
-        redis_conn = None
+        # ✅ INTEGRAÇÃO COM PAYMENTSERVICE (NOVA ARQUITETURA)
         try:
-            from redis_manager import get_redis_connection
-            redis_conn = get_redis_connection()
-            if redis_conn:
-                lock_key = f"lock:pix:{bot_id}:{customer_user_id}"
-                lock_acquired = bool(redis_conn.set(lock_key, "1", nx=True, ex=10))
-                if not lock_acquired:
-                    logger.warning(f"⚠️ Lock PIX ativo para bot_id={bot_id}, user={customer_user_id} - aguardando liberação")
-                    return None
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import Bot, Gateway
+            
+            # Buscar bot para obter gateway_id
+            bot = Bot.query.get(bot_id)
+            if not bot:
+                logger.error(f"❌ Bot {bot_id} não encontrado para geração de PIX")
+                return None
+            
+            # Buscar gateway ativo do usuário
+            gateway = Gateway.query.filter_by(
+                user_id=bot.user_id,
+                is_active=True,
+                is_verified=True
+            ).first()
+            
+            if not gateway:
+                logger.error(f"❌ Nenhum gateway ativo encontrado para usuário {bot.user_id}")
+                return None
+            
+            # ✅ USAR PAYMENTSERVICE (NOVA ARQUITETURA)
+            payment_service = get_payment_service(db.session)
+            
+            response = payment_service.generate_pix(
+                bot_id=bot_id,
+                gateway_id=gateway.id,
+                amount=amount,
+                description=description,
+                customer_name=customer_name or 'Cliente',
+                customer_email=f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
+                customer_cpf=customer_user_id,  # Usar Telegram ID como identificador
+                external_id=customer_user_id
+            )
+            
+            if response.success:
+                logger.info(f"✅ PIX gerado via PaymentService - Transaction ID: {response.transaction_id}")
+                return {
+                    'pix_code': response.qr_code,
+                    'pix_code_base64': None,
+                    'qr_code_url': response.qr_code_url,
+                    'transaction_id': response.transaction_id,
+                    'transaction_hash': None,
+                    'payment_id': response.transaction_id,
+                    'expires_at': None,
+                    'status': response.status
+                }
             else:
-                logger.warning("⚠️ Redis indisponível para lock PIX - seguindo sem lock (risco de duplicidade)")
-        except Exception as lock_error:
-            logger.warning(f"⚠️ Erro ao adquirir lock PIX: {lock_error} - seguindo mesmo assim (risco de duplicidade)")
+                logger.error(f"❌ Falha ao gerar PIX via PaymentService: {response.error_message}")
+                # Se falhou, continuar com lógica legada (fallback)
+                # Não retornar None ainda - deixa o código antigo tentar
+        except Exception as e:
+            logger.error(f"❌ Erro na integração PaymentService: {e}")
+            logger.info("🔄 Fallback para lógica legada de PIX...")
         
-        try:
+        # 🔄 LÓGICA LEGADA (Fallback) - Executa se PaymentService falhar
+        # (código original continua abaixo...)
             # ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
             if not customer_user_id or customer_user_id.strip() == "":
                 logger.error(f"❌ ERRO CRÍTICO: customer_user_id vazio ao gerar PIX! Bot: {bot_id}, Valor: R$ {amount:.2f}")
