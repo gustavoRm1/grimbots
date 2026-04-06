@@ -38,11 +38,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
-# ✅ INJEÇÃO SEGURA: Criar app usando Factory Pattern
-from internal_logic.core.config import Config
-from internal_logic.core.extensions import create_app
-
-app = create_app()
+# ✅ CONEXÃO DIRETA: Importar app já inicializado
+from app import app
+from internal_logic.core.extensions import db
 
 
 def run_with_context(func, job_name):
@@ -61,31 +59,31 @@ def run_with_context(func, job_name):
 
 def reconcile_paradise():
     """Reconciliação Paradise - executar a cada 5 minutos"""
-    from app import reconcile_paradise_payments
+    from internal_logic.services.payment_processor import reconcile_paradise_payments
     run_with_context(reconcile_paradise_payments, "reconcile_paradise")
 
 
 def reconcile_pushynpay():
     """Reconciliação PushynPay - executar a cada 1 minuto"""
-    from app import reconcile_pushynpay_payments
+    from internal_logic.services.payment_processor import reconcile_pushynpay_payments
     run_with_context(reconcile_pushynpay_payments, "reconcile_pushynpay")
 
 
 def reconcile_atomopay():
     """Reconciliação Atomopay - executar a cada 1 minuto"""
-    from app import reconcile_atomopay_payments
+    from internal_logic.services.payment_processor import reconcile_atomopay_payments
     run_with_context(reconcile_atomopay_payments, "reconcile_atomopay")
 
 
 def reconcile_aguia():
     """Reconciliação ÁguiaPags - executar a cada 1 minuto"""
-    from app import reconcile_aguia_payments
+    from internal_logic.services.payment_processor import reconcile_aguia_payments
     run_with_context(reconcile_aguia_payments, "reconcile_aguia")
 
 
 def reconcile_bolt():
     """Reconciliação Bolt - executar a cada 1 minuto"""
-    from app import reconcile_bolt_payments
+    from internal_logic.services.payment_processor import reconcile_bolt_payments
     run_with_context(reconcile_bolt_payments, "reconcile_bolt")
 
 
@@ -111,31 +109,31 @@ def reconcile_all():
 
 def check_expired_subscriptions():
     """Verifica e remove assinaturas expiradas - executar a cada 5 minutos"""
-    from app import check_expired_subscriptions as _check
+    from internal_logic.services.payment_processor import check_expired_subscriptions as _check
     run_with_context(_check, "check_expired_subscriptions")
 
 
 def reset_error_count():
     """Reseta error_count alto após 7 dias - executar a cada 24 horas"""
-    from app import reset_high_error_count_subscriptions
+    from internal_logic.services.payment_processor import reset_high_error_count_subscriptions
     run_with_context(reset_high_error_count_subscriptions, "reset_error_count")
 
 
 def update_ranking():
     """Atualiza taxas premium do ranking - executar a cada 1 hora"""
-    from app import update_ranking_premium_rates
+    from internal_logic.services.payment_processor import update_ranking_premium_rates
     run_with_context(update_ranking_premium_rates, "update_ranking")
 
 
 def health_check_pools():
     """Health check de pools - executar a cada 15 segundos (ou 1 min via cron)"""
-    from app import health_check_all_pools
+    from internal_logic.services.payment_processor import health_check_all_pools
     run_with_context(health_check_all_pools, "health_check_pools")
 
 
 def remarketing_campaigns():
     """Verifica campanhas agendadas - executar a cada 1 minuto"""
-    from app import check_scheduled_remarketing_campaigns
+    from internal_logic.services.payment_processor import check_scheduled_remarketing_campaigns
     run_with_context(check_scheduled_remarketing_campaigns, "remarketing_campaigns")
 
 

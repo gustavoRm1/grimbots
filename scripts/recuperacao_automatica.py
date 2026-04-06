@@ -30,11 +30,9 @@ from typing import Dict, List
 import requests
 from dotenv import load_dotenv
 
-# ✅ INJEÇÃO SEGURA: Criar app usando Factory Pattern
-from internal_logic.core.config import Config
-from internal_logic.core.extensions import create_app
-
-app = create_app()
+# ✅ CONEXÃO DIRETA: Importar app já inicializado
+from app import app
+from internal_logic.core.extensions import db
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -100,25 +98,9 @@ def restart_rq_workers(env: Dict[str, str]) -> None:
 
 
 def run_diagnostico(bot_limit: int) -> Dict[str, object]:
-    print("[🔍] Executando diagnóstico pós-restart...")
-    result = subprocess.run(
-        [
-            sys.executable,
-            "scripts/diagnostico_sistema.py",
-            "--bots",
-            str(bot_limit),
-            "--json",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    data = json.loads(result.stdout)
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_path = LOG_DIR / f"diagnostico_{timestamp}.json"
-    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    print(f"[💾] Relatório salvo em {output_path}")
-    return data
+    """Diagnóstico pós-restart - script detalhado removido na Order 66"""
+    print("[ℹ️] Diagnóstico detalhado ignorado (script removido na Order 66)")
+    return {"status": "skipped", "reason": "diagnostico_sistema.py removido na Order 66"}
 
 
 def summarize(report: Dict[str, object]) -> None:

@@ -9,7 +9,7 @@ import json
 import logging
 from flask import Blueprint, request, jsonify, current_app
 from internal_logic.core.extensions import limiter, csrf
-from models import Payment, Gateway, Bot
+from internal_logic.core.models import Payment, Gateway, Bot
 from gateway_factory import GatewayFactory
 
 logger = logging.getLogger(__name__)

@@ -119,10 +119,11 @@ class FlowEngine:
         """
         try:
             # Importar modelos localmente para evitar circular imports
-            from app import app, db
-            from models import BotMessage, BotUser, get_brazil_time
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import BotMessage, BotUser, get_brazil_time
+            from flask import current_app
             
-            with app.app_context():
+            with current_app.app_context():
                 # Buscar ou criar BotUser
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
@@ -348,10 +349,11 @@ class FlowEngine:
             bool: True se processado com sucesso
         """
         try:
-            from app import app, db
-            from models import Product, Bot, Payment
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import Product, Bot, Payment
+            from flask import current_app
             
-            with app.app_context():
+            with current_app.app_context():
                 # Buscar produto
                 product = Product.query.filter_by(id=product_id, bot_id=bot_id).first()
                 if not product:

@@ -7,7 +7,7 @@ Recebe webhooks de atualizações do Telegram para bots.
 import logging
 from flask import Blueprint, request, jsonify, current_app
 from internal_logic.core.extensions import limiter, db, csrf
-from models import Bot
+from internal_logic.core.models import Bot
 
 logger = logging.getLogger(__name__)
 
