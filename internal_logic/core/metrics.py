@@ -81,12 +81,12 @@ class MetricsService:
                 )
             )
             
-            # 2. Incrementar total_visits do RedirectPool
+            # 2. Incrementar total_redirects do RedirectPool
             self.db.execute(
                 sql_update(RedirectPool)
                 .where(RedirectPool.id == pool_id)
                 .values(
-                    total_visits=text('COALESCE(total_visits, 0) + 1')
+                    total_redirects=text('COALESCE(total_redirects, 0) + 1')
                 )
             )
             

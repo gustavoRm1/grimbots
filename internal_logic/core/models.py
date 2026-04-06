@@ -542,8 +542,8 @@ class RedirectPool(db.Model):
     # Controle round robin
     last_bot_index = db.Column(db.Integer, default=0)
     
-    # Métricas agregadas (cache) - APENAS total_visits (coluna real do banco)
-    total_visits = db.Column(db.Integer, default=0)
+    # Métricas agregadas (cache) - APENAS total_redirects (coluna real do banco)
+    total_redirects = db.Column(db.Integer, default=0)
     
     # Health do pool (0-100)
     health_percentage = db.Column(db.Integer, default=0)
