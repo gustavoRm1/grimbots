@@ -21,6 +21,9 @@ from redis_manager import get_redis_connection
 import hashlib
 import hmac
 from flow_engine_router_v8 import get_message_router
+from internal_logic.services.bot_messenger import BotMessenger
+from internal_logic.services.bot_runner import BotRunner
+from internal_logic.services.flow_engine import FlowEngine
 
 logger = logging.getLogger(__name__)
 
@@ -534,6 +537,21 @@ class BotManager:
         self.messenger = BotMessenger(max_concurrent=10)
         logger.info("✅ BotMessenger injetado no BotManager")
 
+        # ✅ RUNNER SERVICE: Ciclo de vida dos bots (start, stop, polling)
+        self.runner = BotRunner(
+            bot_state=self.bot_state,
+            scheduler=self.scheduler,
+            on_update_received=self._process_telegram_update
+        )
+        logger.info("✅ BotRunner injetado no BotManager")
+
+        # ✅ FLOW ENGINE: Processamento de mensagens e funil
+        self.flow_engine = FlowEngine(
+            messenger=self.messenger,
+            bot_state=self.bot_state
+        )
+        logger.info("✅ FlowEngine injetado no BotManager")
+
         self._remarketing_workers_lock = threading.Lock()
         self._remarketing_workers: Dict[int, Dict[str, Any]] = {}
 
@@ -1030,80 +1048,27 @@ class BotManager:
     
     def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):
         """
-        Inicia um bot Telegram - Com estado centralizado em Redis
+        Inicia um bot Telegram - Delegado ao BotRunner
+        
+        ✅ REFATORADO: Ciclo de vida delegado ao serviço BotRunner
         
         Args:
             bot_id: ID do bot no banco
             token: Token do bot
             config: Configuração do bot
         """
-        # ✅ REDIS BRAIN: Verificar se bot já está ativo no Redis (visível para todos os workers)
-        if self.bot_state.is_bot_active(bot_id):
-            logger.warning(f"Bot {bot_id} já está ativo no Redis")
-            return
-        
-        # ✅ REDIS BRAIN: Adquirir lock de auto-start para prevenir race conditions
-        if not self.bot_state.acquire_autostart_lock(bot_id, timeout=30):
-            logger.warning(f"🔒 Bot {bot_id} está sendo iniciado por outro worker - aguardando")
-            # Aguardar até 3 segundos para o outro worker iniciar
-            import time
-            for _ in range(6):
-                time.sleep(0.5)
-                if self.bot_state.is_bot_active(bot_id):
-                    logger.info(f"✅ Bot {bot_id} foi iniciado por outro worker")
-                    return
-            logger.warning(f"⚠️ Timeout aguardando bot {bot_id} iniciar por outro worker")
-            return
-        
-        try:
-            # Configurar webhook para receber mensagens do Telegram
-            self._setup_webhook(token, bot_id)
-            
-            # ✅ REDIS BRAIN: Registrar bot no Redis (única fonte de verdade)
-            self.bot_state.register_bot(bot_id, token, config, worker_pid=os.getpid())
-            
-            # Iniciar heartbeat para manter bot ativo no Redis
-            self.bot_state.start_heartbeat_thread(bot_id, interval=60)
-            
-            # Iniciar thread de monitoramento
-            thread = threading.Thread(
-                target=self._bot_monitor_thread,
-                args=(bot_id,),
-                daemon=True
-            )
-            thread.start()
-            self.bot_threads[bot_id] = thread
-            
-            logger.info(f"✅ Bot {bot_id} iniciado com webhook configurado (Redis 100%)")
-            
-        finally:
-            # Liberar lock de auto-start
-            self.bot_state.release_autostart_lock(bot_id)
+        return self.runner.start_bot(bot_id, token, config)
     
     def stop_bot(self, bot_id: int):
         """
-        Para um bot Telegram - Remove do Redis (única fonte de verdade)
+        Para um bot Telegram - Delegado ao BotRunner
+        
+        ✅ REFATORADO: Ciclo de vida delegado ao serviço BotRunner
         
         Args:
             bot_id: ID do bot no banco
         """
-        # ✅ REDIS BRAIN: Remover do Redis (todos os workers verão imediatamente)
-        self.bot_state.unregister_bot(bot_id)
-        
-        # Remover job do scheduler se existir
-        if bot_id in self.polling_jobs and self.scheduler:
-            try:
-                self.scheduler.remove_job(self.polling_jobs[bot_id])
-                del self.polling_jobs[bot_id]
-                logger.info(f"✅ Polling job removido para bot {bot_id}")
-            except Exception as e:
-                logger.error(f"Erro ao remover job: {e}")
-        
-        # Thread será encerrada automaticamente
-        if bot_id in self.bot_threads:
-            del self.bot_threads[bot_id]
-        
-        logger.info(f"✅ Bot {bot_id} parado e removido do Redis")
+        return self.runner.stop_bot(bot_id)
     
     def update_bot_config(self, bot_id: int, config: Dict[str, Any]):
         """
