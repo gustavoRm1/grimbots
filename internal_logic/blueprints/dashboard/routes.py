@@ -633,38 +633,13 @@ def ranking():
         categories[cat].append(ach_data)
     
     # Prêmios por receita (milestones) - CONTRATO BLINDADO COM O FRONTEND
+    # 🖼️ ATENÇÃO: Usar apenas imagens que existem em static/img/
+    # Arquivos existentes: premio_50k.png, premio_100k.png, premio_250k.png, premio_500k.png, premio_1m.png
     revenue_awards = [
-        {
-            'threshold': 1000, 
-            'name': 'Primeira Venda', 
-            'image': 'placa_1k.png',  # 🔥 CRÍTICO: Template usa award.image
-            'is_unlocked': total_revenue_float >= 1000,  # 🔥 CRÍTICO: Template usa award.is_unlocked
-            'progress': min(100.0, (total_revenue_float / 1000) * 100) if total_revenue_float < 1000 else 100.0,
-            'remaining': max(0, 1000 - total_revenue_float),
-            'current_revenue': total_revenue_float
-        },
-        {
-            'threshold': 5000, 
-            'name': 'Vendedor Bronze', 
-            'image': 'placa_5k.png',
-            'is_unlocked': total_revenue_float >= 5000,
-            'progress': min(100.0, (total_revenue_float / 5000) * 100) if total_revenue_float < 5000 else 100.0,
-            'remaining': max(0, 5000 - total_revenue_float),
-            'current_revenue': total_revenue_float
-        },
-        {
-            'threshold': 10000, 
-            'name': 'Vendedor Prata', 
-            'image': 'placa_10k.png',
-            'is_unlocked': total_revenue_float >= 10000,
-            'progress': min(100.0, (total_revenue_float / 10000) * 100) if total_revenue_float < 10000 else 100.0,
-            'remaining': max(0, 10000 - total_revenue_float),
-            'current_revenue': total_revenue_float
-        },
         {
             'threshold': 50000, 
             'name': 'Vendedor Ouro', 
-            'image': 'placa_50k.png',
+            'image': 'premio_50k.png',  # 🖼️ Imagem existente em static/img/
             'is_unlocked': total_revenue_float >= 50000,
             'progress': min(100.0, (total_revenue_float / 50000) * 100) if total_revenue_float < 50000 else 100.0,
             'remaining': max(0, 50000 - total_revenue_float),
@@ -673,19 +648,37 @@ def ranking():
         {
             'threshold': 100000, 
             'name': 'Vendedor Diamante', 
-            'image': 'placa_100k.png',
+            'image': 'premio_100k.png',
             'is_unlocked': total_revenue_float >= 100000,
             'progress': min(100.0, (total_revenue_float / 100000) * 100) if total_revenue_float < 100000 else 100.0,
             'remaining': max(0, 100000 - total_revenue_float),
             'current_revenue': total_revenue_float
         },
         {
+            'threshold': 250000, 
+            'name': 'Vendedor Elite', 
+            'image': 'premio_250k.png',
+            'is_unlocked': total_revenue_float >= 250000,
+            'progress': min(100.0, (total_revenue_float / 250000) * 100) if total_revenue_float < 250000 else 100.0,
+            'remaining': max(0, 250000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
             'threshold': 500000, 
             'name': 'Mestre das Vendas', 
-            'image': 'placa_500k.png',
+            'image': 'premio_500k.png',
             'is_unlocked': total_revenue_float >= 500000,
             'progress': min(100.0, (total_revenue_float / 500000) * 100) if total_revenue_float < 500000 else 100.0,
             'remaining': max(0, 500000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 1000000, 
+            'name': 'Lenda do Faturamento', 
+            'image': 'premio_1m.png',
+            'is_unlocked': total_revenue_float >= 1000000,
+            'progress': min(100.0, (total_revenue_float / 1000000) * 100) if total_revenue_float < 1000000 else 100.0,
+            'remaining': max(0, 1000000 - total_revenue_float),
             'current_revenue': total_revenue_float
         },
     ]
