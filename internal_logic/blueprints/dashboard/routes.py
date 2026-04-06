@@ -498,6 +498,9 @@ def ranking():
     now = datetime.now()
     first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
+    # 📅 Período do ranking (default: monthly para o novo motor mensal)
+    period = request.args.get('period', 'monthly')
+    
     # ============================================================================
     # 🔥 QUERY MENSAL - Faturamento do MÊS ATUAL (não total histórico)
     # ============================================================================
