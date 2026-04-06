@@ -544,6 +544,7 @@ class RedirectPool(db.Model):
     
     # Métricas agregadas (cache)
     total_redirects = db.Column(db.Integer, default=0)
+    total_blocked_accesses = db.Column(db.Integer, default=0)  # Contador de bloqueios do cloaker
     healthy_bots_count = db.Column(db.Integer, default=0)
     total_bots_count = db.Column(db.Integer, default=0)
     
