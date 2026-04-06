@@ -6,7 +6,8 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response, send_file
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_socketio import emit, join_room, leave_room
-from internal_logic.core.extensions import db, socketio
+# ✅ FIX: Extensões centralizadas importadas integralmente para evitar NameError
+from internal_logic.core.extensions import db, socketio, login_manager, csrf, limiter
 from internal_logic.core.config import Config
 from internal_logic.blueprints.auth.routes import auth_bp
 from internal_logic.blueprints.dashboard.routes import dashboard_bp
