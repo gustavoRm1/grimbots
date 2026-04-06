@@ -579,7 +579,7 @@ class RedirectPool(db.Model):
     utmify_pixel_id = db.Column(db.String(100), nullable=True)  # Pixel ID da Utmify
     
     # Relacionamentos
-    pool_bots = db.relationship('PoolBot', backref='pool', lazy='dynamic', cascade='all, delete-orphan')
+    pool_bots = db.relationship('PoolBot', backref='pool', lazy='select', cascade='all, delete-orphan')
     
     # Constraint único: slug por usuário
     __table_args__ = (
