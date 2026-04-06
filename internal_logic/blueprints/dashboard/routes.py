@@ -496,7 +496,7 @@ def ranking():
     # Período do ranking (default: all_time)
     period = request.args.get('period', 'all_time')
     
-    # Top vendedores por receita (top 100)
+    # Top vendedores por receita (top 100) - APENAS COLUNAS QUE EXISTEM NO BANCO
     top_sellers = db.session.query(
         User.id,
         User.username,
@@ -504,24 +504,34 @@ def ranking():
         User.total_revenue,
         User.total_sales,
         User.ranking_display_name,
-        User.is_premium,
-        User.avatar_url
+        User.commission_percentage
     ).filter(
         User.is_active == True
     ).order_by(
         User.total_revenue.desc()
     ).limit(100).all()
     
-    # Construir ranking_data com posições
+    # Construir ranking_data com posições - LÓGICA PREMIUM EM PYTHON
     ranking_data = []
+    premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}  # Taxas premium por posição
+    
     for idx, seller in enumerate(top_sellers):
+        position = idx + 1
+        # Premium é calculado dinamicamente: top 3 OU commission_percentage < 2.0
+        is_premium = position <= 3 or (seller.commission_percentage or 2.0) < 2.0
+        premium_rate = premium_rates.get(position, None) if position <= 3 else None
+        has_premium_rate = (seller.commission_percentage or 2.0) < 2.0
+        
         ranking_data.append({
-            'position': idx + 1,
+            'position': position,
             'user_id': seller.id,
             'name': seller.ranking_display_name or seller.full_name or seller.username,
             'username': seller.username,
-            'avatar': seller.avatar_url or '/static/img/default-avatar.png',
-            'is_premium': seller.is_premium or False,
+            'avatar': '/static/img/default-avatar.png',  # Avatar padrão (não existe no User)
+            'is_premium': is_premium,
+            'premium_rate': premium_rate,
+            'current_rate': seller.commission_percentage or 2.0,
+            'has_premium_rate': has_premium_rate,
             'is_current_user': seller.id == current_user.id,
             'total_revenue': float(seller.total_revenue or 0),
             'total_sales': seller.total_sales or 0
