@@ -4,13 +4,18 @@ Dashboard Blueprint - Rotas do Painel Principal
 Dashboard e APIs de analytics
 """
 
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash, abort, session, make_response, send_file
 from flask_login import login_required, current_user
-from internal_logic.core.extensions import db
-from internal_logic.core.models import Bot, Payment, User
+from internal_logic.core.extensions import db, csrf, limiter
+from internal_logic.core.models import (
+    Bot, User, Payment, BotConfig, Gateway, AuditLog, Achievement, UserAchievement, 
+    BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, 
+    Commission, PushSubscription, NotificationSettings, Subscription, get_brazil_time
+)
 from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 

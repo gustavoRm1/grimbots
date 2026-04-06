@@ -7,7 +7,7 @@ Painel administrativo para gerenciamento de usuários e sistema
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_login import login_required, current_user
 from functools import wraps
-from internal_logic.core.extensions import db, csrf
+from internal_logic.core.extensions import db, csrf, limiter
 from internal_logic.core.models import User, Bot, Payment, BotUser, AuditLog
 from sqlalchemy import func
 from datetime import datetime, timedelta
