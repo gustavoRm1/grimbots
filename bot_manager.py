@@ -440,7 +440,7 @@ import time
 class BotManager:
     """Gerenciador de bots Telegram - Com estado centralizado em Redis (Namespace Isolado V2)"""
     
-    def __init__(self, socketio, user_id: int = None):
+    def __init__(self, socketio, scheduler=None, user_id: int = None, **kwargs):
         """
         Inicializa o BotManager com namespace isolado obrigatório.
         

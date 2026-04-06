@@ -269,43 +269,6 @@ class CloakerService:
         return cls.SAFE_PAGE_HTML, 200
     
     @classmethod
-    def increment_blocked_counter(cls, pool_id: int) -> bool:
-        """
-        ➕ Incrementa contador de acessos bloqueados atomicamente
-        
-        Args:
-            pool_id: ID do RedirectPool
-            
-        Returns:
-            bool: True se sucesso
-        """
-        try:
-            from internal_logic.core.extensions import db
-            from sqlalchemy import text
-            
-            sql = text("""
-                UPDATE redirect_pools 
-                SET total_blocked_accesses = COALESCE(total_blocked_accesses, 0) + 1,
-                    updated_at = NOW()
-                WHERE id = :pool_id
-            """)
-            
-            db.session.execute(sql, {'pool_id': pool_id})
-            db.session.commit()
-            
-            logger.debug(f"🛡️ Bloqueio registrado: pool={pool_id}")
-            return True
-            
-        except Exception as e:
-            logger.warning(f"⚠️ Falha ao registrar bloqueio: {e}")
-            try:
-                from internal_logic.core.extensions import db
-                db.session.rollback()
-            except:
-                pass
-            return False
-    
-    @classmethod
     def _log_access_denied(cls, request, pool, reason: str, grim_received: str, 
                            grim_expected: str, fbclid: str):
         """Log estruturado de acesso negado"""
@@ -322,9 +285,6 @@ class CloakerService:
             'user_agent': request.headers.get('User-Agent', '')[:100]
         }
         logger.warning(f"CLOAKER_DENIED: {json.dumps(log_entry, ensure_ascii=False)}")
-        
-        # Incrementar contador de bloqueios
-        cls.increment_blocked_counter(getattr(pool, 'id', 0))
     
     @classmethod
     def _log_access_granted(cls, request, pool, fbclid: str, utm_source: str):
