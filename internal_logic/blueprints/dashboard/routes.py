@@ -1350,7 +1350,7 @@ def get_redirect_pool_detail(pool_id):
     
     # Incluir lista de bots (serializados)
     pool_data = pool.to_dict()
-    pool_data['bots'] = [pb.to_dict() for pb in pool.pool_bots.all()]
+    pool_data['bots'] = [pb.to_dict() for pb in pool.pool_bots]
     
     return jsonify(pool_data)
 
