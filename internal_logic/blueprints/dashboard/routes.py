@@ -612,14 +612,14 @@ def ranking():
             'name': achievement.name,
             'description': achievement.description,
             'icon': achievement.icon or 'fa-trophy',
-            'category': achievement.category or 'Geral',
+            'category': getattr(achievement, 'requirement_type', 'Geral'),
             'points': achievement.points or 0,
             'is_unlocked': is_unlocked
         }
         achievements_data.append(ach_data)
         
         # Agrupar por categoria
-        cat = achievement.category or 'Geral'
+        cat = getattr(achievement, 'requirement_type', 'Geral')
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(ach_data)
