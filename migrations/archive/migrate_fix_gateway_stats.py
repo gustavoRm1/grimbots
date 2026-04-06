@@ -9,7 +9,7 @@ Execução: python migrate_fix_gateway_stats.py
 
 import sys
 from app import app, db
-from models import Gateway, Payment
+from internal_logic.core.models import Gateway, Payment
 from sqlalchemy import func
 
 def fix_gateway_statistics():

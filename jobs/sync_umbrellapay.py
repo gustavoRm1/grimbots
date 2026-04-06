@@ -28,7 +28,7 @@ def sync_umbrellapay_payments():
     """
     try:
         from app import app, db
-        from models import Payment, Gateway, Bot, get_brazil_time
+        from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time
         from gateway_factory import GatewayFactory
         from app import send_meta_pixel_purchase_event
         
@@ -52,7 +52,7 @@ def sync_umbrellapay_payments():
             # ✅ DEBOUNCE: Filtrar payments atualizados recentemente (<5 minutos)
             # Evita processar mesmo payment múltiplas vezes se job rodar antes de 5min
             cinco_minutos_atras = get_brazil_time() - timedelta(minutes=5)
-            from models import WebhookEvent
+            from internal_logic.core.models import WebhookEvent
             
             payments_para_processar = []
             for payment in payments_pendentes:

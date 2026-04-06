@@ -17,7 +17,7 @@ def clean_duplicates():
     """Remove mensagens duplicadas, mantendo apenas a mais antiga"""
     try:
         from app import app, db
-        from models import BotMessage
+        from internal_logic.core.models import BotMessage
         
         with app.app_context():
             print("🔍 Buscando mensagens duplicadas...")

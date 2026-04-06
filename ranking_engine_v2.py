@@ -5,7 +5,7 @@ Sistema justo e competitivo de ranking
 
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from models import db, User, Bot, Payment, BotUser
+from internal_logic.core.models import db, User, Bot, Payment, BotUser
 import logging
 
 # ✅ CORREÇÃO: Desabilitar sistema de ligas (tabelas não criadas)
@@ -224,7 +224,7 @@ class RankingEngine:
         if LEAGUES_ENABLED:
             try:
                 # from models_v2 import UserAchievementV2  # ❌ Módulo não existe
-                from models import UserAchievement  # ✅ Usar modelo existente
+                from internal_logic.core.models import UserAchievement  # ✅ Usar modelo existente
                 total_achievements = UserAchievement.query.filter_by(
                     user_id=user.id
                 ).count()

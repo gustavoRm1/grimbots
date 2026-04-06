@@ -34,7 +34,7 @@ def main():
     
     # Importar após adicionar ao path
     from app import app, db
-    from models import Gateway
+    from internal_logic.core.models import Gateway
     
     with app.app_context():
         try:

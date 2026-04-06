@@ -109,7 +109,7 @@ def _send_token_alert(pixel_id: str, message: str):
     logger = logging.getLogger(__name__)
     
     # ✅ LOG CRÍTICO PARA ALERTA
-    from models import get_brazil_time
+    from internal_logic.core.models import get_brazil_time
     logger.critical(f"ALERT | Token Invalid | Pixel: {pixel_id} | " +
                    f"Message: {message} | " +
                    f"Timestamp: {get_brazil_time().isoformat()}")
@@ -261,7 +261,7 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
             if events_received and events_received >= 1:
                 try:
                     if event_data.get('event_name') == 'Purchase':
-                        from models import db, Payment, get_brazil_time
+                        from internal_logic.core.models import db, Payment, get_brazil_time
                         event_id_val = event_data.get('event_id')
                         if event_id_val:
                             payment = Payment.query.filter_by(meta_event_id=event_id_val).first()
@@ -336,7 +336,7 @@ def reconcile_meta_purchases(days: int = 7, limit: int = 200):
     """
     import logging
     from datetime import datetime, timedelta, timezone
-    from models import db, Payment
+    from internal_logic.core.models import db, Payment
     from app import app, send_meta_pixel_purchase_event
 
     logger = logging.getLogger(__name__)

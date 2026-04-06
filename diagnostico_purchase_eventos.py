@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app
-from models import Payment, PoolBot, RedirectPool, db
+from internal_logic.core.models import Payment, PoolBot, RedirectPool, db
 from utils.encryption import decrypt
 
 def main():

@@ -3,7 +3,7 @@
 def get_chat_messages(bot_id, telegram_user_id):
     """✅ CHAT - Retorna mensagens de uma conversa específica"""
     try:
-        from models import Bot, BotUser, BotMessage
+        from internal_logic.core.models import Bot, BotUser, BotMessage
         
         # Verificar se bot pertence ao usuário
         bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -28,7 +28,7 @@ def get_chat_messages(bot_id, telegram_user_id):
         if since_timestamp:
             try:
                 from datetime import datetime, timezone, timedelta
-                from models import BRAZIL_TZ_OFFSET
+                from internal_logic.core.models import BRAZIL_TZ_OFFSET
                 
                 # ✅ CORREÇÃO: Tratar diferentes formatos de timestamp
                 since_timestamp_clean = since_timestamp.replace('Z', '+00:00')

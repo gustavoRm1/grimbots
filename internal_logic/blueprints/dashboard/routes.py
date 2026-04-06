@@ -7,7 +7,7 @@ Dashboard e APIs de analytics
 from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
 from internal_logic.core.extensions import db
-from models import Bot, Payment, User
+from internal_logic.core.models import Bot, Payment, User
 from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 import logging
@@ -30,7 +30,7 @@ def get_brazil_time():
 def dashboard():
     """Dashboard principal com modo simples/avançado"""
     from sqlalchemy import func
-    from models import BotUser
+    from internal_logic.core.models import BotUser
     
     # Obter modo (simples ou avançado)
     mode = request.args.get('mode', 'advanced')
@@ -85,7 +85,7 @@ def dashboard():
 def api_dashboard_stats():
     """API para estatísticas do dashboard (usado pelo JavaScript)"""
     from sqlalchemy import func
-    from models import BotUser
+    from internal_logic.core.models import BotUser
     
     # IDs dos bots do usuário
     user_bot_ids = [bot.id for bot in current_user.bots]
@@ -207,7 +207,7 @@ def api_dashboard_analytics():
     """API para métricas avançadas e analytics"""
     from sqlalchemy import func, extract
     from datetime import datetime, timedelta
-    from models import BotUser, Commission
+    from internal_logic.core.models import BotUser, Commission
     
     # IDs dos bots do usuário
     user_bot_ids = [bot.id for bot in current_user.bots]

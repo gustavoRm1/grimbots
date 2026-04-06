@@ -41,7 +41,7 @@ def check_health_task():
         
         # 3. Verificar bots mortos
         try:
-            from models import get_brazil_time
+            from internal_logic.core.models import get_brazil_time
             dead_bots = Bot.query.filter(
                 Bot.is_running == True,
                 Bot.last_health_check < get_brazil_time() - timedelta(minutes=10)
@@ -60,7 +60,7 @@ def check_health_task():
         else:
             logger.warning(f"⚠️ Health check: {len(issues)} problemas encontrados")
         
-        from models import get_brazil_time
+        from internal_logic.core.models import get_brazil_time
         return {
             'status': 'ok' if not issues else 'warning',
             'issues': issues,
@@ -69,7 +69,7 @@ def check_health_task():
     
     except Exception as e:
         logger.error(f"💥 Health check falhou: {e}")
-        from models import get_brazil_time
+        from internal_logic.core.models import get_brazil_time
         return {
             'status': 'error',
             'error': str(e),

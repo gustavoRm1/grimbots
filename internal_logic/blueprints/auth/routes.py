@@ -7,7 +7,7 @@ Login, Logout, Register, Forgot Password
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from internal_logic.core.extensions import db, limiter
-from models import User
+from internal_logic.core.models import User
 import logging
 
 logger = logging.getLogger(__name__)

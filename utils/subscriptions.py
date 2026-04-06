@@ -7,7 +7,7 @@ import re
 import requests
 import logging
 from typing import Optional, Tuple
-from models import Bot
+from internal_logic.core.models import Bot
 
 logger = logging.getLogger(__name__)
 

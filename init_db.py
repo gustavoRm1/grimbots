@@ -4,7 +4,7 @@ Cria todas as tabelas necessárias e dados iniciais
 """
 
 from app import app, db
-from models import User, Bot, BotConfig, Gateway, Payment
+from internal_logic.core.models import User, Bot, BotConfig, Gateway, Payment
 import os
 import secrets
 import string

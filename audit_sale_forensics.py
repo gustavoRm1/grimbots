@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 
 from app import app, db  # type: ignore
-from models import Payment  # type: ignore
+from internal_logic.core.models import Payment  # type: ignore
 from utils.tracking_service import TrackingServiceV4  # type: ignore
 
 

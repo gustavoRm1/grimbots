@@ -1,7 +1,7 @@
 from typing import Optional
 
 from app import app, db
-from models import Payment, BotUser
+from internal_logic.core.models import Payment, BotUser
 from sqlalchemy import or_
 
 # Dados alvo

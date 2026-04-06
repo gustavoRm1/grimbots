@@ -170,7 +170,7 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
     try:
         # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
-        from models import PoolBot, RedirectPool
+        from internal_logic.core.models import PoolBot, RedirectPool
         
         # Se pool_id foi passado, buscar pool específico
         if pool_id:
@@ -376,7 +376,7 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         
         # Marcar como enviado IMEDIATAMENTE (flag otimista)
         bot_user.meta_viewcontent_sent = True
-        from models import get_brazil_time
+        from internal_logic.core.models import get_brazil_time
         bot_user.meta_viewcontent_sent_at = get_brazil_time()
         
         # Commit da flag
@@ -479,7 +479,7 @@ class BotManager:
         def cleanup_cache():
             while True:
                 time.sleep(300)  # 5 minutos
-                from models import get_brazil_time
+                from internal_logic.core.models import get_brazil_time
                 now = get_brazil_time()
                 expired_keys = []
                 for user_key, timestamp in self.rate_limit_cache.items():
@@ -660,7 +660,7 @@ class BotManager:
                     campaign_id = job.get('campaign_id')
                     try:
                         from app import app, db, socketio
-                        from models import RemarketingCampaign, get_brazil_time
+                        from internal_logic.core.models import RemarketingCampaign, get_brazil_time
                         with app.app_context():
                             campaign = db.session.get(RemarketingCampaign, int(campaign_id)) if campaign_id else None
                             if campaign:
@@ -734,7 +734,7 @@ class BotManager:
                         blocked_inc = 1
                         try:
                             from app import app, db
-                            from models import RemarketingBlacklist
+                            from internal_logic.core.models import RemarketingBlacklist
                             with app.app_context():
                                 existing = db.session.query(RemarketingBlacklist).filter_by(
                                     bot_id=bot_id,
@@ -773,7 +773,7 @@ class BotManager:
                 try:
                     if campaign_id:
                         from app import app, db, socketio
-                        from models import RemarketingCampaign
+                        from internal_logic.core.models import RemarketingCampaign
                         with app.app_context():
                             campaign = db.session.get(RemarketingCampaign, int(campaign_id))
                             if campaign:
@@ -831,7 +831,7 @@ class BotManager:
         """Blacklist definitiva para 'user is deactivated' (best-effort; não quebra execução se falhar)."""
         try:
             from app import app, db
-            from models import RemarketingBlacklist, Bot
+            from internal_logic.core.models import RemarketingBlacklist, Bot
 
             with app.app_context():
                 bot_id = None
@@ -1109,7 +1109,7 @@ class BotManager:
 
             try:
                 # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
-                from models import get_brazil_time
+                from internal_logic.core.models import get_brazil_time
                 self.socketio.emit('bot_heartbeat', {
                     'bot_id': bot_id,
                     'timestamp': get_brazil_time().isoformat(),
@@ -1506,7 +1506,7 @@ class BotManager:
                     # Tentar auto-start com lock (namespace isolado)
                     try:
                         from app import app, db
-                        from models import Bot, BotConfig
+                        from internal_logic.core.models import Bot, BotConfig
                         with app.app_context():
                             bot = db.session.get(Bot, bot_id)
                             if bot and bot.is_active and bot.user_id == user_id:  # ✅ Verificar ownership
@@ -1547,7 +1547,7 @@ class BotManager:
                 if text and text.strip():  # Apenas mensagens de texto não vazias
                     try:
                         from app import app, db
-                        from models import BotUser, BotMessage
+                        from internal_logic.core.models import BotUser, BotMessage
                         import json
                         from datetime import datetime, timedelta
                         
@@ -1594,7 +1594,7 @@ class BotManager:
                             if not telegram_msg_id:
                                 # Se não tem message_id, gerar um baseado no timestamp + texto
                                 import hashlib
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
                                 unique_id = f"{telegram_user_id}_{get_brazil_time().timestamp()}_{text[:20]}"
                                 telegram_msg_id = hashlib.md5(unique_id.encode()).hexdigest()[:16]
                                 logger.warning(f"⚠️ Mensagem sem message_id do Telegram, gerando ID único: {telegram_msg_id}")
@@ -1634,7 +1634,7 @@ class BotManager:
                             
                             # Fallback: verificar por texto similar nos últimos 5 segundos
                             if not existing_message:
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
                                 recent_window = get_brazil_time() - timedelta(seconds=5)
                                 similar_message = BotMessage.query.filter(
                                     BotMessage.bot_id == bot_id,
@@ -1665,7 +1665,7 @@ class BotManager:
                                     db.session.add(bot_message)
                                     
                                     # Atualizar last_interaction
-                                    from models import get_brazil_time
+                                    from internal_logic.core.models import get_brazil_time
                                     bot_user.last_interaction = get_brazil_time()
                                     
                                     db.session.commit()
@@ -1756,7 +1756,7 @@ class BotManager:
                                 logger.info(f"🔄 CORREÇÃO 5: Grupo convertido! Chat ID antigo: {chat_info.get('id')} → Novo: {migrate_to_chat_id}")
                                 try:
                                     from app import app, db
-                                    from models import Subscription
+                                    from internal_logic.core.models import Subscription
                                     with app.app_context():
                                         # Atualizar todas as subscriptions com chat_id antigo
                                         from utils.subscriptions import normalize_vip_chat_id
@@ -1796,7 +1796,7 @@ class BotManager:
                         # ✅ CORREÇÃO 12: Cancelar subscriptions ativas quando usuário sai do grupo
                         try:
                             from app import app, db
-                            from models import Subscription
+                            from internal_logic.core.models import Subscription
                             from datetime import datetime, timezone
                             
                             with app.app_context():
@@ -1884,7 +1884,7 @@ class BotManager:
         """
         try:
             from app import app, db
-            from models import BotUser, Bot, BotMessage
+            from internal_logic.core.models import BotUser, Bot, BotMessage
             from datetime import datetime, timedelta
             
             with app.app_context():
@@ -1904,7 +1904,7 @@ class BotManager:
                     self._handle_start_command(bot_id, token, config, chat_id, message, None)
                     return
                 
-                from models import get_brazil_time
+                from internal_logic.core.models import get_brazil_time
                 now = get_brazil_time()
                 
                 # ✅ VERIFICAÇÃO CRÍTICA QI 600+: Há conversa ativa?
@@ -2117,7 +2117,7 @@ class BotManager:
         """
         try:
             from app import app, db
-            from models import BotUser
+            from internal_logic.core.models import BotUser
             from datetime import datetime
             import json
             
@@ -2220,7 +2220,7 @@ class BotManager:
                     # Marcar como enviado (sem afetar Meta Pixel)
                     if bot_user:
                         bot_user.welcome_sent = True
-                        from models import get_brazil_time
+                        from internal_logic.core.models import get_brazil_time
                         bot_user.welcome_sent_at = get_brazil_time()
                         db.session.commit()
                     
@@ -2481,9 +2481,9 @@ class BotManager:
                             # ✅ Verificação adicional no banco (anti-duplicação)
                             try:
                                 from app import app, db
-                                from models import BotMessage
+                                from internal_logic.core.models import BotMessage
                                 from datetime import timedelta
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
 
                                 with app.app_context():
                                     recent_window = get_brazil_time() - timedelta(seconds=5)
@@ -2533,8 +2533,8 @@ class BotManager:
                                     # ✅ Salvar mensagem enviada no banco para verificação futura (anti-duplicação)
                                     try:
                                         from app import app, db
-                                        from models import BotMessage, BotUser
-                                        from models import get_brazil_time
+                                        from internal_logic.core.models import BotMessage, BotUser
+                                        from internal_logic.core.models import get_brazil_time
 
                                         with app.app_context():
                                             bot_user = BotUser.query.filter_by(
@@ -3058,7 +3058,7 @@ class BotManager:
         """
         try:
             from app import app, db
-            from models import Payment
+            from internal_logic.core.models import Payment
             
             with app.app_context():
                 # ✅ Buscar payment com lock (SELECT FOR UPDATE)
@@ -3657,7 +3657,7 @@ class BotManager:
         """
         import time
         from app import app, db
-        from models import Payment
+        from internal_logic.core.models import Payment
         
         if visited_steps is None:
             visited_steps = set()
@@ -4123,7 +4123,7 @@ class BotManager:
                     logger.info(f"✅ Usando snapshot de config para step {step_id}")
                 else:
                     # Fallback: buscar config atual do banco
-                    from models import Bot
+                    from internal_logic.core.models import Bot
                     bot = Bot.query.get(bot_id)
                     if bot and bot.config:
                         config = bot.config.to_dict()
@@ -4188,7 +4188,7 @@ class BotManager:
             
             # ✅ QI 500: RESET COMPLETO NO BANCO (ESSENCIAL)
             from app import app, db
-            from models import BotUser, get_brazil_time
+            from internal_logic.core.models import BotUser, get_brazil_time
             
             # Usar sessão fornecida ou criar nova
             if db_session:
@@ -4292,7 +4292,7 @@ class BotManager:
             logger.info(f"🔍 Tentando processar tracking para param: '{start_param}'")
             try:
                 from app import app, db
-                from models import BotUser
+                from internal_logic.core.models import BotUser
                 if start_param:
                     with app.app_context():
                         bot_user_track = BotUser.query.filter_by(
@@ -4355,7 +4355,7 @@ class BotManager:
             # PATCH 2: Se já enviou welcome, nunca mais envia
             try:
                 from app import app, db
-                from models import BotUser
+                from internal_logic.core.models import BotUser
                 with app.app_context():
                     bot_user = BotUser.query.filter_by(
                         bot_id=bot_id,
@@ -4380,7 +4380,7 @@ class BotManager:
             
             # ✅ QI 200: FAST RESPONSE MODE - Buscar apenas config mínima (1 query rápida)
             from app import app, db
-            from models import Bot, BotUser
+            from internal_logic.core.models import Bot, BotUser
             
             # Buscar config do banco e fazer reset NO MESMO CONTEXTO (rápido - apenas 1 query)
             with app.app_context():
@@ -4474,7 +4474,7 @@ class BotManager:
                             ).first()
                             if bot_user_update:
                                 bot_user_update.welcome_sent = True
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
                                 bot_user_update.welcome_sent_at = get_brazil_time()
                                 db.session.commit()
                                 logger.info(f"✅ Fluxo iniciado - welcome_sent=True")
@@ -4566,7 +4566,7 @@ class BotManager:
                             ).first()
                             if bot_user_update:
                                 bot_user_update.welcome_sent = True
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
                                 bot_user_update.welcome_sent_at = get_brazil_time()
                                 db.session.commit()
                                 logger.info(f"✅ Marcado como welcome_sent=True")
@@ -4598,7 +4598,7 @@ class BotManager:
             # ✅ CORREÇÃO: Emitir evento via WebSocket apenas para o dono do bot
             try:
                 from app import app, db
-                from models import Bot
+                from internal_logic.core.models import Bot
                 with app.app_context():
                     bot = db.session.get(Bot, bot_id)
                     if bot:
@@ -4847,7 +4847,7 @@ class BotManager:
                 
                 # Buscar dados da campanha e botão
                 from app import app, db
-                from models import RemarketingCampaign
+                from internal_logic.core.models import RemarketingCampaign
                 
                 with app.app_context():
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
@@ -4922,7 +4922,7 @@ class BotManager:
                     
                     # Atualizar stats da campanha
                     from app import app, db
-                    from models import RemarketingCampaign
+                    from internal_logic.core.models import RemarketingCampaign
                     with app.app_context():
                         campaign = RemarketingCampaign.query.get(campaign_id)
                         if campaign:
@@ -5007,7 +5007,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
                     from app import app, db
-                    from models import Bot as BotModel
+                    from internal_logic.core.models import Bot as BotModel
                     
                     with app.app_context():
                         bot = db.session.get(BotModel, bot_id)
@@ -5103,7 +5103,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
                     from app import app, db
-                    from models import Bot as BotModel
+                    from internal_logic.core.models import Bot as BotModel
                     
                     with app.app_context():
                         bot = db.session.get(BotModel, bot_id)
@@ -5391,7 +5391,7 @@ class BotManager:
                 # Buscar configuração para pegar nome do produto
                 # ✅ Recarregar config do banco (pode ter sido alterada)
                 from app import app, db
-                from models import Bot as BotModel
+                from internal_logic.core.models import Bot as BotModel
                 
                 product_name = f'Produto {button_idx + 1}'  # Default
                 description = f"Downsell {downsell_idx + 1} - {product_name}"
@@ -5498,7 +5498,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Buscar configuração do downsell para calcular valor real
                     from app import app, db
-                    from models import Bot as BotModel
+                    from internal_logic.core.models import Bot as BotModel
                     
                     with app.app_context():
                         bot = db.session.get(BotModel, bot_id)
@@ -5534,7 +5534,7 @@ class BotManager:
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
                 from app import app, db
-                from models import Bot as BotModel
+                from internal_logic.core.models import Bot as BotModel
                 
                 # Default seguro (sem índice de downsell)
                 description = "Oferta Especial"
@@ -5562,7 +5562,7 @@ class BotManager:
                 
                 # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE DOWNSELL
                 from app import app, db
-                from models import Bot as BotModel
+                from internal_logic.core.models import Bot as BotModel
                 
                 order_bump = None
                 with app.app_context():
@@ -5680,7 +5680,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Buscar configuração do upsell para calcular valor real
                     from app import app, db
-                    from models import Bot as BotModel
+                    from internal_logic.core.models import Bot as BotModel
                     
                     with app.app_context():
                         bot = db.session.get(BotModel, bot_id)
@@ -5716,7 +5716,7 @@ class BotManager:
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o upsell
                 from app import app, db
-                from models import Bot as BotModel
+                from internal_logic.core.models import Bot as BotModel
                 
                 # Default seguro (sem índice de upsell)
                 description = "Oferta Especial"
@@ -5744,7 +5744,7 @@ class BotManager:
                 
                 # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE UPSELL
                 from app import app, db
-                from models import Bot as BotModel
+                from internal_logic.core.models import Bot as BotModel
                 
                 order_bump = None
                 with app.app_context():
@@ -5945,7 +5945,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
                     from app import app, db
-                    from models import Bot as BotModel
+                    from internal_logic.core.models import Bot as BotModel
                     
                     with app.app_context():
                         bot = db.session.get(BotModel, bot_id)
@@ -6049,7 +6049,7 @@ Desculpe, não foi possível processar seu pagamento.
             user_info: Informações do usuário
         """
         try:
-            from models import Payment, Bot, Gateway, db
+            from internal_logic.core.models import Payment, Bot, Gateway, db
             from app import app
             
             with app.app_context():
@@ -6087,7 +6087,7 @@ Desculpe, não foi possível processar seu pagamento.
                             return
                         
                         # ✅ ETAPA 1: Verificar se existe webhook recente (<2 minutos)
-                        from models import WebhookEvent, get_brazil_time
+                        from internal_logic.core.models import WebhookEvent, get_brazil_time
                         from datetime import timedelta
                         import time
                         
@@ -6264,7 +6264,7 @@ Desculpe, não foi possível processar seu pagamento.
                                         logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                         try:
                                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                            from models import Payment as PaymentModel
+                                            from internal_logic.core.models import Payment as PaymentModel
                                             payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                                             
                                             # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
@@ -6408,7 +6408,7 @@ Desculpe, não foi possível processar seu pagamento.
                                     if payment.status == 'pending':
                                         logger.info(f"✅ API confirmou pagamento! Atualizando status...")
                                         payment.status = 'paid'
-                                        from models import get_brazil_time
+                                        from internal_logic.core.models import get_brazil_time
                                         payment.paid_at = get_brazil_time()
                                         payment.bot.total_sales += 1
                                         payment.bot.total_revenue += payment.amount
@@ -6442,7 +6442,7 @@ Desculpe, não foi possível processar seu pagamento.
                                             logger.info(f"✅ [UPSELLS VERIFY OTHER] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                             try:
                                                 # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                                from models import Payment as PaymentModel
+                                                from internal_logic.core.models import Payment as PaymentModel
                                                 payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                                                 
                                                 # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
@@ -6657,7 +6657,7 @@ Desculpe, não foi possível processar seu pagamento.
                                         logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                         try:
                                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                            from models import Payment as PaymentModel
+                                            from internal_logic.core.models import Payment as PaymentModel
                                             payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                                             
                                             # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
@@ -7037,7 +7037,7 @@ Seu pagamento ainda não foi confirmado.
                 # Se não encontrou por chat, tentar buscar via BotUser
                 if not session_tracking:
                     from app import app, db
-                    from models import BotUser
+                    from internal_logic.core.models import BotUser
                     with app.app_context():
                         bot_user = BotUser.query.filter_by(
                             bot_id=bot_id,
@@ -7247,7 +7247,7 @@ Seu pagamento ainda não foi confirmado.
             
             # ✅ CRÍTICO: Buscar config do bot para agendar downsells depois
             from app import app, db
-            from models import Bot, BotUser
+            from internal_logic.core.models import Bot, BotUser
             
             # Buscar config do bot
             bot_config = None
@@ -7629,7 +7629,7 @@ Seu pagamento ainda não foi confirmado.
             tracking_token = None
             try:
                 # Importar models dentro da função para evitar circular import
-                from models import Bot, Gateway, Payment, db
+                from internal_logic.core.models import Bot, Gateway, Payment, db
                 from app import app
                 from sqlalchemy.exc import IntegrityError
                 
@@ -7688,7 +7688,7 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ REGRA DE NEGÓCIO: Reutilizar APENAS se foi gerado há <= 5 minutos E o valor bater exatamente
                     if pending_same_product:
                         try:
-                            from models import get_brazil_time
+                            from internal_logic.core.models import get_brazil_time
                             age_seconds = (get_brazil_time() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
                         except Exception:
                             age_seconds = 999999
@@ -7723,7 +7723,7 @@ Seu pagamento ainda não foi confirmado.
                     ).order_by(Payment.id.desc()).first()
                     
                     if last_pix and last_pix.status == 'pending':
-                        from models import get_brazil_time
+                        from internal_logic.core.models import get_brazil_time
                         time_since = (get_brazil_time() - last_pix.created_at).total_seconds()
                         if time_since < 120:  # 2 minutos
                             wait_time = 120 - int(time_since)
@@ -7746,7 +7746,7 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
                     # Prioridade: owner_commission (fresh) > gateway.split_percentage > 2.0 (padrão)
                     # ✅ FIX SÊNIOR: Bypass Lazy Load (DetachedInstance)
-                    from models import User
+                    from internal_logic.core.models import User
                     owner_commission = None
                     if bot and getattr(bot, 'user_id', None):
                         current_owner = db.session.get(User, bot.user_id)
@@ -8060,7 +8060,7 @@ Seu pagamento ainda não foi confirmado.
                             logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
                     
                         # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS (robusto string/int)
-                        from models import BotUser
+                        from internal_logic.core.models import BotUser
                         bot_user = BotUser.query.filter_by(
                             bot_id=bot_id,
                             telegram_user_id=customer_user_id
@@ -8887,7 +8887,7 @@ Seu pagamento ainda não foi confirmado.
                 logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX: {timeout_error}")
                 # Tentar encontrar Payment criado antes do timeout para marcar como pendente de verificação
                 try:
-                    from models import db, Payment
+                    from internal_logic.core.models import db, Payment
                     with app.app_context():
                         payment = Payment.query.filter_by(
                             bot_id=bot_id,
@@ -9512,7 +9512,7 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
                     try:
                         from app import app, db
-                        from models import BotUser, BotMessage, Bot
+                        from internal_logic.core.models import BotUser, BotMessage, Bot
                         import json as json_lib
                         import uuid as uuid_lib
                         
@@ -9647,7 +9647,7 @@ Seu pagamento ainda não foi confirmado.
             error_description: Descrição do erro para logging
         """
         from app import app, db
-        from models import Bot
+        from internal_logic.core.models import Bot
         from datetime import datetime, timedelta
         
         with app.app_context():
@@ -9713,7 +9713,7 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             from app import app, db
-            from models import Bot
+            from internal_logic.core.models import Bot
             from datetime import datetime
             
             with app.app_context():
@@ -9816,7 +9816,7 @@ Seu pagamento ainda não foi confirmado.
                 }
         
         # Bot está ativo no Redis e (se verificado) responde no Telegram
-        from models import get_brazil_time
+        from internal_logic.core.models import get_brazil_time
         from datetime import datetime
         started_at = bot_info.get('started_at')
         if isinstance(started_at, str):
@@ -9952,7 +9952,7 @@ Seu pagamento ainda não foi confirmado.
             payment_status = None
             try:
                 from app import app, db
-                from models import Payment
+                from internal_logic.core.models import Payment
                 with app.app_context():
                     payment = Payment.query.filter_by(payment_id=payment_id).first()
                     if payment:
@@ -9987,7 +9987,7 @@ Seu pagamento ainda não foi confirmado.
             # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
             # Isso garante que mudanças recentes na configuração sejam refletidas
             from app import app, db
-            from models import Bot as BotModel
+            from internal_logic.core.models import Bot as BotModel
             
             with app.app_context():
                 bot = BotModel.query.get(bot_id)
@@ -10348,7 +10348,7 @@ Seu pagamento ainda não foi confirmado.
             payment_status = None
             try:
                 from app import app, db
-                from models import Payment
+                from internal_logic.core.models import Payment
                 with app.app_context():
                     payment = Payment.query.filter_by(payment_id=payment_id).first()
                     if payment:
@@ -10382,7 +10382,7 @@ Seu pagamento ainda não foi confirmado.
             
             # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
             from app import app, db
-            from models import Bot as BotModel
+            from internal_logic.core.models import Bot as BotModel
             
             with app.app_context():
                 bot = BotModel.query.get(bot_id)
@@ -10606,7 +10606,7 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             from app import app, db
-            from models import Payment
+            from internal_logic.core.models import Payment
             
             with app.app_context():
                 payment = Payment.query.filter_by(payment_id=payment_id).first()
@@ -10646,12 +10646,12 @@ Seu pagamento ainda não foi confirmado.
             Quantidade de leads elegíveis
         """
         from app import app, db
-        from models import BotUser, Payment, RemarketingBlacklist
+        from internal_logic.core.models import BotUser, Payment, RemarketingBlacklist
         from datetime import datetime, timedelta
         
         with app.app_context():
             # Data limite de último contato
-            from models import get_brazil_time
+            from internal_logic.core.models import get_brazil_time
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
             # Query base: usuários do bot (apenas ativos, não arquivados)
@@ -10784,7 +10784,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 elif target_audience == 'inactive':
                     # Inativos há 7+ dias
-                    from models import get_brazil_time
+                    from internal_logic.core.models import get_brazil_time
                     inactive_limit = get_brazil_time() - timedelta(days=7)
                     query = query.filter(BotUser.last_interaction <= inactive_limit)
             
@@ -10802,7 +10802,7 @@ Seu pagamento ainda não foi confirmado.
             from redis_manager import get_redis_connection
             import json
             from app import app, db, socketio
-            from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time, Bot
+            from internal_logic.core.models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time, Bot
             from datetime import timedelta
 
             def enqueue_jobs():
@@ -11109,7 +11109,7 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"❌ Falha no remarketing orchestration (fallback para modo legado): {orchestration_error}", exc_info=True)
 
         from app import app, db, socketio
-        from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist
+        from internal_logic.core.models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist
         from datetime import datetime, timedelta
         import time
         
@@ -11124,14 +11124,14 @@ Seu pagamento ainda não foi confirmado.
                     
                     # Atualizar status
                     campaign.status = 'sending'
-                    from models import get_brazil_time
+                    from internal_logic.core.models import get_brazil_time
                     campaign.started_at = get_brazil_time()
                     db.session.commit()
                     
                     logger.info(f"📢 Iniciando envio de remarketing: {campaign.name}")
                     
                     # Buscar leads elegíveis (apenas usuários ativos, não arquivados)
-                    from models import get_brazil_time
+                    from internal_logic.core.models import get_brazil_time
                     contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
                     
                     query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
@@ -11263,7 +11263,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     elif target_audience == 'inactive':
                         # ✅ COMPATIBILIDADE LEGADO: Inativos há 7+ dias
-                        from models import get_brazil_time
+                        from internal_logic.core.models import get_brazil_time
                         inactive_limit = get_brazil_time() - timedelta(days=7)
                         query = query.filter(BotUser.last_interaction <= inactive_limit)
                     
@@ -11303,7 +11303,7 @@ Seu pagamento ainda não foi confirmado.
                     if total_leads == 0:
                         logger.warning(f"⚠️ Nenhum lead elegível para campanha {campaign_id}")
                         campaign.status = 'completed'
-                        from models import get_brazil_time
+                        from internal_logic.core.models import get_brazil_time
                         campaign.completed_at = get_brazil_time()
                         db.session.commit()
                         return
@@ -11688,7 +11688,7 @@ Seu pagamento ainda não foi confirmado.
                     try:
                         db.session.refresh(campaign)  # ✅ CRÍTICO: Refresh antes de finalizar
                         campaign.status = 'completed'
-                        from models import get_brazil_time
+                        from internal_logic.core.models import get_brazil_time
                         campaign.completed_at = get_brazil_time()
                         db.session.commit()
                         db.session.refresh(campaign)  # ✅ Refresh após commit final
@@ -11765,7 +11765,7 @@ Seu pagamento ainda não foi confirmado.
                             # Se já enviou alguma mensagem, marcar como concluída
                             if campaign.total_sent and campaign.total_sent > 0:
                                 campaign.status = 'completed'
-                                from models import get_brazil_time
+                                from internal_logic.core.models import get_brazil_time
                                 if not campaign.completed_at:
                                     campaign.completed_at = get_brazil_time()
                                 db.session.commit()
@@ -11875,7 +11875,7 @@ Seu pagamento ainda não foi confirmado.
         Retorna: True se ativada com sucesso, False caso contrário
         """
         from app import app, db
-        from models import Subscription
+        from internal_logic.core.models import Subscription
         from datetime import datetime, timezone
         from dateutil.relativedelta import relativedelta
         from sqlalchemy import select
@@ -11960,7 +11960,7 @@ Seu pagamento ainda não foi confirmado.
         # ✅ Ativa subscriptions pendentes para este usuário neste grupo
         """
         from app import app, db
-        from models import Subscription
+        from internal_logic.core.models import Subscription
         from utils.subscriptions import normalize_vip_chat_id
         import logging
         

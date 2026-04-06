@@ -4,7 +4,7 @@ Executar: python migrate_add_gateway_fields.py
 """
 
 from app import app, db
-from models import Gateway
+from internal_logic.core.models import Gateway
 
 def migrate():
     """Adiciona novos campos à tabela gateways"""

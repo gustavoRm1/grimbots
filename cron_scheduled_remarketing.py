@@ -28,7 +28,7 @@ if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
 from app import app, db
-from models import RemarketingCampaign, Bot
+from internal_logic.core.models import RemarketingCampaign, Bot
 from tasks_async import task_queue, task_process_broadcast_campaign
 from sqlalchemy import and_
 

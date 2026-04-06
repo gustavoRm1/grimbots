@@ -3,7 +3,7 @@ Migration: Corrigir constraint de pool_bots para CASCADE DELETE
 """
 
 from app import app, db
-from models import PoolBot
+from internal_logic.core.models import PoolBot
 import logging
 
 logging.basicConfig(level=logging.INFO)

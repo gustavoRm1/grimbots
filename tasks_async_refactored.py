@@ -16,7 +16,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
         group_id: UUID opcional para agrupar campanhas multi-bot
     """
     from app import app, db
-    from models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
+    from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
     from datetime import timedelta
     from redis_manager import get_redis_connection

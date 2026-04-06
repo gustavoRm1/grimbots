@@ -12,7 +12,7 @@ from internal_logic.blueprints.auth.routes import auth_bp
 from internal_logic.blueprints.dashboard.routes import dashboard_bp
 from internal_logic.blueprints.webhooks.payments import webhooks_bp
 from internal_logic.blueprints.webhooks.telegram import telegram_bp
-from models import User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
+from internal_logic.core.models import User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 import hashlib
@@ -218,7 +218,7 @@ def send_payment_delivery(payment):
             logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
         # ✅ Buscar pool para verificar Meta Pixel
-        from models import PoolBot, BotUser
+        from internal_logic.core.models import PoolBot, BotUser
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
         pool = pool_bot.pool if pool_bot else None
 
@@ -331,7 +331,7 @@ def reconcile_paradise_payments():
     """Consulta periodicamente pagamentos pendentes da Paradise (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
-            from models import Payment, Gateway, db, Bot
+            from internal_logic.core.models import Payment, Gateway, db, Bot
             # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
             # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
             pending = Payment.query.filter_by(status='pending', gateway_type='paradise').order_by(Payment.created_at.desc()).limit(5).all()
@@ -413,7 +413,7 @@ def reconcile_paradise_payments():
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
                             if p.bot.user_id:
-                                from models import User
+                                from internal_logic.core.models import User
                                 user = User.query.get(p.bot.user_id)
                                 if user:
                                     user.total_sales += 1
@@ -421,7 +421,7 @@ def reconcile_paradise_payments():
                         
                         # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
                         if p.is_remarketing and p.remarketing_campaign_id:
-                            from models import RemarketingCampaign
+                            from internal_logic.core.models import RemarketingCampaign
                             campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
                             if campaign:
                                 campaign.total_sales += 1
@@ -441,7 +441,7 @@ def reconcile_paradise_payments():
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
-                            from models import Payment
+                            from internal_logic.core.models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
                                 # ✅ CRÍTICO: Refresh antes de validar status
@@ -517,7 +517,7 @@ def reconcile_pushynpay_payments():
     """Consulta periodicamente pagamentos pendentes da PushynPay (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
-            from models import Payment, Gateway, db, Bot
+            from internal_logic.core.models import Payment, Gateway, db, Bot
             # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
             pending = Payment.query.filter_by(status='pending', gateway_type='pushynpay').order_by(Payment.id.asc()).limit(5).all()
             
@@ -583,7 +583,7 @@ def reconcile_pushynpay_payments():
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
                             if p.bot.user_id:
-                                from models import User
+                                from internal_logic.core.models import User
                                 user = User.query.get(p.bot.user_id)
                                 if user:
                                     user.total_sales += 1
@@ -591,7 +591,7 @@ def reconcile_pushynpay_payments():
                         
                         # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
                         if p.is_remarketing and p.remarketing_campaign_id:
-                            from models import RemarketingCampaign
+                            from internal_logic.core.models import RemarketingCampaign
                             campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
                             if campaign:
                                 campaign.total_sales += 1
@@ -608,7 +608,7 @@ def reconcile_pushynpay_payments():
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
-                            from models import Payment
+                            from internal_logic.core.models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
                                 # ✅ CRÍTICO: Refresh antes de validar status
@@ -688,7 +688,7 @@ def reconcile_atomopay_payments():
     """Consulta periodicamente pagamentos pendentes do Atomopay (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
-            from models import Payment, Gateway, db, Bot
+            from internal_logic.core.models import Payment, Gateway, db, Bot
             # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
             # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
             pending = Payment.query.filter_by(status='pending', gateway_type='atomopay').order_by(Payment.created_at.desc()).limit(5).all()
@@ -768,7 +768,7 @@ def reconcile_atomopay_payments():
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
                             if p.bot.user_id:
-                                from models import User
+                                from internal_logic.core.models import User
                                 user = User.query.get(p.bot.user_id)
                                 if user:
                                     user.total_sales += 1
@@ -776,7 +776,7 @@ def reconcile_atomopay_payments():
                         
                         # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
                         if p.is_remarketing and p.remarketing_campaign_id:
-                            from models import RemarketingCampaign
+                            from internal_logic.core.models import RemarketingCampaign
                             campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
                             if campaign:
                                 campaign.total_sales += 1
@@ -796,7 +796,7 @@ def reconcile_atomopay_payments():
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
-                            from models import Payment
+                            from internal_logic.core.models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
                                 # ✅ CRÍTICO: Refresh antes de validar status
@@ -874,7 +874,7 @@ def reconcile_aguia_payments():
     """Consulta periodicamente pagamentos pendentes da ÁguiaPags (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
-            from models import Payment, Gateway, db, Bot
+            from internal_logic.core.models import Payment, Gateway, db, Bot
             # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
             # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
             pending = Payment.query.filter_by(status='pending', gateway_type='aguia').order_by(Payment.created_at.desc()).limit(5).all()
@@ -942,7 +942,7 @@ def reconcile_aguia_payments():
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
                             if p.bot.user_id:
-                                from models import User
+                                from internal_logic.core.models import User
                                 user = User.query.get(p.bot.user_id)
                                 if user:
                                     user.total_sales += 1
@@ -950,7 +950,7 @@ def reconcile_aguia_payments():
                         
                         # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
                         if p.is_remarketing and p.remarketing_campaign_id:
-                            from models import RemarketingCampaign
+                            from internal_logic.core.models import RemarketingCampaign
                             campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
                             if campaign:
                                 campaign.total_sales += 1
@@ -969,7 +969,7 @@ def reconcile_aguia_payments():
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
-                            from models import Payment
+                            from internal_logic.core.models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
                                 # ✅ CRÍTICO: Refresh antes de validar status
@@ -1052,7 +1052,7 @@ def reconcile_bolt_payments():
     """Consulta periodicamente pagamentos não pagos do Bolt (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
-            from models import Payment, Gateway, db
+            from internal_logic.core.models import Payment, Gateway, db
 
             # ✅ BATCH LIMITADO: apenas 5 por execução
             pending = (
@@ -1188,7 +1188,7 @@ def reset_high_error_count_subscriptions():
     ✅ Executado a cada 24 horas
     ✅ Permite retry mesmo com error_count alto após tempo
     """
-    from models import Subscription
+    from internal_logic.core.models import Subscription
     from datetime import datetime, timezone, timedelta
     import logging
     import os
@@ -1321,7 +1321,7 @@ def log_admin_action(action, description, target_user_id=None, data_before=None,
 
 def check_and_unlock_achievements(user):
     """Verifica e desbloqueia conquistas automaticamente"""
-    from models import Achievement, UserAchievement, BotUser
+    from internal_logic.core.models import Achievement, UserAchievement, BotUser
     from sqlalchemy import func
     
     try:
@@ -1596,7 +1596,7 @@ def politica_privacidade():
 def dashboard():
     """Dashboard principal com modo simples/avançado"""
     from sqlalchemy import func
-    from models import BotUser
+    from internal_logic.core.models import BotUser
     
     # ✅ PERFORMANCE: Query simplificada - usar campos calculados do modelo Bot
     # Evitar JOINs pesados no carregamento inicial, calcular contagens depois se necessário
@@ -1837,7 +1837,7 @@ def dashboard():
 def api_dashboard_stats():
     """API para estatísticas em tempo real"""
     from sqlalchemy import func, case
-    from models import BotUser, Bot
+    from internal_logic.core.models import BotUser, Bot
     
     # ✅ PERFORMANCE: Não fazer verificações síncronas de Telegram na API
     # O job de background (sync_bots_status) já cuida de atualizar o status a cada 30s
@@ -1923,7 +1923,7 @@ def api_dashboard_analytics():
     """API para métricas avançadas e analytics"""
     from sqlalchemy import func, extract
     from datetime import datetime, timedelta
-    from models import BotUser, Commission
+    from internal_logic.core.models import BotUser, Commission
     
     # IDs dos bots do usuário
     user_bot_ids = [bot.id for bot in current_user.bots]
@@ -2264,7 +2264,7 @@ def update_bot_token(bot_id):
         logger.info(f"💰 PRESERVANDO faturamento do bot {bot_id}: {preserved_sales} vendas, R$ {preserved_revenue:.2f} faturamento")
         
         # ✅ ARQUIVAR USUÁRIOS DO TOKEN ANTIGO
-        from models import BotUser
+        from internal_logic.core.models import BotUser
         archived_count = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
         if archived_count > 0:
             BotUser.query.filter_by(bot_id=bot_id, archived=False).update({
@@ -2504,7 +2504,7 @@ def export_bot_config(bot_id):
             }), 400
         
         # Buscar gateway ativo do usuário (referência apenas)
-        from models import Gateway
+        from internal_logic.core.models import Gateway
         active_gateway = Gateway.query.filter_by(
             user_id=current_user.id,
             is_active=True,
@@ -2517,7 +2517,7 @@ def export_bot_config(bot_id):
         # então não estão diretamente no BotConfig. Vamos incluir apenas referência.
         subscription_config = None
         # Se houver subscriptions ativas, podemos inferir configurações
-        from models import Subscription
+        from internal_logic.core.models import Subscription
         active_subscription = Subscription.query.filter_by(
             bot_id=bot.id,
             status='active'
@@ -2806,7 +2806,7 @@ def import_bot_config():
         # ✅ VALIDAÇÃO 5: Gateway (se referenciado)
         gateway_type = config_data.get('gateway_type')
         if gateway_type:
-            from models import Gateway
+            from internal_logic.core.models import Gateway
             user_gateway = Gateway.query.filter_by(
                 user_id=current_user.id,
                 gateway_type=gateway_type,
@@ -3187,7 +3187,7 @@ def verify_bots_status():
         if not user_bots:
             return jsonify({'bots': []})
         
-        from models import get_brazil_time
+        from internal_logic.core.models import get_brazil_time
         
         # Obter conexão Redis (reutilizar dentro do loop)
         redis_conn = None
@@ -3332,7 +3332,7 @@ def debug_bot(bot_id):
 def bot_remarketing_page(bot_id):
     """Página de remarketing do bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(
         RemarketingCampaign.created_at.desc()
     ).all()
@@ -3347,7 +3347,7 @@ def bot_remarketing_page(bot_id):
 def get_remarketing_campaigns(bot_id):
     """Lista campanhas de remarketing"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     import json
     import hashlib
     campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(
@@ -3375,7 +3375,7 @@ def create_remarketing_campaign(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     data = request.json
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     from datetime import datetime
     
     # ✅ V2.0: Processar scheduled_at se fornecido
@@ -3448,7 +3448,7 @@ def create_remarketing_campaign(bot_id):
 def update_remarketing_campaign(bot_id, campaign_id):
     """✅ Atualiza campanha de remarketing existente"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     from datetime import datetime
     
     campaign = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first_or_404()
@@ -3658,7 +3658,7 @@ def update_remarketing_campaign(bot_id, campaign_id):
 @csrf.exempt
 def send_remarketing_campaign(bot_id, campaign_id):
     """Envia campanha de remarketing"""
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     data = request.get_json(silent=True) or {}
     selected_bot_ids = data.get('bot_ids')
 
@@ -3836,7 +3836,7 @@ def general_remarketing():
         
         # ✅ Se for agendado, criar campanhas no banco (mas não enfileirar ainda)
         if status == 'scheduled':
-            from models import RemarketingCampaign
+            from internal_logic.core.models import RemarketingCampaign
             from sqlalchemy.exc import OperationalError
             import time as time_module
             
@@ -3914,7 +3914,7 @@ def general_remarketing():
         
         # ✅ ENVIO IMEDIATO: Master Pre-Allocation + Fan-Out
         from tasks_async import marathon_queue, task_process_broadcast_campaign
-        from models import RemarketingCampaign
+        from internal_logic.core.models import RemarketingCampaign
         import json
         
         # 🏗️ FASE 1: MASTER PRE-ALLOCATION (na API - ACID)
@@ -4013,7 +4013,7 @@ def get_remarketing_stats(bot_id):
     Retorna métricas agregadas de todas as campanhas
     """
     try:
-        from models import RemarketingCampaign
+        from internal_logic.core.models import RemarketingCampaign
         
         # Verificar se o bot pertence ao usuário
         bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -4055,7 +4055,7 @@ def get_remarketing_timeline(bot_id):
     Retorna dados diários dos últimos 30 dias
     """
     try:
-        from models import RemarketingCampaign
+        from internal_logic.core.models import RemarketingCampaign
         from datetime import date, timedelta
         from sqlalchemy import func
         
@@ -4099,7 +4099,7 @@ def get_remarketing_timeline(bot_id):
 def admin_dashboard():
     """Dashboard principal do admin"""
     from sqlalchemy import func
-    from models import BotUser
+    from internal_logic.core.models import BotUser
     from datetime import timedelta
     
     # Métricas globais
@@ -4119,7 +4119,7 @@ def admin_dashboard():
     ).scalar() or 0.0
     
     # Receita da plataforma (via split payment)
-    from models import Commission
+    from internal_logic.core.models import Commission
     platform_revenue_total = db.session.query(func.sum(Commission.commission_amount)).filter(
         Commission.status == 'paid'
     ).scalar() or 0.0
@@ -4227,7 +4227,7 @@ def admin_users():
 def admin_user_detail(user_id):
     """Perfil detalhado 360° do usuário"""
     from sqlalchemy import func
-    from models import BotUser, RemarketingCampaign
+    from internal_logic.core.models import BotUser, RemarketingCampaign
     
     user = User.query.get_or_404(user_id)
     
@@ -4569,7 +4569,7 @@ def admin_logs():
 def admin_revenue():
     """Página de receita da plataforma (via split payment)"""
     from sqlalchemy import func
-    from models import Commission
+    from internal_logic.core.models import Commission
     from datetime import timedelta
     
     # Receita total da plataforma (via split payment - sempre "paid")
@@ -4757,7 +4757,7 @@ def admin_generate_csv():
 def admin_analytics():
     """Página de analytics global com gráficos"""
     from sqlalchemy import func
-    from models import BotUser, Commission
+    from internal_logic.core.models import BotUser, Commission
     from datetime import timedelta
     
     # Gráfico 1: Novos usuários (últimos 12 meses)
@@ -4856,7 +4856,7 @@ def get_bot_analytics_v2(bot_id):
     Implementado por: QI 540
     """
     from sqlalchemy import func, extract, case
-    from models import BotUser, PoolBot
+    from internal_logic.core.models import BotUser, PoolBot
     from datetime import datetime, timedelta
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -5094,7 +5094,7 @@ def get_bot_analytics_v2(bot_id):
 def get_bot_stats(bot_id):
     """API para estatísticas detalhadas de um bot específico"""
     from sqlalchemy import func, extract, case
-    from models import BotUser
+    from internal_logic.core.models import BotUser
     from datetime import datetime, timedelta
     
     # ✅ GARANTIR: Usar get_brazil_time do escopo global (já importado no topo)
@@ -5195,7 +5195,7 @@ def get_bot_stats(bot_id):
     ).scalar() or 0.0
     
     # 4.5. REMARKETING CAMPAIGNS (is_remarketing=True)
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     
     # Estatísticas de campanhas
     total_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).count()
@@ -5607,7 +5607,7 @@ def api_remarketing_stats(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     from sqlalchemy import func
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     
     # Estatísticas agregadas
     total_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).count()
@@ -5643,7 +5643,7 @@ def api_remarketing_timeline(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     from sqlalchemy import func
-    from models import RemarketingCampaign
+    from internal_logic.core.models import RemarketingCampaign
     from datetime import datetime, timedelta
     
     # Últimos 7 dias
@@ -5686,7 +5686,7 @@ def get_group_remarketing_stats(group_id):
     """
     try:
         from sqlalchemy import func
-        from models import RemarketingCampaign, Bot
+        from internal_logic.core.models import RemarketingCampaign, Bot
         
         # Buscar todas as campanhas do grupo com JOIN em Bot para verificação de propriedade
         campaigns_query = db.session.query(
@@ -5780,7 +5780,7 @@ def group_remarketing_analytics(group_id):
     """
     # ✅ SEGURANÇA IDOR: Verificar se o grupo pertence ao usuário antes de renderizar
     try:
-        from models import RemarketingCampaign, Bot
+        from internal_logic.core.models import RemarketingCampaign, Bot
         
         # Verificar se existe pelo menos uma campanha no grupo e se pertence ao usuário
         campaign_check = db.session.query(RemarketingCampaign, Bot).join(
@@ -5810,7 +5810,7 @@ def remarketing_history():
     """
     try:
         from sqlalchemy import func, desc
-        from models import RemarketingCampaign, Bot
+        from internal_logic.core.models import RemarketingCampaign, Bot
         
         # Query de agrupamento: group_id, data mais recente, quantidade de bots, total enviado
         history = db.session.query(
@@ -5867,7 +5867,7 @@ def get_bot_config(bot_id):
         logger.info(f"   - upsells: {len(config_dict.get('upsells', []))} upsells")
         
         # ✅ NOVA ARQUITETURA: Verificar se bot está associado a pool com Meta Pixel ativado
-        from models import PoolBot
+        from internal_logic.core.models import PoolBot
         pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
         has_meta_pixel = False
         pool_name = None
@@ -5894,7 +5894,7 @@ def validate_subscription(bot_id):
     
     Retorna: chat_id validado ou erro
     """
-    from models import Bot
+    from internal_logic.core.models import Bot
     from utils.subscriptions import extract_or_validate_chat_id, validate_bot_is_admin_and_in_group, normalize_vip_chat_id
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -6604,7 +6604,7 @@ def public_redirect(slug):
     }
 
     # ✅ UPSERT CANÔNICO EM meta_tracking_sessions (PageView = nascimento da sessão)
-    from models import MetaTrackingSession, get_brazil_time
+    from internal_logic.core.models import MetaTrackingSession, get_brazil_time
     try:
         session_row = MetaTrackingSession.query.filter_by(tracking_token=tracking_token).first()
         now_ts = get_brazil_time()
@@ -8198,7 +8198,7 @@ def api_check_bots_status():
 def _reload_user_bots_config(user_id: int):
     """Recarrega configuração dos bots ativos quando gateway muda"""
     try:
-        from models import Bot
+        from internal_logic.core.models import Bot
         
         # Buscar bots ativos do usuário
         active_bots = Bot.query.filter_by(user_id=user_id, is_active=True).all()
@@ -8536,7 +8536,7 @@ def update_ranking_premium_rates():
     try:
         with app.app_context():
             from sqlalchemy import func
-            from models import Bot, Payment, Gateway
+            from internal_logic.core.models import Bot, Payment, Gateway
             from datetime import timedelta
             
             logger.info("="*70)
@@ -8826,7 +8826,7 @@ def ranking():
     Sistema completo de ranking com premiação, avatares anonimizados e LGPD compliant
     """
     from sqlalchemy import func
-    from models import BotUser, UserAchievement, Achievement
+    from internal_logic.core.models import BotUser, UserAchievement, Achievement
     from datetime import timedelta
     
     # ✅ Filtro de período - APENAS "month" disponível (removido "all")
@@ -9309,7 +9309,7 @@ def force_check_achievements():
 @login_required
 def chat():
     """✅ CHAT - Página de gerenciamento de conversas dos bots"""
-    from models import Bot, BotUser, Payment, BotMessage
+    from internal_logic.core.models import Bot, BotUser, Payment, BotMessage
     from sqlalchemy import func
     
     # Buscar bots online do usuário
@@ -9348,7 +9348,7 @@ def chat():
 @login_required
 def get_chat_conversations(bot_id):
     """✅ CHAT - Retorna lista de conversas de um bot com filtros"""
-    from models import Bot, BotUser, Payment, BotMessage
+    from internal_logic.core.models import Bot, BotUser, Payment, BotMessage
     from sqlalchemy import func
     
     # Verificar se bot pertence ao usuário
@@ -9500,7 +9500,7 @@ def get_chat_conversations(bot_id):
 def get_chat_messages(bot_id, telegram_user_id):
     """✅ CHAT - Retorna mensagens de uma conversa específica"""
     try:
-        from models import Bot, BotUser, BotMessage
+        from internal_logic.core.models import Bot, BotUser, BotMessage
         
         # Verificar se bot pertence ao usuário
         bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -9525,7 +9525,7 @@ def get_chat_messages(bot_id, telegram_user_id):
         if since_timestamp:
             try:
                 from datetime import datetime, timezone, timedelta
-                from models import BRAZIL_TZ_OFFSET
+                from internal_logic.core.models import BRAZIL_TZ_OFFSET
                 
                 # ✅ CORREÇÃO: Tratar diferentes formatos de timestamp
                 since_timestamp_clean = since_timestamp.replace('Z', '+00:00')
@@ -9627,7 +9627,7 @@ def get_chat_messages(bot_id, telegram_user_id):
 @csrf.exempt
 def send_chat_message(bot_id, telegram_user_id):
     """✅ CHAT - Envia mensagem para um lead via Telegram"""
-    from models import Bot, BotUser, BotMessage
+    from internal_logic.core.models import Bot, BotUser, BotMessage
     import uuid
     
     # Verificar se bot pertence ao usuário
@@ -9738,7 +9738,7 @@ def send_chat_message(bot_id, telegram_user_id):
 @csrf.exempt
 def send_chat_media(bot_id, telegram_user_id):
     """✅ CHAT - Envia foto/vídeo para um lead via Telegram"""
-    from models import Bot, BotUser, BotMessage
+    from internal_logic.core.models import Bot, BotUser, BotMessage
     import uuid
     import os
     import tempfile
@@ -9853,7 +9853,7 @@ def send_chat_media(bot_id, telegram_user_id):
 @login_required
 def get_chat_media(bot_id, file_id):
     """✅ CHAT - Proxy para exibir mídia do Telegram"""
-    from models import Bot
+    from internal_logic.core.models import Bot
     import requests
     
     # Verificar se bot pertence ao usuário
@@ -9924,13 +9924,13 @@ def delivery_page(delivery_token):
     - Matching garantido mesmo se cookies expirarem
     """
     try:
-        from models import Payment, PoolBot, BotUser
+        from internal_logic.core.models import Payment, PoolBot, BotUser
         from utils.tracking_service import TrackingServiceV4
         import time
         from datetime import datetime
         from gateway_factory import GatewayFactory
-        from models import Gateway
-        from models import get_brazil_time
+        from internal_logic.core.models import Gateway
+        from internal_logic.core.models import get_brazil_time
         
         # ✅ VALIDAÇÃO: Buscar payment pelo delivery_token (NÃO filtrar status aqui)
         # A rota deve tratar status pendente de forma controlada e nunca disparar Purchase.
@@ -10236,7 +10236,7 @@ def delivery_page(delivery_token):
 def mark_purchase_sent():
     """Marca Purchase como enviado (anti-duplicação)"""
     try:
-        from models import Payment
+        from internal_logic.core.models import Payment
         import json
         
         data = request.get_json() or {}
@@ -10255,7 +10255,7 @@ def mark_purchase_sent():
         payment.purchase_sent_from_delivery = True
         if not payment.meta_purchase_sent:
             payment.meta_purchase_sent = True
-            from models import get_brazil_time
+            from internal_logic.core.models import get_brazil_time
             payment.meta_purchase_sent_at = get_brazil_time()
         
         db.session.commit()
@@ -10925,7 +10925,7 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Iniciando para {payment.payment_id}")
         
         # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
-        from models import PoolBot
+        from internal_logic.core.models import PoolBot
         
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool Bot encontrado: {pool_bot is not None}")
@@ -10995,7 +10995,7 @@ def send_meta_pixel_purchase_event(payment):
         # Importar Meta Pixel API
         from utils.meta_pixel import MetaPixelAPI
         from utils.encryption import decrypt
-        from models import BotUser
+        from internal_logic.core.models import BotUser
         from celery_app import send_meta_event
         
         # ✅ LOG CRÍTICO: Verificar se função está sendo chamada
@@ -12281,7 +12281,7 @@ def create_subscription_for_payment(payment):
     
     Retorna: Subscription object ou None
     """
-    from models import Subscription
+    from internal_logic.core.models import Subscription
     from datetime import datetime, timezone
     from sqlalchemy.exc import IntegrityError
     from utils.subscriptions import normalize_vip_chat_id
@@ -12613,7 +12613,7 @@ def payment_webhook(gateway_type):
                 # ✅ Filtrar apenas Payments do gateway correto (evita conflitos entre usuários)
                 payment_query = payment_query.filter_by(gateway_type='atomopay')
                 # ✅ Filtrar por bot_id do usuário correto (via relacionamento Bot -> User)
-                from models import Bot
+                from internal_logic.core.models import Bot
                 user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
                 if user_bot_ids:
                     payment_query = payment_query.filter(Payment.bot_id.in_(user_bot_ids))
@@ -12718,7 +12718,7 @@ def payment_webhook(gateway_type):
                 )
                 # ✅ Filtrar por usuário se gateway foi identificado
                 if gateway:
-                    from models import Bot
+                    from internal_logic.core.models import Bot
                     user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
                     if user_bot_ids:
                         recent_query = recent_query.filter(Payment.bot_id.in_(user_bot_ids))
@@ -12881,7 +12881,7 @@ def payment_webhook(gateway_type):
                     
                     # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
                     if payment.is_remarketing and payment.remarketing_campaign_id:
-                        from models import RemarketingCampaign
+                        from internal_logic.core.models import RemarketingCampaign
                         campaign = RemarketingCampaign.query.get(payment.remarketing_campaign_id)
                         if campaign:
                             campaign.total_sales += 1
@@ -12891,7 +12891,7 @@ def payment_webhook(gateway_type):
                             logger.warning(f"⚠️ Campanha de remarketing {payment.remarketing_campaign_id} não encontrada para payment {payment.id}")
                     
                     # REGISTRAR COMISSÃO
-                    from models import Commission
+                    from internal_logic.core.models import Commission
                     
                     # Verificar se já existe comissão para este pagamento
                     existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
@@ -12981,7 +12981,7 @@ def payment_webhook(gateway_type):
                 # ✅ CORREÇÃO 1: SISTEMA DE ASSINATURAS - Cancelar subscription quando payment refunded/failed
                 if status in ['refunded', 'failed', 'cancelled']:
                     try:
-                        from models import Subscription
+                        from internal_logic.core.models import Subscription
                         subscription = Subscription.query.filter_by(payment_id=payment.id).first()
                         if subscription and subscription.status in ['pending', 'active']:
                             logger.info(f"🔴 Cancelando subscription {subscription.id} - payment {payment.payment_id} refunded/failed")
@@ -13051,7 +13051,7 @@ def payment_webhook(gateway_type):
                     logger.info(f"✅ [UPSELLS] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                     try:
                         # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                        from models import Payment
+                        from internal_logic.core.models import Payment
                         payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
                         
                         # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
@@ -13811,7 +13811,7 @@ def simulate_payment(payment_id):
                     logger.info(f"✅ [SIMULAR] Estatísticas do gateway {gateway.gateway_type} atualizadas")
             
             # Registrar comissão
-            from models import Commission
+            from internal_logic.core.models import Commission
             existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
             
             if not existing_commission:
@@ -13895,7 +13895,7 @@ def check_expired_subscriptions():
     ✅ Lock distribuído (Redis) para evitar processamento duplicado
     ✅ Processa batch pequeno para evitar timeout
     """
-    from models import Subscription
+    from internal_logic.core.models import Subscription
     from datetime import datetime, timezone
     import redis
     import logging
@@ -13945,7 +13945,7 @@ def check_expired_subscriptions():
                     logger.info(f"🔴 Removendo subscription {subscription.id} (expirada em {subscription.expires_at})")
                     
                     # ✅ CORREÇÃO: Verificar se usuário ainda está no grupo antes de tentar remover
-                    from models import Bot
+                    from internal_logic.core.models import Bot
                     bot = Bot.query.get(subscription.bot_id)
                     if bot and bot.token:
                         from utils.subscriptions import check_user_in_group
@@ -13998,7 +13998,7 @@ def check_pending_subscriptions_in_groups():
     ✅ Fallback caso evento new_chat_member não seja recebido
     ✅ Processa em batch para evitar rate limit
     """
-    from models import Subscription, Bot
+    from internal_logic.core.models import Subscription, Bot
     from utils.subscriptions import check_user_in_group
     import logging
     import os
@@ -14106,7 +14106,7 @@ def retry_failed_subscription_removals():
     ✅ Executado a cada 30 minutos
     ✅ Processa apenas subscriptions com error_count < 5
     """
-    from models import Subscription
+    from internal_logic.core.models import Subscription
     from datetime import datetime, timezone, timedelta
     import logging
     
@@ -14173,7 +14173,7 @@ def remove_user_from_vip_group(subscription, max_retries: int = 3) -> bool:
     
     Retorna: True se removido com sucesso, False caso contrário
     """
-    from models import Bot, Subscription, db
+    from internal_logic.core.models import Bot, Subscription, db
     from datetime import datetime, timezone, timedelta
     import requests
     import time
@@ -14447,7 +14447,7 @@ def check_scheduled_remarketing_campaigns():
     """
     try:
         with app.app_context():
-            from models import RemarketingCampaign, Bot
+            from internal_logic.core.models import RemarketingCampaign, Bot
             from datetime import datetime
             
             now = get_brazil_time()

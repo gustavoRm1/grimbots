@@ -1,5 +1,5 @@
 from app import app, db
-from models import Payment, User, Bot
+from internal_logic.core.models import Payment, User, Bot
 
 TARGET_EMAIL = "grcontato001@gmail.com"
 

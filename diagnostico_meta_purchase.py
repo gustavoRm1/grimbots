@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app import app, db
-from models import Payment, PoolBot, RedirectPool, Bot
+from internal_logic.core.models import Payment, PoolBot, RedirectPool, Bot
 from datetime import datetime, timedelta
 from sqlalchemy import func, text, case
 

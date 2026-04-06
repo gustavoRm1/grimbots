@@ -18,7 +18,7 @@ sys.path.insert(0, str(BASE_DIR))
 # Carregar variáveis de ambiente
 load_dotenv()
 
-from models import db
+from internal_logic.core.models import db
 from sqlalchemy import text, inspect
 import logging
 

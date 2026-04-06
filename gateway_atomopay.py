@@ -1129,7 +1129,7 @@ class AtomPayGateway(PaymentGateway):
             if 'items' in webhook_data and webhook_data['items']:
                 prod_hash = webhook_data['items'][0].get('product_hash')
                 if prod_hash:
-                    from models import Gateway
+                    from internal_logic.core.models import Gateway
                     g = Gateway.query.filter_by(
                         gateway_type='atomopay',
                         product_hash=prod_hash
@@ -1142,7 +1142,7 @@ class AtomPayGateway(PaymentGateway):
             if 'transaction' in webhook_data and isinstance(webhook_data['transaction'], dict):
                 token = webhook_data['transaction'].get('token')
                 if token:
-                    from models import Payment
+                    from internal_logic.core.models import Payment
                     payment = Payment.query.filter_by(
                         gateway_transaction_id=str(token)
                     ).first()
@@ -1154,9 +1154,9 @@ class AtomPayGateway(PaymentGateway):
             if 'customer' in webhook_data and isinstance(webhook_data['customer'], dict):
                 customer_doc = webhook_data['customer'].get('document')
                 if customer_doc:
-                    from models import Payment
+                    from internal_logic.core.models import Payment
                     from datetime import timedelta
-                    from models import get_brazil_time
+                    from internal_logic.core.models import get_brazil_time
                     # Buscar payment recente (últimas 24h) com mesmo documento
                     recent_payment = Payment.query.filter(
                         Payment.customer_user_id == customer_doc,

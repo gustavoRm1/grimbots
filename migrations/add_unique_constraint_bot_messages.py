@@ -22,7 +22,7 @@ def add_unique_constraint():
     """Adiciona constraint única em bot_messages"""
     try:
         from app import app, db
-        from models import BotMessage
+        from internal_logic.core.models import BotMessage
         
         with app.app_context():
             # Verificar se constraint já existe

@@ -4,7 +4,7 @@ Cria todas as tabelas novas e popula dados iniciais
 """
 
 from app import app
-from models import db
+from internal_logic.core.models import db
 from models_v2 import (
     AchievementV2, UserAchievementV2,
     League, UserLeague,

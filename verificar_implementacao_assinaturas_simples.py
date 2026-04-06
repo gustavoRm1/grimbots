@@ -35,7 +35,7 @@ def verificar_modelos():
     
     try:
         # Importar apenas os modelos (sem inicializar app completo)
-        from models import Payment, Subscription, db
+        from internal_logic.core.models import Payment, Subscription, db
         print(f"  ✅ Models importados com sucesso")
         sucessos.append("Imports dos modelos")
     except Exception as e:
@@ -143,7 +143,7 @@ def verificar_modelos():
     
     # Verificar se timezone foi importado
     try:
-        from models import timezone
+        from internal_logic.core.models import timezone
         print(f"  ✅ timezone importado em models.py")
         sucessos.append("Import timezone")
     except:

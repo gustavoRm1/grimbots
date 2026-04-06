@@ -11,7 +11,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
     from app import app, db
-    from models import Payment
+    from internal_logic.core.models import Payment
     
     with app.app_context():
         try:
@@ -55,7 +55,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
     from app import app, db
-    from models import Payment
+    from internal_logic.core.models import Payment
     
     with app.app_context():
         try:

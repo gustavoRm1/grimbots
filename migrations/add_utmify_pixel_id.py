@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import app, db
-from models import RedirectPool
+from internal_logic.core.models import RedirectPool
 
 def migrate():
     """Adiciona campo utmify_pixel_id na tabela redirect_pools"""

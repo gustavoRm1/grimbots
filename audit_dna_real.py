@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 from app import app, db
-from models import Payment, RedirectPool
+from internal_logic.core.models import Payment, RedirectPool
 from utils.tracking_service import TrackingServiceV4
 from sqlalchemy import or_
 

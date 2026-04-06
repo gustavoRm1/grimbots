@@ -9,7 +9,7 @@ Execução: python migrate_gateway_complete.py
 
 import sys
 from app import app, db
-from models import Gateway, Payment
+from internal_logic.core.models import Gateway, Payment
 from sqlalchemy import func, text
 
 def migrate_gateway_schema():
@@ -77,7 +77,7 @@ def fix_gateway_statistics():
             print(f"     - Transacoes bem-sucedidas: {gateway.successful_transactions}")
             
             # Contar pagamentos deste gateway através dos bots do usuário
-            from models import Bot
+            from internal_logic.core.models import Bot
             
             # Total de transações (todos os pagamentos com esse gateway_type)
             total_transactions = db.session.query(func.count(Payment.id)).join(

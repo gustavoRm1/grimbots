@@ -50,7 +50,7 @@ def _ensure_aux_tables() -> None:
         return
 
     try:
-        from models import WebhookEvent, WebhookPendingMatch
+        from internal_logic.core.models import WebhookEvent, WebhookPendingMatch
 
         WebhookEvent.__table__.create(db.engine, checkfirst=True)
         WebhookPendingMatch.__table__.create(db.engine, checkfirst=True)
@@ -67,7 +67,7 @@ def _persist_webhook_event(
     """
     Salva ou atualiza o registro do webhook em webhook_events para auditoria.
     """
-    from models import WebhookEvent, get_brazil_time
+    from internal_logic.core.models import WebhookEvent, get_brazil_time
 
     _ensure_aux_tables()
 
@@ -150,7 +150,7 @@ def _enqueue_pending_match(
     Registra payload para retry posterior quando payment ainda não existe.
     """
     from app import db
-    from models import WebhookPendingMatch, get_brazil_time
+    from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     if not transaction_id and not transaction_hash:
         return
@@ -199,7 +199,7 @@ def _clear_pending_match(
     transaction_hash: Optional[str]
 ) -> None:
     """Remove pending match associado ao webhook processado."""
-    from models import WebhookPendingMatch
+    from internal_logic.core.models import WebhookPendingMatch
 
     if not transaction_id and not transaction_hash:
         return
@@ -240,7 +240,7 @@ def process_start_async(
     """
     try:
         from app import app
-        from models import BotUser, Bot, get_brazil_time
+        from internal_logic.core.models import BotUser, Bot, get_brazil_time
         from bot_manager import send_meta_pixel_viewcontent_event
         import base64
         import json
@@ -835,7 +835,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
         logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}, user_id={user_id}")
         
         from app import app, db
-        from models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
+        from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
@@ -915,7 +915,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                 logger.info(f"   Amount: R$ {result.get('amount', 0):.2f}" if result.get('amount') else "   Amount: N/A")
                 
                 # ✅ IDEMPOTÊNCIA MELHORADA: Verificar se webhook já foi processado (independente do status)
-                from models import WebhookEvent
+                from internal_logic.core.models import WebhookEvent
                 from datetime import timedelta
                 cinco_minutos_atras = get_brazil_time() - timedelta(minutes=5)
                 
@@ -1341,7 +1341,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                         
                         try:
                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados
-                            from models import Payment as PaymentModel
+                            from internal_logic.core.models import Payment as PaymentModel
                             payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
                             
                             # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
@@ -1439,7 +1439,7 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
     Retorna quantidade processada com sucesso.
     """
     from app import app
-    from models import WebhookPendingMatch, get_brazil_time
+    from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     processed = 0
 
@@ -1505,7 +1505,7 @@ def generate_pix_async(
     """
     try:
         from app import app, db
-        from models import Bot, BotConfig, Payment, Gateway
+        from internal_logic.core.models import Bot, BotConfig, Payment, Gateway
         from gateway_factory import GatewayFactory
         from bot_manager import BotManager
         import uuid
@@ -1673,7 +1673,7 @@ def task_process_broadcast_campaign(campaign_id: int):
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
     from app import app, db
-    from models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
+    from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
     from datetime import timedelta
     from redis_manager import get_redis_connection
@@ -1718,7 +1718,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             redis_conn = get_redis_connection()
             
             # ✅ ISOLAMENTO: Buscar bot para obter user_id
-            from models import Bot
+            from internal_logic.core.models import Bot
             bot = Bot.query.get(bot_id)
             if not bot:
                 logger.error(f"❌ [MARATHON SETUP] Bot {bot_id} não encontrado")
@@ -2290,7 +2290,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
     from app import app
-    from models import Payment
+    from internal_logic.core.models import Payment
     
     with app.app_context():
         try:
@@ -2335,7 +2335,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
     from app import app
-    from models import Payment
+    from internal_logic.core.models import Payment
     
     with app.app_context():
         try:

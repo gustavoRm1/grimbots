@@ -5,7 +5,7 @@ Suporta requisitos compostos, progressão parcial e conquistas secretas
 
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from models import db, User, Bot, Payment, BotUser, Achievement, UserAchievement
+from internal_logic.core.models import db, User, Bot, Payment, BotUser, Achievement, UserAchievement
 import logging
 
 logger = logging.getLogger(__name__)

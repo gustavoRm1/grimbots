@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 from flask import Flask
-from models import db
+from internal_logic.core.models import db
 from sqlalchemy import text, inspect
 import logging
 
