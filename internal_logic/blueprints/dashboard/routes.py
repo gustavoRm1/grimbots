@@ -524,18 +524,25 @@ def ranking():
         
         ranking_data.append({
             'position': position,
-            'user': seller,  # <--- CRÍTICO: O template EXIGE essa chave
+            'user': seller,  # Objeto/row do usuário para acesso a id, ranking_display_name
             'user_id': seller.id,
+            'display_name': seller.ranking_display_name or seller.full_name or seller.username or f'usuario{seller.id}',
             'name': seller.ranking_display_name or seller.full_name or seller.username,
             'username': seller.username,
-            'avatar': '/static/img/default-avatar.png',
+            'avatar': {
+                'gradient': 'background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                'logo_path': 'img/logo.png'
+            },
             'is_premium': is_premium,
             'premium_rate': premium_rate,
             'current_rate': seller.commission_percentage or 2.0,
             'has_premium_rate': has_premium_rate,
             'is_current_user': seller.id == current_user.id,
+            'revenue': float(seller.total_revenue or 0),  # 💰 CRÍTICO: Template usa item.revenue
             'total_revenue': float(seller.total_revenue or 0),
-            'total_sales': seller.total_sales or 0
+            'sales': int(seller.total_sales or 0),  # 📦 PREVENÇÃO: Template pode pedir vendas
+            'total_sales': seller.total_sales or 0,
+            'streak': getattr(seller, 'current_streak', 0)  # 🔥 CRÍTICO: Template usa item.streak
         })
     
     # Calcular posição do usuário atual
