@@ -8,7 +8,7 @@ Responde 200 imediatamente e delega processamento para fila RQ ou service.
 import json
 import logging
 from flask import Blueprint, request, jsonify, current_app
-from internal_logic.core.extensions import limiter
+from internal_logic.core.extensions import limiter, csrf
 from models import Payment, Gateway, Bot
 from gateway_factory import GatewayFactory
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 webhooks_bp = Blueprint('webhooks', __name__)
 
 
+@csrf.exempt
 @webhooks_bp.route('/webhook/payment/<string:gateway_type>', methods=['POST'])
 @limiter.limit("500 per minute")
 def payment_webhook(gateway_type):

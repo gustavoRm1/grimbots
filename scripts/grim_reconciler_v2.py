@@ -24,14 +24,15 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app import app
-from app import db
+from internal_logic.core.extensions import db
+from internal_logic.services.payment_processor import send_payment_delivery
 from models import Payment, Gateway
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
 from tasks_async import webhook_queue, process_webhook_async, process_pending_webhooks
-from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
 from models import get_brazil_time
 from models import Commission
+from bot_manager import BotManager
 
 
 BATCH_LIMIT = int(os.environ.get("ATOMOPAY_RECON_BATCH", 30))
@@ -217,7 +218,10 @@ def _force_finalize_payment(payment: Payment) -> None:
         # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
         if payment.status == 'paid':
             try:
-                send_payment_delivery(payment, bot_manager)
+                # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+                from bot_manager import BotManager
+                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id if payment.bot else 0)
+                send_payment_delivery(payment, local_bot_manager)
             except Exception as e:
                 print(f"⚠️ Forçando entregável falhou: {e}")
         else:

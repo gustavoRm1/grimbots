@@ -6,7 +6,7 @@ Recebe webhooks de atualizações do Telegram para bots.
 
 import logging
 from flask import Blueprint, request, jsonify, current_app
-from internal_logic.core.extensions import limiter, db
+from internal_logic.core.extensions import limiter, db, csrf
 from models import Bot
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 telegram_bp = Blueprint('telegram_webhooks', __name__)
 
 
+@csrf.exempt
 @telegram_bp.route('/webhook/telegram/<int:bot_id>', methods=['POST'])
 @limiter.limit("1000 per minute")
 def telegram_webhook(bot_id):
