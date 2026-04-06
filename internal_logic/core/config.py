@@ -7,8 +7,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Carregar variáveis de ambiente
-load_dotenv()
+# Carregar variáveis de ambiente com caminho absoluto
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+load_dotenv(env_path)
 
 
 class Config:

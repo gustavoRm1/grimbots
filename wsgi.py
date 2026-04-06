@@ -9,7 +9,9 @@ print("✅ [INFRA] Eventlet Monkey Patch aplicado com sucesso no WSGI.")
 
 import os
 from dotenv import load_dotenv
-load_dotenv()  # Carrega o .env antes de qualquer import do Flask
+# Caminho absoluto para garantir o carregamento correto em qualquer contexto
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(env_path)
 
 from internal_logic.core.extensions import create_app
 

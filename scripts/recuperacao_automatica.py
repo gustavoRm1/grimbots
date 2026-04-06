@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
+import os
+from dotenv import load_dotenv
+# Carregar variáveis de ambiente com caminho absoluto
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(env_path)
+
 """
 Rotina automatizada de recuperação do ambiente GRIMBOTS.
 
@@ -13,8 +21,6 @@ Fluxo:
 Uso:
     python scripts/recuperacao_automatica.py [--bots 5]
 """
-
-from __future__ import annotations
 
 import argparse
 import json
