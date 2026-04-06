@@ -111,25 +111,14 @@ logger.info("✅ Configurações aplicadas via Config.init_app()")
 # INICIALIZAR EXTENSÕES (Application Factory Pattern)
 # ============================================================================
 
-# Configurar opções do SocketIO
-socketio_options = {
-    'cors_allowed_origins': ALLOWED_ORIGINS,
-    'async_mode': 'eventlet',
-    'cors_credentials': True,
-}
-
-message_queue_url = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
-if message_queue_url:
-    socketio_options['message_queue'] = message_queue_url
-    socketio_options['channel'] = os.environ.get('SOCKETIO_CHANNEL', 'grimbots_socketio')
-
 db.init_app(app)
-socketio.init_app(app, **socketio_options)
-logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
-if 'message_queue' in socketio_options:
-    logger.info("✅ Socket.IO message queue: %s", socketio_options['message_queue'])
-else:
-    logger.warning("⚠️ Socket.IO sem message queue configurada – limite workers simultâneos ou defina REDIS_URL/SOCKETIO_MESSAGE_QUEUE")
+socketio.init_app(
+    app,
+    cors_allowed_origins=app.config.get('ALLOWED_ORIGINS', '*'),
+    async_mode='eventlet',
+    message_queue=app.config.get('SOCKETIO_MESSAGE_QUEUE')
+)
+logger.info("✅ Extensões inicializadas via init_app()")
 
 # ============================================================================
 # REGISTRAR BLUEPRINTS
