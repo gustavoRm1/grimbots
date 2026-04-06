@@ -1316,7 +1316,7 @@ def redirect_pools_page():
 @login_required
 def get_redirect_pools():
     """Retorna lista de pools do usuário"""
-    from internal_logic.core.models import RedirectPool, PoolBot
+    from internal_logic.core.models import RedirectPool
     
     # DEBUG: Expor identidade do usuário
     print(f"DEBUG POOLS: Buscando pools para User ID: {current_user.id} (Tipo: {type(current_user.id)})")
@@ -1333,24 +1333,8 @@ def get_redirect_pools():
     
     print(f"DEBUG POOLS: Quantidade de pools encontrados para este usuário: {len(pools)}")
     
-    pools_data = []
-    for pool in pools:
-        bots_in_pool = PoolBot.query.filter_by(pool_id=pool.id).all()
-        pools_data.append({
-            'id': pool.id,
-            'name': pool.name,
-            'slug': pool.slug,
-            'is_active': pool.is_active,
-            'rotation_mode': pool.distribution_strategy,
-            'total_bots': len(bots_in_pool),
-            'bots': [{
-                'bot_id': pb.bot_id,
-                'priority': pb.priority,
-                'is_active': pb.is_enabled
-            } for pb in bots_in_pool]
-        })
-    
-    return jsonify({'success': True, 'pools': pools_data})
+    # ✅ PADRONIZAÇÃO: Usar to_dict() do modelo para garantir contrato consistente
+    return jsonify([pool.to_dict() for pool in pools])
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['GET'])
