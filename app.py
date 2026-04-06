@@ -10,6 +10,8 @@ from internal_logic.core.extensions import db, socketio
 from internal_logic.core.config import Config
 from internal_logic.blueprints.auth.routes import auth_bp
 from internal_logic.blueprints.dashboard.routes import dashboard_bp
+from internal_logic.blueprints.webhooks.payments import webhooks_bp
+from internal_logic.blueprints.webhooks.telegram import telegram_bp
 from models import User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
 from bot_manager import BotManager
 from datetime import datetime, timedelta
@@ -117,7 +119,9 @@ logger.info("✅ Extensões inicializadas via init_app()")
 # ============================================================================
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
-logger.info("✅ Blueprints registrados: auth, dashboard")
+app.register_blueprint(webhooks_bp)
+app.register_blueprint(telegram_bp)
+logger.info("✅ Blueprints registrados: auth, dashboard, webhooks, telegram")
 
 def _ensure_payments_payment_method_column() -> None:
     try:
