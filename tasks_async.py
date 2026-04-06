@@ -149,7 +149,7 @@ def _enqueue_pending_match(
     """
     Registra payload para retry posterior quando payment ainda não existe.
     """
-    from app import db
+    from internal_logic.core.extensions import db
     from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     if not transaction_id and not transaction_hash:
@@ -239,7 +239,7 @@ def process_start_async(
     - Salvar welcome_sent no banco
     """
     try:
-        from app import app
+        from flask import current_app
         from internal_logic.core.models import BotUser, Bot, get_brazil_time
         from bot_manager import send_meta_pixel_viewcontent_event
         import base64
@@ -247,7 +247,7 @@ def process_start_async(
         import redis
         from utils.tracking_service import TrackingServiceV4
 
-        with app.app_context():
+        with current_app.app_context():
             # Recarregar config do banco
             bot = db.session.get(Bot, bot_id)
             if bot and bot.config:
@@ -834,14 +834,15 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
         # CRÍTICO: Logging no início para verificar se função está sendo chamada
         logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}, user_id={user_id}")
         
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
         # Não usar bot_manager global - criar instância com user_id
         
-        with app.app_context():
+        with current_app.app_context():
             logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - App context criado para gateway_type={gateway_type}, user_id={user_id}")
             
             # ✅ ISOLAMENTO: Se user_id for 0, resolver pelo transaction_id
@@ -1263,7 +1264,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                         
                         # Gamificação V2.0
                         try:
-                            from app import GAMIFICATION_V2_ENABLED
+                            GAMIFICATION_V2_ENABLED = os.environ.get('GAMIFICATION_V2_ENABLED', 'false').lower() == 'true'
                             if GAMIFICATION_V2_ENABLED:
                                 payment.bot.owner.update_streak(payment.created_at)
                                 from ranking_engine_v2 import RankingEngine
@@ -1383,7 +1384,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                     # ✅ Enviar notificação WebSocket APENAS para o dono do bot (após atualizar status para 'paid')
                     if status == 'paid' and payment and payment.bot:
                         try:
-                            from app import socketio
+                            from internal_logic.core.extensions import socketio
                             if payment.bot.user_id:
                                 socketio.emit('payment_update', {
                                     'payment_id': payment.payment_id,
@@ -1438,14 +1439,14 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     Retorna quantidade processada com sucesso.
     """
-    from app import app
+    from flask import current_app
     from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     processed = 0
 
     _ensure_aux_tables()
 
-    with app.app_context():
+    with current_app.app_context():
         pendings = (
             WebhookPendingMatch.query
             .order_by(WebhookPendingMatch.last_attempt_at.asc().nullsfirst())
@@ -1504,14 +1505,15 @@ def generate_pix_async(
     - Envio de mensagem com QR Code
     """
     try:
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Bot, BotConfig, Payment, Gateway
         from gateway_factory import GatewayFactory
         from bot_manager import BotManager
         import uuid
         import time
         
-        with app.app_context():
+        with current_app.app_context():
             bot = db.session.get(Bot, bot_id)
             if not bot:
                 logger.error(f"Bot {bot_id} não encontrado")
@@ -1672,7 +1674,8 @@ def task_process_broadcast_campaign(campaign_id: int):
     Args:
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
-    from app import app, db
+    from flask import current_app
+    from internal_logic.core.extensions import db
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
     from datetime import timedelta
@@ -1681,7 +1684,7 @@ def task_process_broadcast_campaign(campaign_id: int):
     import time
     import requests
     
-    with app.app_context():
+    with current_app.app_context():
         try:
             # ✅ BUSCAR CAMPANHA EXISTENTE NO BANCO
             campaign = db.session.query(RemarketingCampaign).get(campaign_id)
@@ -2289,10 +2292,10 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     Job RQ para enviar downsell agendado
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
-    from app import app
+    from flask import current_app
     from internal_logic.core.models import Payment
     
-    with app.app_context():
+    with current_app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento ainda está pendente
             payment = Payment.query.filter_by(payment_id=payment_id).first()
@@ -2334,10 +2337,10 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     Job RQ para enviar upsell agendado
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
-    from app import app
+    from flask import current_app
     from internal_logic.core.models import Payment
     
-    with app.app_context():
+    with current_app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento está pago
             payment = Payment.query.filter_by(payment_id=payment_id).first()

@@ -27,12 +27,13 @@ def sync_umbrellapay_payments():
     sistema e reenvia Meta Pixel Purchase se necessário.
     """
     try:
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time
         from gateway_factory import GatewayFactory
-        from app import send_meta_pixel_purchase_event
+        # from app import send_meta_pixel_purchase_event  # TODO: Import from correct location
         
-        with app.app_context():
+        with current_app.app_context():
             logger.info("=" * 80)
             logger.info("🔄 [SYNC UMBRELLAPAY] Iniciando sincronização periódica")
             logger.info("=" * 80)

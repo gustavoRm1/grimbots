@@ -380,7 +380,7 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         bot_user.meta_viewcontent_sent_at = get_brazil_time()
         
         # Commit da flag
-        from app import db
+        from internal_logic.core.extensions import db
         db.session.commit()
         
         logger.info(f"📤 ViewContent enfileirado: Pool {pool.name} | " +
@@ -659,9 +659,10 @@ class BotManager:
                 if job_type == 'campaign_done':
                     campaign_id = job.get('campaign_id')
                     try:
-                        from app import app, db, socketio
+                        from flask import current_app
+                        from internal_logic.core.extensions import db, socketio
                         from internal_logic.core.models import RemarketingCampaign, get_brazil_time
-                        with app.app_context():
+                        with current_app.app_context():
                             campaign = db.session.get(RemarketingCampaign, int(campaign_id)) if campaign_id else None
                             if campaign:
                                 db.session.refresh(campaign)
@@ -733,9 +734,10 @@ class BotManager:
                     if error_code == 403 and ('bot was blocked' in desc or 'forbidden: bot was blocked' in desc):
                         blocked_inc = 1
                         try:
-                            from app import app, db
+                            from flask import current_app
+                            from internal_logic.core.extensions import db
                             from internal_logic.core.models import RemarketingBlacklist
-                            with app.app_context():
+                            with current_app.app_context():
                                 existing = db.session.query(RemarketingBlacklist).filter_by(
                                     bot_id=bot_id,
                                     telegram_user_id=str(chat_id)
@@ -772,9 +774,10 @@ class BotManager:
 
                 try:
                     if campaign_id:
-                        from app import app, db, socketio
+                        from flask import current_app
+                        from internal_logic.core.extensions import db, socketio
                         from internal_logic.core.models import RemarketingCampaign
-                        with app.app_context():
+                        with current_app.app_context():
                             campaign = db.session.get(RemarketingCampaign, int(campaign_id))
                             if campaign:
                                 db.session.refresh(campaign)
@@ -830,10 +833,11 @@ class BotManager:
     def _blacklist_user_deactivated(self, token: str, chat_id: str) -> None:
         """Blacklist definitiva para 'user is deactivated' (best-effort; não quebra execução se falhar)."""
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import RemarketingBlacklist, Bot
 
-            with app.app_context():
+            with current_app.app_context():
                 bot_id = None
                 # ✅ REDIS BRAIN: Buscar bot pelo token no Redis
                 # Como não temos índice reverso no Redis, buscar no banco
@@ -1505,9 +1509,10 @@ class BotManager:
                 else:
                     # Tentar auto-start com lock (namespace isolado)
                     try:
-                        from app import app, db
+                        from flask import current_app
+                        from internal_logic.core.extensions import db
                         from internal_logic.core.models import Bot, BotConfig
-                        with app.app_context():
+                        with current_app.app_context():
                             bot = db.session.get(Bot, bot_id)
                             if bot and bot.is_active and bot.user_id == user_id:  # ✅ Verificar ownership
                                 config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
@@ -1546,12 +1551,13 @@ class BotManager:
                 # ✅ CHAT: Salvar mensagem recebida no banco (SEMPRE, independente do comando)
                 if text and text.strip():  # Apenas mensagens de texto não vazias
                     try:
-                        from app import app, db
+                        from flask import current_app
+                        from internal_logic.core.extensions import db
                         from internal_logic.core.models import BotUser, BotMessage
                         import json
                         from datetime import datetime, timedelta
                         
-                        with app.app_context():
+                        with current_app.app_context():
                             # Buscar ou criar bot_user
                             bot_user = BotUser.query.filter_by(
                                 bot_id=bot_id,
@@ -1755,9 +1761,10 @@ class BotManager:
                             if migrate_to_chat_id:
                                 logger.info(f"🔄 CORREÇÃO 5: Grupo convertido! Chat ID antigo: {chat_info.get('id')} → Novo: {migrate_to_chat_id}")
                                 try:
-                                    from app import app, db
+                                    from flask import current_app
+                                    from internal_logic.core.extensions import db
                                     from internal_logic.core.models import Subscription
-                                    with app.app_context():
+                                    with current_app.app_context():
                                         # Atualizar todas as subscriptions com chat_id antigo
                                         from utils.subscriptions import normalize_vip_chat_id
                                         old_chat_id_raw = str(chat_info.get('id'))
@@ -1795,11 +1802,12 @@ class BotManager:
                         logger.info(f"👋 Usuário {member_name} (ID: {member_id}) saiu do grupo {chat_info.get('id')}")
                         # ✅ CORREÇÃO 12: Cancelar subscriptions ativas quando usuário sai do grupo
                         try:
-                            from app import app, db
+                            from flask import current_app
+                            from internal_logic.core.extensions import db
                             from internal_logic.core.models import Subscription
                             from datetime import datetime, timezone
                             
-                            with app.app_context():
+                            with current_app.app_context():
                                 from utils.subscriptions import normalize_vip_chat_id
                                 chat_id_raw = str(chat_info.get('id'))
                                 chat_id_str = normalize_vip_chat_id(chat_id_raw)
@@ -1883,11 +1891,12 @@ class BotManager:
         - Não envia Meta Pixel ViewContent (evita duplicação)
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import BotUser, Bot, BotMessage
             from datetime import datetime, timedelta
             
-            with app.app_context():
+            with current_app.app_context():
                 # Buscar usuário
                 user_from = message.get('from', {})
                 telegram_user_id = str(user_from.get('id', ''))
@@ -2116,7 +2125,8 @@ class BotManager:
         # ✅ CRÍTICO: Respeita flow_enabled - se fluxo visual está ativo, não envia welcome_message
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import BotUser
             from datetime import datetime
             import json
@@ -2143,7 +2153,11 @@ class BotManager:
                 
                 return  # ✅ SAIR SEM ENVIAR welcome_message
             
-            with app.app_context():
+            from flask import current_app
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import BotUser
+            
+            with current_app.app_context():
                 # Buscar usuário para atualizar welcome_sent
                 user_from = message.get('from', {})
                 telegram_user_id = str(user_from.get('id', ''))
@@ -2480,12 +2494,13 @@ class BotManager:
                         try:
                             # ✅ Verificação adicional no banco (anti-duplicação)
                             try:
-                                from app import app, db
+                                from flask import current_app
+                                from internal_logic.core.extensions import db
                                 from internal_logic.core.models import BotMessage
                                 from datetime import timedelta
                                 from internal_logic.core.models import get_brazil_time
 
-                                with app.app_context():
+                                with current_app.app_context():
                                     recent_window = get_brazil_time() - timedelta(seconds=5)
                                     existing_text = BotMessage.query.filter(
                                         BotMessage.telegram_user_id == str(chat_id),
@@ -2532,11 +2547,12 @@ class BotManager:
                                     
                                     # ✅ Salvar mensagem enviada no banco para verificação futura (anti-duplicação)
                                     try:
-                                        from app import app, db
+                                        from flask import current_app
+                                        from internal_logic.core.extensions import db
                                         from internal_logic.core.models import BotMessage, BotUser
                                         from internal_logic.core.models import get_brazil_time
 
-                                        with app.app_context():
+                                        with current_app.app_context():
                                             bot_user = BotUser.query.filter_by(
                                                 telegram_user_id=str(chat_id)
                                             ).order_by(BotUser.last_interaction.desc()).first()
@@ -3057,10 +3073,11 @@ class BotManager:
             bool: True se salvou com sucesso
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Payment
             
-            with app.app_context():
+            with current_app.app_context():
                 # ✅ Buscar payment com lock (SELECT FOR UPDATE)
                 payment = db.session.query(Payment).filter_by(payment_id=payment_id).with_for_update().first()
                 
@@ -3656,7 +3673,8 @@ class BotManager:
             flow_snapshot: Snapshot da config no início do fluxo
         """
         import time
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment
         
         if visited_steps is None:
@@ -4097,9 +4115,10 @@ class BotManager:
         # ✅ IDEMPOTÊNCIA: Verifica se step já foi executado (evita duplicação)
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             
-            with app.app_context():
+            with current_app.app_context():
                 # ✅ NOVO: Buscar snapshot do Redis primeiro (prioridade sobre config atual)
                 telegram_user_id_str = str(telegram_user_id) if telegram_user_id else ''
                 flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id_str)
@@ -4187,7 +4206,8 @@ class BotManager:
                 logger.info(f"🧹 Rate limit cache limpo: {user_key_rate}")
             
             # ✅ QI 500: RESET COMPLETO NO BANCO (ESSENCIAL)
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import BotUser, get_brazil_time
             
             # Usar sessão fornecida ou criar nova
@@ -4222,7 +4242,8 @@ class BotManager:
                 do_reset()
             else:
                 # Criar novo app_context
-                with app.app_context():
+                from flask import current_app
+                with current_app.app_context():
                     do_reset()
             
             logger.info(f"✅ Funil completamente resetado para bot_id={bot_id}, chat_id={chat_id}")
@@ -4291,10 +4312,11 @@ class BotManager:
             # ============================================================================
             logger.info(f"🔍 Tentando processar tracking para param: '{start_param}'")
             try:
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import BotUser
                 if start_param:
-                    with app.app_context():
+                    with current_app.app_context():
                         bot_user_track = BotUser.query.filter_by(
                             bot_id=bot_id,
                             telegram_user_id=telegram_user_id,
@@ -4354,9 +4376,10 @@ class BotManager:
             
             # PATCH 2: Se já enviou welcome, nunca mais envia
             try:
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import BotUser
-                with app.app_context():
+                with current_app.app_context():
                     bot_user = BotUser.query.filter_by(
                         bot_id=bot_id,
                         telegram_user_id=telegram_user_id,
@@ -4379,11 +4402,12 @@ class BotManager:
                 return  # Sair sem processar
             
             # ✅ QI 200: FAST RESPONSE MODE - Buscar apenas config mínima (1 query rápida)
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Bot, BotUser
             
             # Buscar config do banco e fazer reset NO MESMO CONTEXTO (rápido - apenas 1 query)
-            with app.app_context():
+            with current_app.app_context():
                 # ✅ QI 500: RESET ABSOLUTO NO MESMO CONTEXTO (garante commit imediato)
                 self._reset_user_funnel(bot_id, chat_id, telegram_user_id, db_session=db.session)
                 
@@ -4466,7 +4490,11 @@ class BotManager:
                     logger.info(f"✅ _execute_flow concluído sem exceções")
                     
                     # Marcar welcome_sent após fluxo iniciar
-                    with app.app_context():
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    from internal_logic.core.models import BotUser
+                    
+                    with current_app.app_context():
                         try:
                             bot_user_update = BotUser.query.filter_by(
                                 bot_id=bot_id,
@@ -4558,7 +4586,11 @@ class BotManager:
                     logger.info(f"✅ Mensagem /start enviada com {len(buttons)} botão(ões)")
                     
                     # ✅ MARCAR COMO ENVIADO NO BANCO
-                    with app.app_context():
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    from internal_logic.core.models import BotUser
+                    
+                    with current_app.app_context():
                         try:
                             bot_user_update = BotUser.query.filter_by(
                                 bot_id=bot_id,
@@ -4597,9 +4629,10 @@ class BotManager:
             
             # ✅ CORREÇÃO: Emitir evento via WebSocket apenas para o dono do bot
             try:
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(Bot, bot_id)
                     if bot:
                         self.socketio.emit('bot_interaction', {
@@ -4846,10 +4879,11 @@ class BotManager:
                 }, timeout=3)
                 
                 # Buscar dados da campanha e botão
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import RemarketingCampaign
                 
-                with app.app_context():
+                with current_app.app_context():
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
                     if campaign and campaign.buttons:
                         # ✅ CORREÇÃO: Parsear JSON se for string
@@ -4921,9 +4955,10 @@ class BotManager:
                     logger.info(f"✅ PIX ENVIADO (Remarketing)! ID: {pix_data.get('payment_id')}")
                     
                     # Atualizar stats da campanha
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import RemarketingCampaign
-                    with app.app_context():
+                    with current_app.app_context():
                         campaign = RemarketingCampaign.query.get(campaign_id)
                         if campaign:
                             campaign.total_clicks += 1
@@ -5006,10 +5041,11 @@ class BotManager:
                     logger.info(f"✅ PIX gerado COM order bump!")
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import Bot as BotModel
                     
-                    with app.app_context():
+                    with current_app.app_context():
                         bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
@@ -5102,10 +5138,11 @@ class BotManager:
                     logger.info(f"✅ PIX gerado SEM order bump!")
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import Bot as BotModel
                     
-                    with app.app_context():
+                    with current_app.app_context():
                         bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
@@ -5390,13 +5427,14 @@ class BotManager:
                 
                 # Buscar configuração para pegar nome do produto
                 # ✅ Recarregar config do banco (pode ter sido alterada)
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot as BotModel
                 
                 product_name = f'Produto {button_idx + 1}'  # Default
                 description = f"Downsell {downsell_idx + 1} - {product_name}"
                 
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         fresh_config = bot.config.to_dict()
@@ -5497,10 +5535,11 @@ class BotManager:
                     logger.warning(f"⚠️ Downsell com preço muito baixo (R$ {price:.2f}), calculando valor real")
                     
                     # ✅ CORREÇÃO: Buscar configuração do downsell para calcular valor real
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import Bot as BotModel
                     
-                    with app.app_context():
+                    with current_app.app_context():
                         bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
@@ -5533,13 +5572,14 @@ class BotManager:
                             logger.warning(f"⚠️ Configuração do bot não encontrada, usando fallback R$ {price:.2f}")
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot as BotModel
                 
                 # Default seguro (sem índice de downsell)
                 description = "Oferta Especial"
                 
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         fresh_config = bot.config.to_dict()
@@ -5561,11 +5601,12 @@ class BotManager:
                 logger.info(f"💙 DOWNSELL FIXO CLICADO | Downsell: {downsell_idx} | Botão Original: {original_button_idx} | Produto: {description} | Valor: R$ {price:.2f}")
                 
                 # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE DOWNSELL
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot as BotModel
                 
                 order_bump = None
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         config = bot.config.to_dict()
@@ -5679,10 +5720,11 @@ class BotManager:
                     logger.warning(f"⚠️ Upsell com preço muito baixo (R$ {price:.2f}), calculando valor real")
                     
                     # ✅ CORREÇÃO: Buscar configuração do upsell para calcular valor real
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import Bot as BotModel
                     
-                    with app.app_context():
+                    with current_app.app_context():
                         bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
@@ -5715,13 +5757,14 @@ class BotManager:
                             logger.warning(f"⚠️ Configuração do bot não encontrada, usando fallback R$ {price:.2f}")
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o upsell
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot as BotModel
                 
                 # Default seguro (sem índice de upsell)
                 description = "Oferta Especial"
                 
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         fresh_config = bot.config.to_dict()
@@ -5743,11 +5786,12 @@ class BotManager:
                 logger.info(f"💙 UPSELL CLICADO | Upsell: {upsell_idx} | Botão Original: {original_button_idx} | Produto: {description} | Valor: R$ {price:.2f}")
                 
                 # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE UPSELL
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Bot as BotModel
                 
                 order_bump = None
-                with app.app_context():
+                with current_app.app_context():
                     bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         config = bot.config.to_dict()
@@ -5944,10 +5988,11 @@ class BotManager:
                     logger.info(f"✅ PIX ENVIADO! ID: {pix_data.get('payment_id')}")
                     
                     # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import Bot as BotModel
                     
-                    with app.app_context():
+                    with current_app.app_context():
                         bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
@@ -6049,10 +6094,11 @@ Desculpe, não foi possível processar seu pagamento.
             user_info: Informações do usuário
         """
         try:
-            from internal_logic.core.models import Payment, Bot, Gateway, db
-            from app import app
+            from internal_logic.core.models import Payment, Bot, Gateway
+            from internal_logic.core.extensions import db
+            from flask import current_app
             
-            with app.app_context():
+            with current_app.app_context():
                 # Buscar pagamento no banco
                 payment = Payment.query.filter_by(payment_id=payment_id).first()
                 
@@ -6247,7 +6293,7 @@ Desculpe, não foi possível processar seu pagamento.
                                     
                                     # ✅ VERIFICAR CONQUISTAS
                                     try:
-                                        from app import check_and_unlock_achievements
+                                        from internal_logic.services.achievements import check_and_unlock_achievements
                                         new_achievements = check_and_unlock_achievements(payment.bot.owner)
                                         if new_achievements:
                                             logger.info(f"🏆 [VERIFY UMBRELLAPAY] {len(new_achievements)} conquista(s) desbloqueada(s)!")
@@ -6425,7 +6471,7 @@ Desculpe, não foi possível processar seu pagamento.
                                         db.session.refresh(payment)
                                         
                                         try:
-                                            from app import check_and_unlock_achievements
+                                            from internal_logic.services.achievements import check_and_unlock_achievements
                                             new_achievements = check_and_unlock_achievements(payment.bot.owner)
                                             if new_achievements:
                                                 logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
@@ -6524,7 +6570,8 @@ Desculpe, não foi possível processar seu pagamento.
                                         
                                         # ✅ ENVIAR ENTREGÁVEL após confirmar pagamento (outros gateways)
                                         try:
-                                            from app import send_payment_delivery
+                                            # TODO: Importar send_payment_delivery do local correto
+                                            # from internal_logic.services.payment_processor import send_payment_delivery
                                             logger.info(f"📦 [VERIFY OTHER] Enviando entregável via send_payment_delivery para {payment.payment_id}")
                                             
                                             db.session.refresh(payment)
@@ -6635,7 +6682,8 @@ Desculpe, não foi possível processar seu pagamento.
                     
                         # ✅ CRÍTICO: Usar send_payment_delivery para garantir validação consistente
                         try:
-                            from app import send_payment_delivery
+                            # TODO: Importar send_payment_delivery do local correto
+                            # from internal_logic.services.payment_processor import send_payment_delivery
                             logger.info(f"📦 [VERIFY] Enviando entregável via send_payment_delivery para {payment.payment_id}")
                             
                             # ✅ CRÍTICO: Refresh antes de chamar send_payment_delivery
@@ -7036,9 +7084,10 @@ Seu pagamento ainda não foi confirmado.
                 
                 # Se não encontrou por chat, tentar buscar via BotUser
                 if not session_tracking:
-                    from app import app, db
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
                     from internal_logic.core.models import BotUser
-                    with app.app_context():
+                    with current_app.app_context():
                         bot_user = BotUser.query.filter_by(
                             bot_id=bot_id,
                             telegram_user_id=str(chat_id)
@@ -7246,12 +7295,13 @@ Seu pagamento ainda não foi confirmado.
             logger.info(f"🎁 Finalizando sessão - Preço original: R$ {original_price:.2f}, Bumps aceitos: {len(accepted_bumps)}, Valor total: R$ {final_price:.2f}")
             
             # ✅ CRÍTICO: Buscar config do bot para agendar downsells depois
-            from app import app, db
             from internal_logic.core.models import Bot, BotUser
+            from flask import current_app
+            from internal_logic.core.extensions import db
             
             # Buscar config do bot
             bot_config = None
-            with app.app_context():
+            with current_app.app_context():
                 bot_model = Bot.query.get(bot_id)
                 if bot_model and bot_model.config:
                     bot_config = bot_model.config.to_dict()
@@ -7259,7 +7309,7 @@ Seu pagamento ainda não foi confirmado.
             # ✅ CRÍTICO: Buscar BotUser para obter nome e username (necessário para tracking Meta Pixel)
             customer_name = ""
             customer_username = ""
-            with app.app_context():
+            with current_app.app_context():
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
                     telegram_user_id=str(chat_id)
@@ -7629,11 +7679,12 @@ Seu pagamento ainda não foi confirmado.
             tracking_token = None
             try:
                 # Importar models dentro da função para evitar circular import
-                from internal_logic.core.models import Bot, Gateway, Payment, db
-                from app import app
+                from internal_logic.core.models import Bot, Gateway, Payment
+                from internal_logic.core.extensions import db
+                from flask import current_app
                 from sqlalchemy.exc import IntegrityError
                 
-                with app.app_context():
+                with current_app.app_context():
                     # Buscar bot e gateway
                     bot = db.session.get(Bot, bot_id)
                     if not bot:
@@ -8887,8 +8938,10 @@ Seu pagamento ainda não foi confirmado.
                 logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX: {timeout_error}")
                 # Tentar encontrar Payment criado antes do timeout para marcar como pendente de verificação
                 try:
-                    from internal_logic.core.models import db, Payment
-                    with app.app_context():
+                    from internal_logic.core.extensions import db
+                    from internal_logic.core.models import Payment
+                    from flask import current_app
+                    with current_app.app_context():
                         payment = Payment.query.filter_by(
                             bot_id=bot_id,
                             customer_user_id=customer_user_id,
@@ -9511,12 +9564,13 @@ Seu pagamento ainda não foi confirmado.
                     
                     # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
                     try:
-                        from app import app, db
+                        from flask import current_app
+                        from internal_logic.core.extensions import db
                         from internal_logic.core.models import BotUser, BotMessage, Bot
                         import json as json_lib
                         import uuid as uuid_lib
                         
-                        with app.app_context():
+                        with current_app.app_context():
                             # ✅ REDIS BRAIN: Buscar bot pelo token
                             # Como não temos índice reverso no Redis, buscar direto no banco
                             bot_id = None
@@ -9646,11 +9700,12 @@ Seu pagamento ainda não foi confirmado.
             error_bucket: 'BOT_FATAL', 'USER_FATAL', ou 'RETRYABLE'
             error_description: Descrição do erro para logging
         """
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Bot
         from datetime import datetime, timedelta
         
-        with app.app_context():
+        with current_app.app_context():
             bot = Bot.query.filter_by(token=token).first()
             if not bot:
                 return
@@ -9712,11 +9767,12 @@ Seu pagamento ainda não foi confirmado.
             token: Token do bot
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Bot
             from datetime import datetime
             
-            with app.app_context():
+            with current_app.app_context():
                 bot = Bot.query.filter_by(token=token).first()
                 # 🟢 A MÁGICA DA ESCALA: Só faz update se o bot estava machucado!
                 if bot and (bot.consecutive_failures > 0 or bot.health_status != 'online' or bot.circuit_breaker_until):
@@ -9951,22 +10007,20 @@ Seu pagamento ainda não foi confirmado.
             logger.info(f"🔍 Verificando status do pagamento...")
             payment_status = None
             try:
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Payment
-                with app.app_context():
+                with current_app.app_context():
                     payment = Payment.query.filter_by(payment_id=payment_id).first()
                     if payment:
                         payment_status = payment.status
-                        logger.info(f"✅ Pagamento encontrado: status={payment_status}")
+                        logger.info(f"   Status do pagamento: {payment_status}")
                     else:
-                        logger.error(f"❌ Pagamento {payment_id} NÃO encontrado no banco!")
-                        logger.error(f"   Downsell NÃO será enviado")
-                        return
+                        logger.error(f"   ❌ Pagamento {payment_id} não encontrado no banco!")
+                        return  # Cancelar envio se pagamento não existe
             except Exception as e:
-                logger.error(f"❌ Erro ao verificar pagamento: {e}", exc_info=True)
-                return
-            
-            # Verificar se pagamento ainda está pendente
+                logger.error(f"   ❌ Erro ao verificar pagamento: {e}")
+                return  # Cancelar envio se não conseguir verificar se pagamento ainda está pendente
             if payment_status != 'pending':
                 logger.warning(f"💰 Pagamento {payment_id} já foi {payment_status}, cancelando downsell {index+1}")
                 logger.warning(f"   Isso é normal se o cliente pagou antes do delay configurado")
@@ -9986,10 +10040,11 @@ Seu pagamento ainda não foi confirmado.
             
             # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
             # Isso garante que mudanças recentes na configuração sejam refletidas
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Bot as BotModel
             
-            with app.app_context():
+            with current_app.app_context():
                 bot = BotModel.query.get(bot_id)
                 if bot and bot.config:
                     config = bot.config.to_dict()
@@ -10249,18 +10304,9 @@ Seu pagamento ainda não foi confirmado.
                 logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
                 logger.error(f"   Payment ID: {payment_id} | Bot ID: {bot_id}")
                 # ✅ CORREÇÃO CRÍTICA QI 500: Tentar recuperar scheduler do app
-                try:
-                    from app import scheduler as app_scheduler
-                    if app_scheduler:
-                        logger.warning(f"⚠️ Scheduler não disponível no bot_manager, tentando usar scheduler do app...")
-                        self.scheduler = app_scheduler
-                        logger.info(f"✅ Scheduler recuperado do app!")
-                    else:
-                        logger.error(f"❌ Scheduler também não está disponível no app!")
-                        return
-                except Exception as recover_error:
-                    logger.error(f"❌ Erro ao recuperar scheduler: {recover_error}", exc_info=True)
-                    return
+                # TODO: Implementar importação alternativa para o scheduler
+                logger.warning(f"⚠️ Scheduler não disponível no bot_manager...")
+                return
             
             if not upsells:
                 logger.warning(f"⚠️ Lista de upsells está vazia!")
@@ -10347,9 +10393,10 @@ Seu pagamento ainda não foi confirmado.
             logger.info(f"🔍 Verificando status do pagamento...")
             payment_status = None
             try:
-                from app import app, db
+                from flask import current_app
+                from internal_logic.core.extensions import db
                 from internal_logic.core.models import Payment
-                with app.app_context():
+                with current_app.app_context():
                     payment = Payment.query.filter_by(payment_id=payment_id).first()
                     if payment:
                         payment_status = payment.status
@@ -10381,10 +10428,11 @@ Seu pagamento ainda não foi confirmado.
             token = bot_info['token']
             
             # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Bot as BotModel
             
-            with app.app_context():
+            with current_app.app_context():
                 bot = BotModel.query.get(bot_id)
                 if bot and bot.config:
                     config = bot.config.to_dict()
@@ -10605,10 +10653,11 @@ Seu pagamento ainda não foi confirmado.
             True se ainda está pendente
         """
         try:
-            from app import app, db
+            from flask import current_app
+            from internal_logic.core.extensions import db
             from internal_logic.core.models import Payment
             
-            with app.app_context():
+            with current_app.app_context():
                 payment = Payment.query.filter_by(payment_id=payment_id).first()
                 logger.info(f"🔍 DEBUG _is_payment_pending - payment_id: {payment_id}")
                 if payment:
@@ -10645,11 +10694,12 @@ Seu pagamento ainda não foi confirmado.
         Returns:
             Quantidade de leads elegíveis
         """
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import BotUser, Payment, RemarketingBlacklist
         from datetime import datetime, timedelta
         
-        with app.app_context():
+        with current_app.app_context():
             # Data limite de último contato
             from internal_logic.core.models import get_brazil_time
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
@@ -10801,12 +10851,13 @@ Seu pagamento ainda não foi confirmado.
         try:
             from redis_manager import get_redis_connection
             import json
-            from app import app, db, socketio
+            from flask import current_app
+            from internal_logic.core.extensions import db, socketio
             from internal_logic.core.models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time, Bot
             from datetime import timedelta
 
             def enqueue_jobs():
-                with app.app_context():
+                with current_app.app_context():
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
                     if not campaign:
                         logger.warning(f"❌ Remarketing enqueue abortado: campaign_id={campaign_id} não encontrada")
@@ -11108,14 +11159,15 @@ Seu pagamento ainda não foi confirmado.
         except Exception as orchestration_error:
             logger.error(f"❌ Falha no remarketing orchestration (fallback para modo legado): {orchestration_error}", exc_info=True)
 
-        from app import app, db, socketio
+        from flask import current_app
+        from internal_logic.core.extensions import db, socketio
         from internal_logic.core.models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist
         from datetime import datetime, timedelta
         import time
         
         def send_campaign():
             import time  # ✅ CRÍTICO: Importar time no início da função para evitar UnboundLocalError
-            with app.app_context():
+            with current_app.app_context():
                 try:
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
                     if not campaign:
@@ -11818,7 +11870,9 @@ Seu pagamento ainda não foi confirmado.
                 # ✅ Timeout muito longo - apenas logar (não falhar)
                 logger.error(f"❌ Campanha {campaign_id} não conseguiu slot após {max_retries} tentativas")
                 try:
-                    with app.app_context():
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    with current_app.app_context():
                         campaign = db.session.get(RemarketingCampaign, campaign_id)
                         if campaign and campaign.status == 'sending':
                             # Manter como 'sending' mas adicionar nota no erro
@@ -11838,7 +11892,9 @@ Seu pagamento ainda não foi confirmado.
             except Exception as outer_error:
                 logger.error(f"❌ Erro crítico na campanha {campaign_id}: {outer_error}", exc_info=True)
                 try:
-                    with app.app_context():
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    with current_app.app_context():
                         campaign = db.session.get(RemarketingCampaign, campaign_id)
                         if campaign:
                             campaign.status = 'failed'
@@ -11874,7 +11930,8 @@ Seu pagamento ainda não foi confirmado.
         
         Retorna: True se ativada com sucesso, False caso contrário
         """
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Subscription
         from datetime import datetime, timezone
         from dateutil.relativedelta import relativedelta
@@ -11884,7 +11941,7 @@ Seu pagamento ainda não foi confirmado.
         logger = logging.getLogger(__name__)
         
         try:
-            with app.app_context():
+            with current_app.app_context():
                 # ✅ LOCK PESSIMISTA: Selecionar subscription com lock
                 subscription = db.session.execute(
                     select(Subscription)
@@ -11959,7 +12016,8 @@ Seu pagamento ainda não foi confirmado.
         
         # ✅ Ativa subscriptions pendentes para este usuário neste grupo
         """
-        from app import app, db
+        from flask import current_app
+        from internal_logic.core.extensions import db
         from internal_logic.core.models import Subscription
         from utils.subscriptions import normalize_vip_chat_id
         import logging
@@ -11967,7 +12025,7 @@ Seu pagamento ainda não foi confirmado.
         logger = logging.getLogger(__name__)
         
         try:
-            with app.app_context():
+            with current_app.app_context():
                 # ✅ Buscar subscriptions pendentes para este usuário neste grupo
                 pending_subscriptions = Subscription.query.filter(
                     Subscription.bot_id == bot_id,

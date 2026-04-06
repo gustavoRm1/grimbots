@@ -19,7 +19,8 @@ def check_health_task():
     """
     try:
         # Importar aqui para evitar circular import
-        from app import db, Bot
+        from internal_logic.core.extensions import db
+        from internal_logic.core.models import Bot
         import redis
         
         issues = []
