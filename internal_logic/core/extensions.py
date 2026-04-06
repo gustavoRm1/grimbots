@@ -78,6 +78,26 @@ def create_app():
         pass  # Gamificação é opcional
     
     # ============================================================================
+    # ALIAS DE COMPATIBILIDADE PARA ENDPOINTS LEGADOS (url_for antigo)
+    # ============================================================================
+    # Adicionar ALIAS para manter compatibilidade com url_for legados nos templates
+    # Mapeia requisições do nome antigo (monólito) para o novo nome (blueprint.rota)
+    app.add_url_rule('/dashboard', endpoint='dashboard', view_func=app.view_functions.get('dashboard.dashboard'))
+    app.add_url_rule('/login', endpoint='login', view_func=app.view_functions.get('auth.login'))
+    app.add_url_rule('/logout', endpoint='logout', view_func=app.view_functions.get('auth.logout'))
+    app.add_url_rule('/register', endpoint='register', view_func=app.view_functions.get('auth.register'))
+    
+    # Alias adicionais que podem estar no menu base:
+    if app.view_functions.get('dashboard.settings'):
+        app.add_url_rule('/settings', endpoint='settings', view_func=app.view_functions.get('dashboard.settings'))
+    if app.view_functions.get('dashboard.ranking'):
+        app.add_url_rule('/ranking', endpoint='ranking', view_func=app.view_functions.get('dashboard.ranking'))
+    if app.view_functions.get('dashboard.chat'):
+        app.add_url_rule('/chat', endpoint='chat', view_func=app.view_functions.get('dashboard.chat'))
+    if app.view_functions.get('dashboard.redirect_pools_page'):
+        app.add_url_rule('/redirect-pools', endpoint='redirect_pools_page', view_func=app.view_functions.get('dashboard.redirect_pools_page'))
+    
+    # ============================================================================
     # REGISTRAR USER LOADER DO FLASK-LOGIN
     # ============================================================================
     from internal_logic.core.models import User
