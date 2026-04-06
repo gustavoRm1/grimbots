@@ -179,10 +179,57 @@ def dashboard():
         'month_users': month_users
     }
     
+    # ============================================================================
+    # DADOS PARA O TEMPLATE (SERIALIZÁVEIS)
+    # ============================================================================
+    
+    # Buscar pagamentos recentes
+    if bot_ids:
+        recent_payments = db.session.query(Payment, Bot).join(
+            Bot, Payment.bot_id == Bot.id
+        ).filter(
+            Payment.bot_id.in_(bot_ids)
+        ).order_by(Payment.id.desc()).limit(20).all()
+    else:
+        recent_payments = []
+    
+    # Mapear bots para dict serializável
+    bots_list = []
+    for b in bots:
+        bots_list.append({
+            'id': b.id,
+            'name': b.name,
+            'username': getattr(b, 'username', ''),
+            'is_running': getattr(b, 'is_running', False),
+            'is_active': getattr(b, 'is_active', True),
+            'total_users': getattr(b, 'total_users', 0),
+            'total_sales': getattr(b, 'total_sales', 0),
+            'total_revenue': float(getattr(b, 'total_revenue', 0) or 0),
+            'pending_sales': getattr(b, 'pending_sales', 0),
+            'created_at': b.created_at.isoformat() if b.created_at else None
+        })
+    
+    # Mapear pagamentos para dict serializável
+    payments_list = []
+    for payment, bot in recent_payments:
+        payments_list.append({
+            'id': payment.id,
+            'customer_name': payment.customer_name,
+            'product_name': payment.product_name,
+            'amount': float(payment.amount),
+            'status': payment.status,
+            'created_at': payment.created_at.isoformat() if payment.created_at else None,
+            'bot_id': bot.id,
+            'bot_name': bot.name,
+            'bot_username': getattr(bot, 'username', '')
+        })
+    
     return render_template(
         'dashboard.html',
         mode=mode,
         stats=stats,
+        bots=bots_list,
+        recent_payments=payments_list,
         user=current_user
     )
 
