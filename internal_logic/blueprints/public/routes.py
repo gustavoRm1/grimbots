@@ -5,7 +5,7 @@ Rotas públicas para redirecionamento de tráfego (/go/<slug>) com Cloaker e Loa
 import logging
 import time
 from datetime import datetime
-from flask import Blueprint, request, redirect, jsonify
+from flask import Blueprint, request, redirect, jsonify, render_template
 from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
 from internal_logic.core.metrics import MetricsService
@@ -55,8 +55,7 @@ def public_redirect(slug):
     try:
         allowed, reason, log_data = CloakerService.validate_access(request, pool)
         if not allowed:
-            safe_page, status = CloakerService.get_safe_page()
-            return safe_page, status
+            return render_template('cloaker_block.html'), 200
     except Exception as e:
         logger.error(f"❌ Erro no cloaker: {e}")
         # Em caso de falha no cloaker, permitir acesso (fail-open)

@@ -643,22 +643,21 @@ class RedirectPool(db.Model):
     
     def to_dict(self):
         """Retorna dados do pool em formato dict"""
-        # Contadores calculados de bots (pool_bots agora é lista com lazy='select')
-        bots_count = len(self.pool_bots)
-        active_bots_count = len([b for b in self.pool_bots if getattr(b, 'is_enabled', False)])
+        # Contadores calculados de bots (pool_bots é dynamic - usar SQLAlchemy queries)
+        bots_count = self.pool_bots.count()
+        active_bots_count = self.pool_bots.filter_by(is_enabled=True).count()
         
-        # Usando .filter() porque pool_bots é dynamic
-        online_bots = [b for b in self.pool_bots.filter_by(status='online', is_enabled=True).all() if not (b.circuit_breaker_until and b.circuit_breaker_until > get_brazil_time())] if bots_count > 0 else 0
+        # Bots online para health_score
+        online_bots = [b for b in self.pool_bots.filter_by(status='online', is_enabled=True).all() if not (b.circuit_breaker_until and b.circuit_breaker_until > get_brazil_time())]
         
         return {
             'id': self.id,
             'user_id': self.user_id,
             'name': self.name,
             'slug': self.slug,
-            'description': self.description,
             'is_active': self.is_active,
             'distribution_strategy': self.distribution_strategy,
-            'total_visits': self.total_visits,
+            'total_visits': self.total_redirects,
             'health_score': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
             'public_url': f'/go/{self.slug}',
             'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
