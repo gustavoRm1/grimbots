@@ -524,10 +524,11 @@ def ranking():
         
         ranking_data.append({
             'position': position,
+            'user': seller,  # <--- CRÍTICO: O template EXIGE essa chave
             'user_id': seller.id,
             'name': seller.ranking_display_name or seller.full_name or seller.username,
             'username': seller.username,
-            'avatar': '/static/img/default-avatar.png',  # Avatar padrão (não existe no User)
+            'avatar': '/static/img/default-avatar.png',
             'is_premium': is_premium,
             'premium_rate': premium_rate,
             'current_rate': seller.commission_percentage or 2.0,
