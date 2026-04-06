@@ -632,17 +632,65 @@ def ranking():
             categories[cat] = []
         categories[cat].append(ach_data)
     
-    # Prêmios por receita (milestones)
+    # Prêmios por receita (milestones) - CONTRATO BLINDADO COM O FRONTEND
     revenue_awards = [
-        {'threshold': 1000, 'name': 'Primeira Venda', 'icon': 'fa-star', 'unlocked': total_revenue_float >= 1000},
-        {'threshold': 5000, 'name': 'Vendedor Bronze', 'icon': 'fa-medal', 'unlocked': total_revenue_float >= 5000},
-        {'threshold': 10000, 'name': 'Vendedor Prata', 'icon': 'fa-award', 'unlocked': total_revenue_float >= 10000},
-        {'threshold': 50000, 'name': 'Vendedor Ouro', 'icon': 'fa-crown', 'unlocked': total_revenue_float >= 50000},
-        {'threshold': 100000, 'name': 'Vendedor Diamante', 'icon': 'fa-gem', 'unlocked': total_revenue_float >= 100000},
-        {'threshold': 500000, 'name': 'Mestre das Vendas', 'icon': 'fa-trophy', 'unlocked': total_revenue_float >= 500000},
+        {
+            'threshold': 1000, 
+            'name': 'Primeira Venda', 
+            'image': 'placa_1k.png',  # 🔥 CRÍTICO: Template usa award.image
+            'is_unlocked': total_revenue_float >= 1000,  # 🔥 CRÍTICO: Template usa award.is_unlocked
+            'progress': min(100.0, (total_revenue_float / 1000) * 100) if total_revenue_float < 1000 else 100.0,
+            'remaining': max(0, 1000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 5000, 
+            'name': 'Vendedor Bronze', 
+            'image': 'placa_5k.png',
+            'is_unlocked': total_revenue_float >= 5000,
+            'progress': min(100.0, (total_revenue_float / 5000) * 100) if total_revenue_float < 5000 else 100.0,
+            'remaining': max(0, 5000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 10000, 
+            'name': 'Vendedor Prata', 
+            'image': 'placa_10k.png',
+            'is_unlocked': total_revenue_float >= 10000,
+            'progress': min(100.0, (total_revenue_float / 10000) * 100) if total_revenue_float < 10000 else 100.0,
+            'remaining': max(0, 10000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 50000, 
+            'name': 'Vendedor Ouro', 
+            'image': 'placa_50k.png',
+            'is_unlocked': total_revenue_float >= 50000,
+            'progress': min(100.0, (total_revenue_float / 50000) * 100) if total_revenue_float < 50000 else 100.0,
+            'remaining': max(0, 50000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 100000, 
+            'name': 'Vendedor Diamante', 
+            'image': 'placa_100k.png',
+            'is_unlocked': total_revenue_float >= 100000,
+            'progress': min(100.0, (total_revenue_float / 100000) * 100) if total_revenue_float < 100000 else 100.0,
+            'remaining': max(0, 100000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
+        {
+            'threshold': 500000, 
+            'name': 'Mestre das Vendas', 
+            'image': 'placa_500k.png',
+            'is_unlocked': total_revenue_float >= 500000,
+            'progress': min(100.0, (total_revenue_float / 500000) * 100) if total_revenue_float < 500000 else 100.0,
+            'remaining': max(0, 500000 - total_revenue_float),
+            'current_revenue': total_revenue_float
+        },
     ]
     
-    unlocked_count = sum(1 for award in revenue_awards if award['unlocked'])
+    unlocked_count = sum(1 for award in revenue_awards if award['is_unlocked'])
     total_count = len(revenue_awards)
     
     # O RETURN CRÍTICO DO RANKING V2.0
