@@ -29,11 +29,12 @@ def telegram_webhook(bot_id):
         
         logger.info(f"📨 Webhook Telegram: Bot {bot_id} | Update ID: {update.get('update_id')}")
         
-        # Buscar bot
+        # Buscar bot (query pura sem filtros contextuais)
         bot = Bot.query.get(bot_id)
         if not bot:
-            logger.warning(f"⚠️ Bot {bot_id} não encontrado")
-            return jsonify({'error': 'Bot not found'}), 404
+            logger.error(f"CRITICAL: Bot {bot_id} não encontrado no banco de dados")
+            # NÃO retornar 404 para evitar retry policy do Telegram
+            return jsonify({'status': 'error', 'message': 'Bot not found'}), 200
         
         # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do bot
         from bot_manager import BotManager
