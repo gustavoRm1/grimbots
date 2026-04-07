@@ -256,10 +256,19 @@ def mark_purchase_sent():
         
         payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
         
-        # DEFENSIVO: Nunca marcar Purchase como enviado se pagamento não estiver confirmado
+        # DEFENSIVO: Verificar status do pagamento
         if payment.status != 'paid':
-            logger.warning(f"⚠️ [MARK_PURCHASE] Tentativa de marcar como enviado mas status != 'paid': {payment.status}")
-            return jsonify({'error': 'Pagamento não está confirmado'}), 400
+            if payment.status == 'pending':
+                # Pagamento ainda pendente - retornar 202 Accepted (aguardando confirmação)
+                logger.info(f"⏳ [MARK_PURCHASE] Pagamento pendente, aguardando confirmação: payment_id={payment.id}")
+                return jsonify({
+                    'status': 'pending',
+                    'message': 'Pagamento em processamento, aguardando confirmação do gateway'
+                }), 202
+            else:
+                # Status inválido (cancelled, refunded, etc.)
+                logger.warning(f"⚠️ [MARK_PURCHASE] Status inválido para marcar Purchase: {payment.status}")
+                return jsonify({'error': 'Pagamento não está confirmado'}), 400
         
         # Marcar como enviado
         if hasattr(payment, 'purchase_sent_from_delivery'):

@@ -67,14 +67,24 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    payment_id: {{ payment.id }}
+                    payment_id: parseInt('{{ payment.id }}')
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (response.status === 202) {
+                    // Pagamento ainda pendente - aguardando confirmação
+                    return response.json().then(data => {
+                        console.log("⏳ Pagamento pendente:", data.message);
+                        // Não é erro - apenas aguardando confirmação do gateway
+                    });
+                } else {
+                    return response.json();
+                }
+            })
             .then(data => {
                 if(data.success || data.message) {
                     console.log("🔒 Backend bloqueado com sucesso contra duplicações (Trava Anti-F5 ativada).");
-                } else {
+                } else if(data.status !== 'pending') {
                     console.warn("⚠️ Aviso do backend:", data.error);
                 }
             })
