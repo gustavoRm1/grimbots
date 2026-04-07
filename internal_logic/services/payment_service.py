@@ -231,6 +231,11 @@ class PaymentService:
         Returns:
             PixPaymentResponse com QR code ou erro
         """
+        # Initialize distributed lock variables
+        lock_key = None
+        lock_acquired = False
+        redis_conn = None
+        
         # 1. Log de início da requisição
         self.logger.info(f"Gerando PIX - BotID: {bot_id} | Valor: {amount} | UserID: {external_id}")
         
@@ -304,13 +309,40 @@ class PaymentService:
         
         # 4. Chamar gateway
         try:
-            response = gateway.generate_pix(request)
+            # Garanta que payment_id e description existam no escopo antes dessa chamada
+            payment_id = external_id or f"bot_{bot_id}_{int(__import__('time').time())}"
+            customer_user_id = external_id or bot_id
+            
+            result = gateway.generate_pix(
+                amount=amount,
+                description=description,
+                payment_id=payment_id,
+                customer_data={
+                    'name': customer_name,
+                    'email': f"{customer_user_id}@telegram.user",
+                    'phone': str(customer_user_id),
+                    'document': str(customer_user_id)
+                }
+            )
             
             # 4. Log do resultado da API externa
-            if response.success:
-                self.logger.info(f"PIX gerado com sucesso via {gateway_config.gateway_type}. Payload: {response.raw_response}")
+            if result and result.get('status') != 'error':
+                self.logger.info(f"PIX gerado com sucesso via {gateway_config.gateway_type}")
+                response = PixPaymentResponse(
+                    success=True,
+                    transaction_id=result.get('transaction_id'),
+                    pix_code=result.get('pix_code'),
+                    qr_code_url=result.get('qr_code_url'),
+                    status=result.get('status', 'pending'),
+                    raw_response=result
+                )
             else:
-                self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {response.error_message}")
+                self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {result.get('error', 'Unknown error')}")
+                response = PixPaymentResponse(
+                    success=False,
+                    error_message=result.get('error', 'Erro desconhecido no gateway'),
+                    raw_response=result
+                )
             
             # 5. Registrar transação no banco (se sucesso)
             if response.success and self.db:
@@ -330,6 +362,12 @@ class PaymentService:
                 success=False,
                 error_message=f"Erro ao comunicar com gateway: {str(e)}"
             )
+        finally:
+            try:
+                if lock_acquired and lock_key and redis_conn:
+                    redis_conn.delete(lock_key)
+            except Exception as e:
+                self.logger.warning(f"Erro ao liberar lock PIX: {e}")
     
     def _register_transaction(
         self,
