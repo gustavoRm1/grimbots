@@ -1520,14 +1520,44 @@ class BotManager:
                 
                 # Verificar novamente
                 if not bot_state.is_bot_active(bot_id):
-                    logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start, ignorando update")
-                    return
+                    logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start. Acionando FALLBACK para banco de dados...")
+                    # NÃO retornar - vamos tentar fallback no banco
+                    bot_info = None  # Marcar para fallback
+                else:
+                    # Bot está ativo, obter dados do Redis
+                    bot_info = bot_state.get_bot_data(bot_id)
+            else:
+                # Bot já estava ativo, obter dados do Redis
+                bot_info = bot_state.get_bot_data(bot_id)
             
-            # ✅ ISOLAMENTO: Obter dados do bot do Redis ISOLADO
-            bot_info = bot_state.get_bot_data(bot_id)
+            # ✅ FALLBACK CRÍTICO: Se Redis falhou, buscar direto do banco
             if not bot_info:
-                logger.warning(f"🤖 Bot {bot_id} não encontrado no Redis isolado (gb:{user_id}:) - descartando update")
-                return
+                logger.warning(f"🤖 Bot {bot_id} não encontrado no Redis. Acionando FALLBACK LEGADO (Via Expressa)!")
+                try:
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    from internal_logic.core.models import Bot, BotConfig
+                    
+                    with current_app.app_context():
+                        db_bot = db.session.get(Bot, bot_id)
+                        if not db_bot:
+                            logger.error(f"❌ Bot {bot_id} não existe no banco de dados!")
+                            return  # Bot realmente não existe
+                            
+                        # Buscar config
+                        db_config = db_bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
+                        config_dict = db_config.to_dict() if db_config else {}
+                        
+                        # Criar bot_info manualmente do banco
+                        bot_info = {
+                            'token': db_bot.token,
+                            'config': config_dict
+                        }
+                        logger.info(f"✅ FALLBACK: Bot {bot_id} carregado direto do banco!")
+                        
+                except Exception as fallback_error:
+                    logger.error(f"❌ FALLBACK falhou para bot {bot_id}: {fallback_error}")
+                    return  # Se fallback falhou, realmente não podemos processar
             
             token = bot_info['token']
             config = bot_info['config']
@@ -1870,6 +1900,82 @@ class BotManager:
             logger.error(f"❌ Erro ao processar update do bot {bot_id}: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _process_telegram_update_direct(self, bot_id: int, token: str, config: Dict[str, Any], 
+                                         update: Dict[str, Any]) -> None:
+        """
+        🔥 FALLBACK LEGADO: Processa update SEM verificar Redis/state
+        
+        Usado quando o bot não está registrado no Redis ou quando
+        o caminho normal falha. Implementação direta similar ao código legado.
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot Telegram
+            config: Configuração do bot
+            update: Update do Telegram
+        """
+        try:
+            logger.info(f"🚀 [FALLBACK DIRECT] Processando update para bot {bot_id}")
+            
+            update_id = update.get('update_id')
+            
+            # Processar mensagem diretamente (sem Redis locks/state)
+            if 'message' in update:
+                message = update['message']
+                chat_id = message['chat']['id']
+                text = message.get('text', '')
+                user = message.get('from', {})
+                telegram_user_id = str(user.get('id', ''))
+                
+                logger.info(f"💬 [FALLBACK] De: {user.get('first_name', 'Usuário')} | Msg: '{text[:50]}...'")
+                
+                # Verificar se é comando /start
+                if text and text.strip() == '/start':
+                    logger.info(f"⭐ [FALLBACK] Comando /start detectado")
+                    self._handle_start_command(bot_id, token, config, chat_id, message, None)
+                    return
+                
+                # Mensagem de texto normal - usar MessageRouter
+                try:
+                    from flow_engine_router_v8 import get_message_router
+                    router = get_message_router(self)
+                    
+                    result = router.process_message(
+                        bot_id=bot_id,
+                        token=token,
+                        config=config,
+                        chat_id=chat_id,
+                        telegram_user_id=telegram_user_id,
+                        message=message,
+                        message_type='text'
+                    )
+                    
+                    logger.info(f"✅ [FALLBACK] Mensagem processada via Router: {result}")
+                    
+                except Exception as router_error:
+                    logger.error(f"❌ [FALLBACK] Erro no Router: {router_error}")
+                    # Fallback último recurso: processar direto
+                    self._handle_text_message(bot_id, token, config, chat_id, message)
+                    
+            elif 'callback_query' in update:
+                # Callback query - processar diretamente
+                callback = update['callback_query']
+                message = callback.get('message', {})
+                chat_id = message.get('chat', {}).get('id')
+                callback_data = callback.get('data', '')
+                
+                if chat_id and callback_data:
+                    logger.info(f"🔘 [FALLBACK] Callback: {callback_data}")
+                    self._handle_callback_query(bot_id, token, config, callback)
+                    
+            logger.info(f"✅ [FALLBACK DIRECT] Update {update_id} processado com sucesso")
+            
+        except Exception as e:
+            logger.error(f"❌ [FALLBACK DIRECT] Erro ao processar: {e}")
+            import traceback
+            traceback.print_exc()
+            raise  # Propagar erro para que o caller saiba que falhou
     
     def _handle_text_message(self, bot_id: int, token: str, config: Dict[str, Any], 
                             chat_id: int, message: Dict[str, Any]):
