@@ -29,6 +29,36 @@ def telegram_webhook(bot_id):
         
         logger.info(f"📨 Webhook Telegram: Bot {bot_id} | Update ID: {update.get('update_id')}")
         
+        # DIAGNÓSTICO: BYPASS ORM COM SQL PURO
+        from sqlalchemy import text
+        from internal_logic.core.extensions import db
+        
+        try:
+            # 1. Tenta achar na tabela principal de bots
+            raw_bot = db.session.execute(
+                text("SELECT id, token FROM bots WHERE id = :bot_id"),
+                {"bot_id": bot_id}
+            ).fetchone()
+            
+            if raw_bot:
+                logger.info(f"DIAGNÓSTICO: RAW SQL ENCONTROU O BOT {bot_id} NA TABELA 'bots'! Token: {raw_bot[1][:5]}...")
+            else:
+                logger.warning(f"DIAGNÓSTICO: RAW SQL NÃO ACHOU O BOT {bot_id} NA TABELA 'bots'.")
+                
+                # 2. Tenta achar na tabela de pool (se existir na sua arquitetura)
+                try:
+                    raw_pool = db.session.execute(
+                        text("SELECT id, token FROM pool_bots WHERE id = :bot_id"),
+                        {"bot_id": bot_id}
+                    ).fetchone()
+                    if raw_pool:
+                        logger.info(f"DIAGNÓSTICO: O BOT {bot_id} FOI ACHADO NA TABELA 'pool_bots' e não na 'bots'!")
+                except Exception:
+                    pass # Tabela pool_bots não existe, segue o jogo
+
+        except Exception as e:
+            logger.error(f"DIAGNÓSTICO: ERRO NO RAW SQL (Tabela com nome diferente?): {e}")
+        
         # Buscar bot (query pura sem filtros contextuais)
         bot = Bot.query.get(bot_id)
         if not bot:
