@@ -223,12 +223,34 @@ class Bot(db.Model):
     is_running = db.Column(db.Boolean, default=False, index=True)  # Indexado para filtrar bots em execução
     last_error = db.Column(db.Text)
     
-    # Circuit Breaker - Controle de saúde e falhas
-    error_count = db.Column(db.Integer, default=0)
-    consecutive_failures = db.Column(db.Integer, default=0)
-    circuit_breaker_until = db.Column(db.DateTime, index=True)
-    health_status = db.Column(db.String(20), default='online')  # online, degraded, offline
-    last_health_check = db.Column(db.DateTime)
+    # ✅ COLUNAS REMOVIDAS (não existem no banco legado):
+    # Circuit Breaker - Controle de saúde e falhas (DESATIVADO para compatibilidade legacy)
+    # error_count = db.Column(db.Integer, default=0)
+    # consecutive_failures = db.Column(db.Integer, default=0)
+    # circuit_breaker_until = db.Column(db.DateTime, index=True)
+    # health_status = db.Column(db.String(20), default='online')
+    # last_health_check = db.Column(db.DateTime)
+    
+    # Para compatibilidade com código que ainda referencia esses campos:
+    @property
+    def error_count(self):
+        return 0
+    
+    @property
+    def consecutive_failures(self):
+        return 0
+    
+    @property
+    def circuit_breaker_until(self):
+        return None
+    
+    @property
+    def health_status(self):
+        return 'online'
+    
+    @property
+    def last_health_check(self):
+        return None
     
     # Estatísticas
     total_users = db.Column(db.Integer, default=0)

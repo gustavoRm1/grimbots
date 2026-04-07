@@ -9863,97 +9863,29 @@ Seu pagamento ainda não foi confirmado.
 
     def _apply_circuit_breaker(self, token: str, error_bucket: str, error_description: str):
         """
-        Aplica lógica de Circuit Breaker baseada no bucket de erro.
+        🔴 DESATIVADO: Circuit Breaker removido (colunas não existem no banco legado)
         
-        Args:
-            token: Token do bot
-            error_bucket: 'BOT_FATAL', 'USER_FATAL', ou 'RETRYABLE'
-            error_description: Descrição do erro para logging
+        Mantido para compatibilidade - apenas loga, não modifica banco.
         """
-        from flask import current_app
-        from internal_logic.core.extensions import db
-        from internal_logic.core.models import Bot
-        from datetime import datetime, timedelta
-        
-        with current_app.app_context():
-            bot = Bot.query.filter_by(token=token).first()
-            if not bot:
-                return
-            
-            # USER_FATAL: NÃO punir o bot, apenas retornar
-            if error_bucket == 'USER_FATAL':
-                logger.info(f"👤 USER_FATAL detectado para bot {bot.id}: {error_description[:100]}")
-                return
-            
-            # BOT_FATAL: Desativar bot imediatamente
-            if error_bucket == 'BOT_FATAL':
-                bot.is_active = False
-                bot.health_status = 'offline'
-                bot.circuit_breaker_until = None  # Permanente
-                bot.last_error = f"BOT_FATAL: {error_description[:500]}"
-                bot.last_health_check = datetime.now()
-                bot.error_count += 1
-                logger.critical(f"🔴 BOT_FATAL: Bot {bot.id} DESATIVADO. Erro: {error_description[:200]}")
-                
-                # Desregistrar do Redis
-                try:
-                    self.bot_state.unregister_bot(bot.id)
-                    logger.info(f"🗑️ Bot {bot.id} removido do Redis (BOT_FATAL)")
-                except Exception as e:
-                    logger.warning(f"⚠️ Falha ao remover bot {bot.id} do Redis: {e}")
-                
-                db.session.commit()
-                return
-            
-            # RETRYABLE: Incrementar falhas e aplicar cooldown se necessário
-            if error_bucket == 'RETRYABLE':
-                bot.consecutive_failures += 1
-                bot.error_count += 1
-                bot.last_error = f"RETRYABLE: {error_description[:500]}"
-                bot.last_health_check = datetime.now()
-                
-                # Verificar se atingiu threshold para Circuit Breaker
-                if bot.consecutive_failures >= 5:
-                    bot.circuit_breaker_until = datetime.now() + timedelta(minutes=30)
-                    bot.health_status = 'degraded'
-                    logger.critical(
-                        f"🟡 CIRCUIT_BREAKER_TRIPPED: Bot {bot.id} isolado por 30min "
-                        f"({bot.consecutive_failures} falhas). Erro: {error_description[:200]}"
-                    )
-                else:
-                    bot.health_status = 'degraded'
-                    logger.warning(
-                        f"⚠️ Bot {bot.id} falha {bot.consecutive_failures}/5 (RETRYABLE): {error_description[:200]}"
-                    )
-                
-                db.session.commit()
+        # ✅ COLUNAS REMOVIDAS: health_status, circuit_breaker_until, 
+        # error_count, consecutive_failures, last_health_check
+        # Usar apenas logging, sem writes no banco
+        if error_bucket == 'BOT_FATAL':
+            logger.critical(f"🔴 BOT_FATAL detectado: {error_description[:200]}")
+        elif error_bucket == 'RETRYABLE':
+            logger.warning(f"⚠️ RETRYABLE detectado: {error_description[:200]}")
+        # NÃO faz nenhuma operação no banco - colunas não existem
+        return
 
     def _reset_circuit_breaker_on_success(self, token: str):
         """
-        Reseta contadores de falha quando o bot envia mensagem com sucesso.
-        Só acessa o banco se o bot estava machucado (consecutive_failures > 0 ou health_status != 'online').
+        🔴 DESATIVADO: Circuit Breaker reset removido (colunas não existem no banco legado)
         
-        Args:
-            token: Token do bot
+        Mantido para compatibilidade - apenas loga, não modifica banco.
         """
-        try:
-            from flask import current_app
-            from internal_logic.core.extensions import db
-            from internal_logic.core.models import Bot
-            from datetime import datetime
-            
-            with current_app.app_context():
-                bot = Bot.query.filter_by(token=token).first()
-                # 🟢 A MÁGICA DA ESCALA: Só faz update se o bot estava machucado!
-                if bot and (bot.consecutive_failures > 0 or bot.health_status != 'online' or bot.circuit_breaker_until):
-                    bot.consecutive_failures = 0
-                    bot.health_status = 'online'
-                    bot.circuit_breaker_until = None
-                    bot.last_health_check = datetime.now()
-                    db.session.commit()
-                    logger.info(f"✅ Bot {bot.id} recuperado - Circuit Breaker resetado para ZERO")
-        except Exception as e:
-            logger.error(f"❌ Erro no reset do circuit breaker: {e}") 
+        # ✅ COLUNAS REMOVIDAS: consecutive_failures, health_status, circuit_breaker_until, last_health_check
+        # Não faz nada - as colunas não existem no banco legado
+        return 
 
     def send_telegram_message(self, token: str, chat_id: str, message: str, 
                              media_url: Optional[str] = None, 

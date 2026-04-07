@@ -122,4 +122,17 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
     
+    # ============================================================================
+    # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS
+    # ============================================================================
+    @app.teardown_request
+    def teardown_request(exception=None):
+        """
+        Limpa sessão do SQLAlchemy após cada requisição.
+        Previne 'InFailedSqlTransaction' quando uma transação anterior falhou.
+        """
+        if exception:
+            db.session.rollback()
+        db.session.remove()
+    
     return app
