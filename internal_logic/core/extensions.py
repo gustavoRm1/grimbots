@@ -64,6 +64,7 @@ def create_app():
     from internal_logic.blueprints.webhooks.telegram import telegram_bp
     from internal_logic.blueprints.admin.routes import admin_bp
     from internal_logic.blueprints.public.routes import public_bp
+    from internal_logic.blueprints.delivery.routes import delivery_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -71,6 +72,7 @@ def create_app():
     app.register_blueprint(telegram_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(delivery_bp)
     
     # ============================================================================
     # REGISTRAR BLUEPRINT DE GAMIFICAÇÃO (se disponível)

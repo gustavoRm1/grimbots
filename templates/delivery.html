@@ -59,6 +59,28 @@
             }
 
             fbq('track', 'Purchase', purchaseData, eventId ? { eventID: eventId } : {});
+            
+            // AVISA O BACKEND PARA TRANCAR A PORTA (ANTI-DUPLICAÇÃO/F5)
+            fetch('/delivery/api/tracking/mark-purchase-sent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    payment_id: {{ payment.id }}
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success || data.message) {
+                    console.log("🔒 Backend bloqueado com sucesso contra duplicações (Trava Anti-F5 ativada).");
+                } else {
+                    console.warn("⚠️ Aviso do backend:", data.error);
+                }
+            })
+            .catch(error => {
+                console.error("❌ Erro fatal de conexão no callback de tracking:", error);
+            });
         })();
     </script>
     {% else %}

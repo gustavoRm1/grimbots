@@ -122,89 +122,102 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None) -> Dict[str, Any]:
+def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
     """
-    Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado.
+    Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado
     
-    ✅ LAZARUS RECOVERY: Versão completa com Meta Pixel, delivery_token e SocketIO
-    recuperada do app.py em 2026-04-06.
+    ✅ REFATORADO: Cria BotManager localmente com user_id do payment
+    
+    EXTRACTED FROM: app.py linhas 215-381
     
     Args:
         payment: Objeto Payment com status='paid'
         bot_manager: Instância opcional do BotManager (para compatibilidade)
+        socketio: Instância opcional do SocketIO
     
     Returns:
-        dict: {'success': bool, 'message': str, 'delivery_method': str}
+        bool: True se enviado com sucesso, False se houve erro
     """
-    from internal_logic.core.models import get_brazil_time, PoolBot, BotUser
-    
     try:
         if not payment or not payment.bot:
             logger.warning(f"⚠️ Payment ou bot inválido para envio de entregável: payment={payment}")
-            return {'success': False, 'message': 'Payment ou bot inválido', 'delivery_method': 'none'}
+            return False
         
         # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
-        if bot_manager is None:
-            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
-        else:
-            local_bot_manager = bot_manager
+        local_bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
         
         # ✅ CRÍTICO: Não enviar entregável se pagamento não estiver 'paid'
-        if payment.status != 'paid':
+        allowed_status = ['paid']
+        if payment.status not in allowed_status:
             logger.error(
-                f"❌ BLOQUEADO: tentativa de envio com status inválido "
-                f"({payment.status}). Apenas 'paid' é permitido. "
-                f"Payment ID: {payment.payment_id if payment else 'None'}"
+                f"❌ BLOQUEADO: tentativa de envio de acesso com status inválido "
+                f"({payment.status}). Apenas 'paid' é permitido. Payment ID: {payment.payment_id if payment else 'None'}"
             )
-            return {'success': False, 'message': 'Status não é paid', 'delivery_method': 'none'}
+            logger.error(
+                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                f"(status atual: {payment.status}, payment_id: {payment.payment_id if payment else 'None'})"
+            )
+            return False
         
         if not payment.bot.token:
-            logger.error(f"❌ Bot {payment.bot_id} não tem token configurado")
-            return {'success': False, 'message': 'Token não configurado', 'delivery_method': 'none'}
+            logger.error(f"❌ Bot {payment.bot_id} não tem token configurado - não é possível enviar entregável")
+            return False
         
         # ✅ VALIDAÇÃO CRÍTICA: Verificar se customer_user_id é válido
         if not payment.customer_user_id or str(payment.customer_user_id).strip() == '':
-            logger.error(f"❌ Payment {payment.id} não tem customer_user_id válido")
-            return {'success': False, 'message': 'Customer ID inválido', 'delivery_method': 'none'}
+            logger.error(f"❌ Payment {payment.id} não tem customer_user_id válido ({payment.customer_user_id}) - não é possível enviar")
+            return False
         
         # ✅ GERAR delivery_token se não existir (único por payment)
         if not payment.delivery_token:
+            # Gerar token único: hash de payment_id + timestamp + secret
             timestamp = int(time.time())
             secret = f"{payment.id}_{payment.payment_id}_{timestamp}"
             delivery_token = hashlib.sha256(secret.encode()).hexdigest()[:64]
+            
             payment.delivery_token = delivery_token
             db.session.commit()
             logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
         # ✅ Buscar pool para verificar Meta Pixel
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-        # ✅ CORREÇÃO: Usar pool_id diretamente ao invés de backref .pool
-        pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
-        
+        pool = pool_bot.pool if pool_bot else None
+
         # ✅ Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
         bot_user_for_pixel = BotUser.query.filter_by(
             bot_id=payment.bot_id, 
             telegram_user_id=str(payment.customer_user_id)
         ).first() if payment.customer_user_id else None
+        
         user_origin_pixel = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
         pixel_from_user = user_origin_pixel if user_origin_pixel and str(user_origin_pixel).isdigit() else None
         pixel_id_to_use = pixel_from_user or (pool.meta_pixel_id if pool else None)
-        
+
         has_meta_pixel = bool(pool and pool.meta_tracking_enabled and pixel_id_to_use)
         
-        # Verificar se bot tem config e access_link
+        # Verificar se bot tem config e access_link (link final configurado pelo usuário)
         has_access_link = payment.bot.config and payment.bot.config.access_link
         access_link = payment.bot.config.access_link if has_access_link else None
         
         # ✅ DECISÃO CRÍTICA: Qual link enviar baseado em Meta Pixel?
+        # Se Meta Pixel ATIVO → usar /delivery para disparar Purchase tracking
+        # Se Meta Pixel INATIVO → usar access_link direto (sem passar por /delivery)
         link_to_send = None
         
         if has_meta_pixel:
-            # Meta Pixel ATIVO → usar /delivery para disparar Purchase tracking
+            # ✅ Meta Pixel ATIVO → usar /delivery para disparar Purchase tracking
+            # Gerar delivery_token se não existir (necessário para /delivery)
             if not payment.delivery_token:
-                generate_delivery_token(payment)
+                timestamp = int(time.time())
+                secret = f"{payment.id}_{payment.payment_id}_{timestamp}"
+                delivery_token = hashlib.sha256(secret.encode()).hexdigest()[:64]
+                payment.delivery_token = delivery_token
+                db.session.commit()
+                logger.info(f"✅ delivery_token gerado para Meta Pixel tracking: {delivery_token[:20]}...")
             
+            # Gerar URL de delivery
             try:
+                # Transportar pixel_id do redirect junto na URL de delivery (HTML-only)
                 link_to_send = url_for(
                     'delivery_page',
                     delivery_token=payment.delivery_token,
@@ -217,11 +230,12 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
             
             logger.info(f"✅ Meta Pixel ativo → enviando /delivery para disparar Purchase tracking (payment {payment.id})")
         else:
-            # Meta Pixel INATIVO → usar access_link direto
+            # ✅ Meta Pixel INATIVO → usar access_link direto (sem passar por /delivery)
             if has_access_link:
                 link_to_send = access_link
                 logger.info(f"✅ Meta Pixel inativo → enviando access_link direto: {access_link[:50]}... (payment {payment.id})")
             else:
+                # Sem Meta Pixel E sem access_link → sem link (mensagem genérica)
                 link_to_send = None
                 logger.warning(f"⚠️ Meta Pixel inativo E sem access_link → enviando mensagem genérica (payment {payment.id})")
         
@@ -242,6 +256,7 @@ Aproveite! 🚀
             """
             logger.info(f"✅ Link de acesso enviado para payment {payment.id} (Meta Pixel: {'✅' if has_meta_pixel else '❌'})")
         else:
+            # Mensagem genérica sem link (bot não configurou access_link e não tem Meta Pixel)
             access_message = f"""
 ✅ <b>Pagamento Confirmado!</b>
 
@@ -255,115 +270,363 @@ Aproveite! 🚀
             logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado e Meta Pixel inativo - enviando mensagem genérica")
         
         # Enviar via bot manager local e capturar exceção se falhar
-        telegram_sent = False
         try:
             local_bot_manager.send_telegram_message(
                 token=payment.bot.token,
                 chat_id=str(payment.customer_user_id),
                 message=access_message.strip()
             )
-            telegram_sent = True
             logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id}, delivery_token: {payment.delivery_token[:20]}...)")
+            return True
         except Exception as send_error:
+            # Erro ao enviar mensagem (bot bloqueado, chat_id inválido, etc)
             logger.error(f"❌ Erro ao enviar mensagem Telegram para payment {payment.id}: {send_error}")
-        
-        # Atualizar payment com método de entrega
-        delivery_method = 'telegram' if telegram_sent else 'none'
-        
-        try:
-            payment.delivery_method = delivery_method
-            payment.delivery_sent_at = get_brazil_time()
-            db.session.commit()
-        except Exception as e:
-            logger.warning(f"⚠️ Não foi possível salvar delivery_method: {e}")
-            db.session.rollback()
-        
-        # Emitir evento SocketIO para notificação em tempo real
-        try:
-            if payment.bot and payment.bot.user_id:
-                socketio.emit('delivery_sent', {
-                    'payment_id': payment.id,
-                    'status': 'delivered',
-                    'delivery_method': delivery_method,
-                    'bot_id': payment.bot_id,
-                }, room=f'user_{payment.bot.user_id}')
-        except Exception as e:
-            logger.error(f"❌ Erro ao emitir WebSocket de entrega: {e}")
-        
-        return {
-            'success': telegram_sent,
-            'message': 'Entregável enviado com sucesso' if telegram_sent else 'Falha ao enviar entregável',
-            'delivery_method': delivery_method
-        }
+            return False
         
     except Exception as e:
-        logger.error(f"❌ Erro crítico em send_payment_delivery: {e}", exc_info=True)
-        return {'success': False, 'message': f'Erro: {str(e)}', 'delivery_method': 'none'}
+        logger.error(f"❌ Erro ao enviar entregável para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
+        return False
 
 
-def process_payment_confirmation(payment: Payment, gateway_type: str) -> bool:
+def process_payment_confirmation(payment: Payment, gateway_type: str, bot_manager=None, socketio=None) -> dict:
     """
     Processa a confirmação de pagamento e executa ações pós-venda.
+    
+    ✅ TRANSPLANTED: Lógica completa do legado com estatísticas, comissões e gamificação
     
     Args:
         payment: Objeto Payment confirmado
         gateway_type: Tipo do gateway (paradise, syncpay, etc.)
+        bot_manager: Instância do BotManager (opcional)
+        socketio: Instância do SocketIO (opcional)
     
     Returns:
-        bool: True se processado com sucesso
+        dict: Status do processamento
     """
-    from internal_logic.core.models import get_brazil_time
+    from internal_logic.core.models import get_brazil_time, Gateway, Commission, Subscription, User, RemarketingCampaign
     
-    try:
-        # Enviar entregável (agora retorna dict)
-        delivery_result = send_payment_delivery(payment)
-        
-        # Emitir evento em tempo real
+    status = 'paid'  # Webhook sempre confirma como 'paid'
+    
+    # ============================================================================
+    # ✅ CRÍTICO: Validação anti-fraude - Rejeitar webhook 'paid' recebido muito rápido
+    # ============================================================================
+    if status == 'paid' and payment.created_at:
         try:
-            if payment.bot and payment.bot.user_id:
-                socketio.emit('payment_update', {
-                    'payment_id': payment.id,
-                    'status': 'paid',
-                    'amount': float(payment.amount),
-                    'bot_id': payment.bot_id,
-                    'delivery_method': delivery_result.get('delivery_method', 'none'),
-                }, room=f'user_{payment.bot.user_id}')
-        except Exception as e:
-            logger.error(f"❌ Erro ao emitir WebSocket: {e}")
+            tempo_desde_criacao = (get_brazil_time() - payment.created_at).total_seconds()
+            
+            if tempo_desde_criacao < 10:  # Menos de 10 segundos
+                logger.error(
+                    f"🚨 [WEBHOOK {gateway_type.upper()}] BLOQUEADO: Webhook 'paid' recebido muito rápido após criação!"
+                )
+                logger.error(f"   Payment ID: {payment.payment_id}")
+                logger.error(f"   Tempo desde criação: {tempo_desde_criacao:.2f} segundos")
+                logger.error(f"   Status do webhook: {status}")
+                logger.error(f"   ⚠️ Isso é SUSPEITO - Gateway não confirma pagamento em menos de 10 segundos!")
+                logger.error(f"   🔒 REJEITANDO webhook e mantendo status como 'pending'")
+                
+                return {
+                    'status': 'rejected_too_fast',
+                    'message': f'Webhook paid rejeitado - recebido {tempo_desde_criacao:.2f}s após criação (mínimo: 10s)'
+                }
+        except Exception as time_error:
+            logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Erro ao calcular tempo desde criação: {time_error}")
+    
+    # ============================================================================
+    # ✅ VERIFICA STATUS ANTIGO ANTES DE QUALQUER ATUALIZAÇÃO
+    # ============================================================================
+    was_pending = payment.status == 'pending'
+    status_antigo = payment.status
+    logger.info(f"📊 Status ANTES: {status_antigo} | Novo status: {status} | Era pending: {was_pending}")
+    
+    # ============================================================================
+    # ✅ PROTEÇÃO: Se já está paid E o webhook também é paid, pode ser duplicado
+    # ============================================================================
+    if payment.status == 'paid' and status == 'paid':
+        logger.info(f"⚠️ Webhook duplicado: {payment.payment_id} já está pago - verificando se entregável foi enviado...")
         
-        # Processar upsells se configurado
-        if payment.bot and payment.bot.config and payment.bot.config.upsells_enabled:
+        # ✅ CRÍTICO: Refresh antes de validar status
+        db.session.refresh(payment)
+        
+        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+        if payment.status == 'paid':
             try:
-                upsells = payment.bot.config.get_upsells()
-                if upsells:
-                    matched_upsells = [
-                        u for u in upsells 
-                        if not u.get('trigger_product') or u.get('trigger_product') == payment.product_name
-                    ]
+                resultado = send_payment_delivery(payment, bot_manager, socketio)
+                if resultado:
+                    logger.info(f"✅ Entregável reenviado com sucesso (webhook duplicado)")
+            except:
+                pass
+        else:
+            logger.error(
+                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+            )
+        
+        # ✅ CORREÇÃO CRÍTICA: Processar upsells ANTES do return (webhook duplicado)
+        logger.info(f"🔍 [UPSELLS WEBHOOK DUPLICADO] Verificando upsells para payment {payment.payment_id}")
+        if payment.bot.config and payment.bot.config.upsells_enabled:
+            logger.info(f"✅ [UPSELLS WEBHOOK DUPLICADO] Upsells habilitados - verificando se já foram agendados...")
+            # Verificar se upsells já foram agendados (anti-duplicação)
+            upsells_already_scheduled = False
+            if bot_manager and bot_manager.scheduler:
+                try:
+                    for i in range(10):
+                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                        existing_job = bot_manager.scheduler.get_job(job_id)
+                        if existing_job:
+                            upsells_already_scheduled = True
+                            logger.info(f"ℹ️ [UPSELLS WEBHOOK DUPLICADO] Upsells já agendados (job {job_id} existe)")
+                            break
+                except Exception as check_error:
+                    logger.warning(f"⚠️ Erro ao verificar jobs no webhook duplicado: {check_error}")
+            
+            # Se não foram agendados, agendar agora
+            if bot_manager and bot_manager.scheduler and not upsells_already_scheduled:
+                try:
+                    upsells = payment.bot.config.get_upsells()
+                    if upsells:
+                        matched_upsells = []
+                        for upsell in upsells:
+                            trigger_product = upsell.get('trigger_product', '')
+                            if not trigger_product or trigger_product == payment.product_name:
+                                matched_upsells.append(upsell)
+                        
+                        if matched_upsells:
+                            logger.info(f"✅ [UPSELLS WEBHOOK DUPLICADO] Agendando {len(matched_upsells)} upsell(s) para payment {payment.payment_id}")
+                            bot_manager.schedule_upsells(
+                                bot_id=payment.bot_id,
+                                payment_id=payment.payment_id,
+                                chat_id=int(payment.customer_user_id),
+                                upsells=matched_upsells,
+                                original_price=payment.amount,
+                                original_button_index=-1
+                            )
+                except Exception as upsell_error:
+                    logger.error(f"❌ Erro ao processar upsells no webhook duplicado: {upsell_error}", exc_info=True)
+        
+        return {'status': 'already_processed'}
+    
+    # ============================================================================
+    # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID (SEM COMMIT AINDA!)
+    # ============================================================================
+    if payment.status != 'paid':
+        payment.status = status
+    
+    # ============================================================================
+    # ✅ CORREÇÃO CRÍTICA: Separar lógica de estatísticas e entregável
+    # ============================================================================
+    deve_processar_estatisticas = (status == 'paid' and was_pending)
+    deve_enviar_entregavel = (status == 'paid')  # SEMPRE envia se status é 'paid'
+    
+    logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: status='{status}' | deve_enviar_entregavel={deve_enviar_entregavel} | status_antigo='{status_antigo}' | was_pending={was_pending}")
+    
+    # ============================================================================
+    # ✅ PROCESSAR ESTATÍSTICAS/COMISSÕES APENAS SE ERA PENDENTE (evita duplicação)
+    # ============================================================================
+    if deve_processar_estatisticas:
+        logger.info(f"✅ Processando pagamento confirmado (era pending): {payment.payment_id}")
+        
+        payment.paid_at = get_brazil_time()
+        
+        # ✅ ATUALIZAR ESTATÍSTICAS DO BOT
+        payment.bot.total_sales += 1
+        payment.bot.total_revenue += payment.amount
+        
+        # ✅ ATUALIZAR ESTATÍSTICAS DO USUÁRIO (owner)
+        payment.bot.owner.total_sales += 1
+        payment.bot.owner.total_revenue += payment.amount
+        
+        # ✅ ATUALIZAR ESTATÍSTICAS DO GATEWAY
+        if payment.gateway_type:
+            gateway = Gateway.query.filter_by(
+                user_id=payment.bot.user_id,
+                gateway_type=payment.gateway_type
+            ).first()
+            if gateway:
+                gateway.total_transactions += 1
+                gateway.successful_transactions += 1
+                logger.info(f"✅ Estatísticas do gateway {gateway.gateway_type} atualizadas: {gateway.total_transactions} transações, {gateway.successful_transactions} bem-sucedidas")
+        
+        # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+        if hasattr(payment, 'is_remarketing') and payment.is_remarketing and hasattr(payment, 'remarketing_campaign_id') and payment.remarketing_campaign_id:
+            campaign = RemarketingCampaign.query.get(payment.remarketing_campaign_id)
+            if campaign:
+                campaign.total_sales += 1
+                campaign.revenue_generated += float(payment.amount)
+                logger.info(f"✅ Estatísticas de remarketing atualizadas: Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+            else:
+                logger.warning(f"⚠️ Campanha de remarketing {payment.remarketing_campaign_id} não encontrada para payment {payment.id}")
+        
+        # ============================================================================
+        # REGISTRAR COMISSÃO
+        # ============================================================================
+        # Verificar se já existe comissão para este pagamento
+        existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
+        
+        if not existing_commission:
+            # Calcular e registrar receita da plataforma (split payment automático)
+            commission_amount = payment.bot.owner.add_commission(payment.amount)
+            
+            commission = Commission(
+                user_id=payment.bot.owner.id,
+                payment_id=payment.id,
+                bot_id=payment.bot.id,
+                sale_amount=payment.amount,
+                commission_amount=commission_amount,
+                commission_rate=payment.bot.owner.commission_percentage,
+                status='paid',  # Split payment cai automaticamente
+                paid_at=get_brazil_time()  # Pago no mesmo momento da venda
+            )
+            db.session.add(commission)
+            
+            # Atualizar receita já paga (split automático via SyncPay)
+            payment.bot.owner.total_commission_paid += commission_amount
+            
+            logger.info(f"💰 Receita da plataforma: R$ {commission_amount:.2f} (split automático) - Usuário: {payment.bot.owner.email}")
+        
+        # ============================================================================
+        # GAMIFICAÇÃO V2.0 - ATUALIZAR STREAK, RANKING E CONQUISTAS
+        # ============================================================================
+        try:
+            # FIXME: Descomentar quando módulos de gamificação forem migrados
+            # from gamification import GAMIFICATION_V2_ENABLED, RankingEngine, AchievementChecker, check_and_unlock_achievements
+            # from gamification_websocket import notify_achievement_unlocked
+            
+            GAMIFICATION_V2_ENABLED = False  # Temporariamente desabilitado
+            
+            if GAMIFICATION_V2_ENABLED:
+                # Atualizar streak
+                payment.bot.owner.update_streak(payment.created_at)
+                
+                # Recalcular ranking com algoritmo V2
+                old_points = payment.bot.owner.ranking_points or 0
+                payment.bot.owner.ranking_points = RankingEngine.calculate_points(payment.bot.owner)
+                new_points = payment.bot.owner.ranking_points
+                
+                # Verificar conquistas V2
+                new_achievements = AchievementChecker.check_all_achievements(payment.bot.owner)
+                
+                if new_achievements:
+                    logger.info(f"🎉 {len(new_achievements)} conquista(s) V2 desbloqueada(s)!")
                     
-                    if matched_upsells:
-                        local_bot_manager = BotManager(
-                            socketio=None, 
-                            scheduler=None, 
-                            user_id=payment.bot.user_id
-                        )
-                        local_bot_manager.schedule_upsells(
-                            bot_id=payment.bot_id,
-                            payment_id=payment.payment_id,
-                            chat_id=int(payment.customer_user_id),
-                            upsells=matched_upsells,
-                            original_price=payment.amount,
-                            original_button_index=-1
-                        )
-                        logger.info(f"📅 Upsells agendados para payment {payment.payment_id}")
-            except Exception as e:
-                logger.error(f"❌ Erro ao processar upsells: {e}", exc_info=True)
+                    # Notificar via WebSocket
+                    if socketio:
+                        for ach in new_achievements:
+                            notify_achievement_unlocked(socketio, payment.bot.owner.id, ach)
+                
+                # Atualizar ligas (pode ser async em produção)
+                RankingEngine.update_leagues()
+                
+                logger.info(f"📊 Gamificação V2: {old_points:,} → {new_points:,} pts")
+                
+            else:
+                # Fallback para sistema V1 (antigo)
+                payment.bot.owner.update_streak(payment.created_at)
+                payment.bot.owner.ranking_points = payment.bot.owner.calculate_ranking_points()
+                # new_badges = check_and_unlock_achievements(payment.bot.owner)
+                
+                # if new_badges:
+                #     logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
+                    
+        except Exception as e:
+            logger.error(f"❌ Erro na gamificação: {e}")
+    
+    # ============================================================================
+    # ✅ CORREÇÃO CRÍTICA: COMMIT ANTES DE ENVIAR ENTREGÁVEL E META PIXEL
+    # ============================================================================
+    db.session.commit()
+    logger.info(f"🔔 Webhook -> payment {payment.payment_id} atualizado para paid e commitado")
+    
+    # ============================================================================
+    # ✅ SISTEMA DE ASSINATURAS - Criar subscription quando payment confirmado
+    # ============================================================================
+    if status == 'paid' and getattr(payment, 'has_subscription', False):
+        try:
+            subscription = create_subscription_for_payment(payment)
+            if subscription:
+                logger.info(f"✅ Subscription criada para payment {payment.payment_id}")
+                db.session.commit()
+            else:
+                logger.debug(f"Subscription não foi criada para payment {payment.payment_id} (não tem config válida)")
+        except Exception as subscription_error:
+            logger.error(f"❌ Erro ao criar subscription para payment {payment.payment_id}: {subscription_error}", exc_info=True)
+            db.session.rollback()
+    
+    # ============================================================================
+    # ✅ SISTEMA DE ASSINATURAS - Cancelar subscription quando payment refunded/failed
+    # ============================================================================
+    if status in ['refunded', 'failed', 'cancelled']:
+        try:
+            subscription = Subscription.query.filter_by(payment_id=payment.id).first()
+            if subscription and subscription.status in ['pending', 'active']:
+                logger.info(f"🔴 Cancelando subscription {subscription.id} - payment {payment.payment_id} refunded/failed")
+                old_status = subscription.status
+                subscription.status = 'cancelled'
+                subscription.removed_at = datetime.now(timezone.utc)
+                subscription.removed_by = 'system_refunded'
+                
+                # ✅ Tentar remover usuário do grupo se subscription estava ativa
+                # FIXME: Implementar quando função for migrada
+                # if old_status == 'active' and subscription.vip_chat_id:
+                #     try:
+                #         remove_user_from_vip_group(subscription, max_retries=1)
+                #     except Exception as remove_error:
+                #         logger.warning(f"⚠️ Não foi possível remover usuário do grupo: {remove_error}")
+                
+                db.session.commit()
+                logger.info(f"✅ Subscription {subscription.id} cancelada")
+        except Exception as cancel_error:
+            logger.error(f"❌ Erro ao cancelar subscription para payment {payment.payment_id}: {cancel_error}", exc_info=True)
+            db.session.rollback()
+    
+    # ============================================================================
+    # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
+    # ============================================================================
+    logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: Verificando deve_enviar_entregavel={deve_enviar_entregavel} | status='{status}'")
+    
+    if deve_enviar_entregavel:
+        # ✅ CRÍTICO: Refresh antes de validar status
+        db.session.refresh(payment)
+        logger.info(f"✅ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=True - VAI ENVIAR ENTREGÁVEL")
         
-        return delivery_result.get('success', False)
-        
-    except Exception as e:
-        logger.error(f"❌ Erro no processamento de pagamento: {e}", exc_info=True)
-        return False
+        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+        if payment.status == 'paid':
+            logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
+            try:
+                resultado = send_payment_delivery(payment, bot_manager, socketio)
+                if resultado:
+                    logger.info(f"✅ Entregável enviado com sucesso para {payment.payment_id}")
+                else:
+                    logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
+            except Exception as delivery_error:
+                logger.exception(f"❌ Erro ao enviar entregável: {delivery_error}")
+        else:
+            logger.error(
+                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+            )
+    else:
+        logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
+    
+    # ============================================================================
+    # ✅ META PIXEL: Purchase NÃO é disparado aqui (webhook/reconciliador)
+    # ============================================================================
+    # ✅ NOVA ARQUITETURA: Purchase é disparado APENAS quando lead acessa link de entrega
+    # ✅ Purchase NÃO dispara quando pagamento é confirmado (PIX pago)
+    # ✅ Purchase dispara quando lead RECEBE entregável no Telegram e clica no link (/delivery/<token>)
+    # ✅ Isso garante tracking 100% preciso: Purchase = conversão REAL (lead acessou produto)
+    logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+    
+    # ============================================================================
+    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
+    # ============================================================================
+    logger.info(f"🔍 [UPSELLS] Verificando condições: status='{status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+    
+    if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+        logger.info(f"✅ [UPSELLS] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+        # Upsells serão processados pelo bot_manager que chamou esta função
+        # (mantido compatibilidade com chamada existente)
+    
+    return {'status': 'processed'}
 
 
 # ==================== RECONCILIADORES (LAZARUS RECOVERY - 2026-04-06) ====================
