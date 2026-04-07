@@ -1876,6 +1876,10 @@ class BotManager:
         """
         Processa mensagens de texto (não comandos)
         
+        # Lock variables - MUST be declared at function start to avoid scope issues
+        lock_acquired = False
+        lock_key = None
+        
         # ✅ CORREÇÃO CRÍTICA QI 600+:
         - Verifica se há conversa ativa (mensagens do bot nos últimos 30 min)
         - Se houver conversa ativa, NÃO reinicia funil (apenas salva mensagem)
