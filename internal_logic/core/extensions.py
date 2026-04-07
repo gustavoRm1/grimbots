@@ -66,6 +66,7 @@ def create_app():
     from internal_logic.blueprints.public.routes import public_bp
     from internal_logic.blueprints.delivery.routes import delivery_bp
     from internal_logic.blueprints.remarketing.routes import remarketing_bp
+    from internal_logic.blueprints.bots.routes import bots_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -75,6 +76,7 @@ def create_app():
     app.register_blueprint(public_bp)
     app.register_blueprint(delivery_bp)
     app.register_blueprint(remarketing_bp, url_prefix='/remarketing')
+    app.register_blueprint(bots_bp, url_prefix='/bots')
     
     # ============================================================================
     # REGISTRAR BLUEPRINT DE GAMIFICAÇÃO (se disponível)
