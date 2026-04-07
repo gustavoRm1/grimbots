@@ -223,7 +223,11 @@
                     <td>
                         <div class="date-cell">
                             <i class="far fa-calendar-alt text-gray-500"></i>
-                            {{ item.last_activity.strftime('%d/%m/%Y %H:%M') }}
+                            {% if item.last_activity %}
+                                {{ item.last_activity.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                ---
+                            {% endif %}
                         </div>
                     </td>
                     <td>
