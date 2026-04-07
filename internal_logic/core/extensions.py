@@ -129,6 +129,16 @@ def create_app():
     register_commands(app)
     
     # ============================================================================
+    # 🔥 CRÍTICO: MOTOR DE AUTO-CURA DE WEBHOOKS (SELF-HEALING ARCHITECTURE)
+    # ============================================================================
+    # Inicia thread de sincronização de webhooks no boot do servidor.
+    # NÃO bloqueia o Gunicorn - roda em background (daemon thread).
+    # Garante que todos os bots ativos estejam sempre conectados ao Telegram.
+    # ============================================================================
+    from internal_logic.services.webhook_syncer import start_webhook_sync_thread
+    start_webhook_sync_thread(app)
+    
+    # ============================================================================
     # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS
     # ============================================================================
     @app.teardown_request
