@@ -249,7 +249,7 @@ class StatsService:
     @staticmethod
     def get_remarketing_metrics(bot_id):
         """
-        Calcula métricas de remarketing do bot
+        Calcula métricas de remarketing do bot usando SQL direto
         
         Args:
             bot_id: ID do bot
@@ -258,18 +258,37 @@ class StatsService:
             dict: Métricas de remarketing
         """
         try:
-            # Campanhas do bot
-            total_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).count()
-            active_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='active').count()
-            completed_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='completed').count()
+            # Usar SQL direto para evitar problemas de schema
+            engine = db.get_engine()
+            connection = engine.connect()
             
-            # Totais de campanhas (query otimizada)
-            campaign_totals = db.session.query(
-                func.sum(RemarketingCampaign.total_sent).label('total_sent'),
-                func.sum(RemarketingCampaign.total_clicks).label('total_clicks'),
-                func.sum(RemarketingCampaign.total_sales).label('total_sales'),
-                func.sum(RemarketingCampaign.revenue_generated).label('revenue_generated')
-            ).filter(RemarketingCampaign.bot_id == bot_id).first()
+            # Campanhas do bot
+            total_campaigns = connection.execute(
+                "SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = ?", 
+                (bot_id,)
+            ).scalar()
+            
+            active_campaigns = connection.execute(
+                "SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = ? AND status = 'active'", 
+                (bot_id,)
+            ).scalar()
+            
+            completed_campaigns = connection.execute(
+                "SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = ? AND status = 'completed'", 
+                (bot_id,)
+            ).scalar()
+            
+            # Totais de campanhas
+            campaign_totals = connection.execute(
+                """SELECT 
+                    COALESCE(SUM(total_sent), 0) as total_sent,
+                    COALESCE(SUM(total_clicks), 0) as total_clicks,
+                    COALESCE(SUM(total_sales), 0) as total_sales,
+                    COALESCE(SUM(revenue_generated), 0) as revenue_generated
+                FROM remarketing_campaigns 
+                WHERE bot_id = ?""",
+                (bot_id,)
+            ).first()
             
             total_sent = int(campaign_totals.total_sent or 0)
             total_clicks = int(campaign_totals.total_clicks or 0)
@@ -280,6 +299,8 @@ class StatsService:
             click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0.0
             conversion_rate = (campaign_sales / total_sent * 100) if total_sent > 0 else 0.0
             avg_ticket = (campaign_revenue / campaign_sales) if campaign_sales > 0 else 0.0
+            
+            connection.close()
             
             return {
                 'total_campaigns': total_campaigns,

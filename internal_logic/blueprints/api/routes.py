@@ -7,6 +7,7 @@ Contém todas as rotas de API usadas pelo frontend via AJAX
 import logging
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
+from flask_wtf.csrf import CSRFProtect
 
 from internal_logic.core.models import Bot
 from internal_logic.services.stats_service import StatsService
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Criar API Blueprint (sem prefixo para manter /api/...)
 api_bp = Blueprint('api', __name__)
+csrf = CSRFProtect()
 
 
 # ============================================================================
@@ -23,6 +25,7 @@ api_bp = Blueprint('api', __name__)
 
 @api_bp.route('/bots/<int:bot_id>/stats')
 @login_required
+@csrf.exempt
 def bot_stats_api(bot_id):
     """API para estatísticas do bot (usada pelo frontend via AJAX)"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -47,7 +50,7 @@ def bot_stats_api(bot_id):
         peak_hours = StatsService.get_peak_hours(bot_id, period)
         
         # Retornar JSON conforme estrutura esperada pelo template
-        return jsonify({
+        response_data = {
             'general': {
                 'total_users': metrics['total_users'],
                 'total_sales': metrics['total_sales'],
@@ -73,10 +76,20 @@ def bot_stats_api(bot_id):
                 'daily_sales': chart_data,
                 'period': period
             },
+            'daily_chart': chart_data,  # ✅ CORREÇÃO: JavaScript espera 'daily_chart'
             'period_label': f'Últimos {period} dias' if str(period).isdigit() else 'Todo o período',
             'gateways': gateway_stats,
             'peak_hours': peak_hours
-        })
+        }
+        
+        # ✅ LOG: Imprimir resposta para debugging
+        logger.info(f"🔍 API RESPONSE for bot {bot_id}:")
+        logger.info(f"  total_sales: {response_data['general']['total_sales']}")
+        logger.info(f"  total_revenue: {response_data['general']['total_revenue']}")
+        logger.info(f"  daily_chart length: {len(response_data['daily_chart'])}")
+        logger.info(f"  chart_data sample: {response_data['daily_chart'][:3] if response_data['daily_chart'] else 'EMPTY'}")
+        
+        return jsonify(response_data)
         
     except Exception as e:
         logger.error(f"Error in stats API for bot {bot_id}: {e}")
@@ -89,6 +102,7 @@ def bot_stats_api(bot_id):
 
 @api_bp.route('/bots/<int:bot_id>/analytics-v2')
 @login_required
+@csrf.exempt
 def bot_analytics_v2(bot_id):
     """API Analytics V2.0 - Dados demográficos e métricas avançadas"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
