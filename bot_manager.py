@@ -466,15 +466,13 @@ class BotManager:
         
         self.bot_threads: Dict[int, threading.Thread] = {}
         
-        # ✅ CACHE DE RATE LIMITING (em memória)
+        # ✅ CACHE DE RATE LIMITING (em memória - por worker)
         self.rate_limit_cache = {}  # {user_key: timestamp}
         
-        # ✅ SESSÕES DE MÚLTIPLOS ORDER BUMPS
-        self.order_bump_sessions = {}  # {user_key: session_data}
-        
-        # ✅ CACHE DE IDEMPOTÊNCIA: PIX já gerados (evita duplicação em cliques repetidos)
-        self.generated_pix_cache = {}  # {user_key: {'pix_data': {...}, 'timestamp': time.time(), 'payment_id': '...'}}
-        self.PIX_CACHE_TTL = 300  # 5 minutos de cache
+        # ✅ SESSÕES DE ORDER BUMP MIGRADAS PARA REDIS (multi-worker)
+        # Chaves: gb:ob_session:{user_key} (TTL 10 min)
+        # Chaves: gb:pix_cache:{user_key} (TTL 5 min)
+        # Redis TTL faz cleanup automático - sem threads necessárias
         
         # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
         def cleanup_cache():
@@ -495,46 +493,6 @@ class BotManager:
         
         cleanup_thread = threading.Thread(target=cleanup_cache, daemon=True)
         cleanup_thread.start()
-        
-        # ✅ LIMPEZA AUTOMÁTICA DE SESSÕES DE ORDER BUMP (a cada 10 minutos)
-        def cleanup_order_bump_sessions():
-            while True:
-                time.sleep(600)  # 10 minutos
-                current_time = time.time()
-                expired_sessions = []
-                
-                # Limpar sessões com mais de 30 minutos de idade (timeout de segurança)
-                for user_key, session in self.order_bump_sessions.items():
-                    created_at = session.get('created_at', 0)
-                    # ✅ Sessões antigas sem created_at: considerar expiradas se não tiver timestamp
-                    if created_at == 0:
-                        # Sessão antiga sem timestamp: adicionar timestamp atual para próxima verificação
-                        session['created_at'] = current_time
-                        continue
-                    
-                    age_seconds = current_time - created_at if created_at > 0 else 0
-                    
-                    if age_seconds > 1800:  # 30 minutos
-                        expired_sessions.append(user_key)
-                
-                for key in expired_sessions:
-                    del self.order_bump_sessions[key]
-                    logger.info(f"🧹 Sessão de order bump expirada removida: {key}")
-                
-                # ✅ NOVO: Limpar cache de PIX expirado (TTL de 5 minutos)
-                expired_pix_cache = []
-                for user_key, cached in self.generated_pix_cache.items():
-                    if current_time - cached.get('timestamp', 0) > self.PIX_CACHE_TTL:
-                        expired_pix_cache.append(user_key)
-                
-                for key in expired_pix_cache:
-                    del self.generated_pix_cache[key]
-                
-                if expired_sessions or expired_pix_cache:
-                    logger.info(f"🧹 Order bump cleanup: {len(expired_sessions)} sessões, {len(expired_pix_cache)} cache PIX")
-        
-        cleanup_ob_thread = threading.Thread(target=cleanup_order_bump_sessions, daemon=True)
-        cleanup_ob_thread.start()
         
         # ✅ CONTROLE DE CONCORRÊNCIA: Limitar threads de remarketing simultâneas
         # Sistema multi-usuário: permite até 15 campanhas simultâneas para fluidez
@@ -4332,26 +4290,29 @@ class BotManager:
         # ✅ QI 500: RESET ABSOLUTO DO FUNIL
         
         Limpa TODOS os estados e sessões do funil:
-        - Sessões de order bump
-        - Cache de rate limiting
+        - Sessões de order bump (Redis)
+        - Cache de rate limiting (memória)
         - welcome_sent = False (ESSENCIAL - permite novo welcome)
         - last_interaction = agora
         - Qualquer estado relacionado ao funil
         
         Esta função é chamada SEMPRE que /start é recebido,
         independente de conversa ativa ou histórico.
-        
-        Args:
-            db_session: Sessão do banco (opcional, se já estiver em app_context)
         """
         try:
-            # Limpar sessões de order bump
+            # ✅ REDIS MIGRATION: Limpar sessões de order bump no Redis
             user_key_orderbump = f"orderbump_{chat_id}"
-            if user_key_orderbump in self.order_bump_sessions:
-                del self.order_bump_sessions[user_key_orderbump]
-                logger.info(f"🧹 Sessão de order bump limpa: {user_key_orderbump}")
+            session_key = f"gb:ob_session:{user_key_orderbump}"
+            pix_cache_key = f"gb:pix_cache:{user_key_orderbump}"
             
-            # Limpar cache de rate limiting
+            redis_conn = get_redis_connection()
+            deleted_session = redis_conn.delete(session_key)
+            deleted_cache = redis_conn.delete(pix_cache_key)
+            
+            if deleted_session or deleted_cache:
+                logger.info(f"🧹 Sessão de order bump limpa no Redis: {user_key_orderbump} (session={deleted_session}, cache={deleted_cache})")
+            
+            # Limpar cache de rate limiting (em memória - por worker)
             user_key_rate = f"{bot_id}_{telegram_user_id}"
             if user_key_rate in self.rate_limit_cache:
                 del self.rate_limit_cache[user_key_rate]
@@ -5330,8 +5291,7 @@ class BotManager:
             
             # ✅ NOVO: Múltiplos Order Bumps - Aceitar
             elif callback_data.startswith('multi_bump_yes_'):
-                # ✅ CORREÇÃO: Formato: multi_bump_yes_CHAT_ID_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
-                # user_key agora é independente do bot_id (apenas chat_id)
+                # ✅ REDIS MIGRATION: Formato: multi_bump_yes_CHAT_ID_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
                 parts = callback_data.replace('multi_bump_yes_', '').split('_')
                 chat_id_from_callback = int(parts[0])
                 user_key = f"orderbump_{chat_id_from_callback}"
@@ -5346,9 +5306,14 @@ class BotManager:
                     'text': '✅ Bônus adicionado!'
                 }, timeout=3)
                 
-                # Atualizar sessão
-                if user_key in self.order_bump_sessions:
-                    session = self.order_bump_sessions[user_key]
+                # ✅ REDIS MIGRATION: Buscar sessão do Redis
+                redis_conn = get_redis_connection()
+                session_key = f"gb:ob_session:{user_key}"
+                pix_cache_key = f"gb:pix_cache:{user_key}"
+                
+                session_json = redis_conn.get(session_key)
+                if session_json:
+                    session = json.loads(session_json)
                     
                     # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
                     session_chat_id = session.get('chat_id')
@@ -5356,17 +5321,15 @@ class BotManager:
                         logger.error(f"❌ Chat ID mismatch: callback de chat {chat_id_from_callback}, mas sessão é do chat {session_chat_id}!")
                         return
                     
-                    session_bot_id = session.get('bot_id', bot_id)  # ✅ Usar bot_id da sessão se disponível
+                    session_bot_id = session.get('bot_id', bot_id)
                     
                     # ✅ VALIDAÇÃO: Verificar se bot_id do callback corresponde ao bot_id da sessão
                     if session_bot_id != bot_id:
                         logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
-                        # Buscar token e chat_id corretos para o bot da sessão
-                        # ✅ REDIS BRAIN: Buscar do Redis
                         session_bot_data = self.bot_state.get_bot_data(session_bot_id)
                         if session_bot_data:
                             token = session_bot_data['token']
-                            bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                            bot_id = session_bot_id
                         else:
                             logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
                             return
@@ -5384,24 +5347,26 @@ class BotManager:
                     
                     logger.info(f"🎁 Bump aceito: {current_bump.get('description', 'Bônus')} (+R$ {bump_price:.2f})")
                     
+                    # ✅ REDIS MIGRATION: Salvar sessão atualizada no Redis (TTL 10 min renovado)
+                    redis_conn.setex(session_key, 600, json.dumps(session))
+                    
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
-                    # ✅ IDEMPOTÊNCIA: Verificar cache de PIX antes de mostrar erro
-                    if user_key in self.generated_pix_cache:
-                        cached = self.generated_pix_cache[user_key]
-                        logger.info(f"🔄 Callback 'SIM' - Reenviando PIX do cache: {cached['pix_data'].get('payment_id')}")
+                    # ✅ REDIS MIGRATION: Verificar cache de PIX no Redis antes de mostrar erro
+                    pix_cache_json = redis_conn.get(pix_cache_key)
+                    if pix_cache_json:
+                        cached = json.loads(pix_cache_json)
+                        logger.info(f"🔄 Callback 'SIM' - Reenviando PIX do cache Redis: {cached['pix_data'].get('payment_id')}")
                         self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
                         return  # ✅ Sucesso - não é erro
                     
                     # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
-                    # Callback já foi respondido acima, apenas logar como warning
-                    logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
+                    logger.warning(f"⚠️ Sessão de order bump não encontrada no Redis (já finalizada): {user_key} | Callback já processado")
             
             # ✅ NOVO: Múltiplos Order Bumps - Recusar
             elif callback_data.startswith('multi_bump_no_'):
-                # ✅ CORREÇÃO: Formato: multi_bump_no_CHAT_ID_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
-                # user_key agora é independente do bot_id (apenas chat_id)
+                # ✅ REDIS MIGRATION: Formato: multi_bump_no_CHAT_ID_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
                 parts = callback_data.replace('multi_bump_no_', '').split('_')
                 chat_id_from_callback = int(parts[0])
                 user_key = f"orderbump_{chat_id_from_callback}"
@@ -5416,9 +5381,14 @@ class BotManager:
                     'text': '❌ Bônus recusado'
                 }, timeout=3)
                 
-                # Atualizar sessão
-                if user_key in self.order_bump_sessions:
-                    session = self.order_bump_sessions[user_key]
+                # ✅ REDIS MIGRATION: Buscar sessão do Redis
+                redis_conn = get_redis_connection()
+                session_key = f"gb:ob_session:{user_key}"
+                pix_cache_key = f"gb:pix_cache:{user_key}"
+                
+                session_json = redis_conn.get(session_key)
+                if session_json:
+                    session = json.loads(session_json)
                     
                     # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
                     session_chat_id = session.get('chat_id')
@@ -5426,17 +5396,15 @@ class BotManager:
                         logger.error(f"❌ Chat ID mismatch: callback de chat {chat_id_from_callback}, mas sessão é do chat {session_chat_id}!")
                         return
                     
-                    session_bot_id = session.get('bot_id', bot_id)  # ✅ Usar bot_id da sessão se disponível
+                    session_bot_id = session.get('bot_id', bot_id)
                     
                     # ✅ VALIDAÇÃO: Verificar se bot_id do callback corresponde ao bot_id da sessão
                     if session_bot_id != bot_id:
                         logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
-                        # Buscar token e chat_id corretos para o bot da sessão
-                        # ✅ REDIS BRAIN: Buscar do Redis
                         session_bot_data = self.bot_state.get_bot_data(session_bot_id)
                         if session_bot_data:
                             token = session_bot_data['token']
-                            bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                            bot_id = session_bot_id
                         else:
                             logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
                             return
@@ -5448,19 +5416,22 @@ class BotManager:
                     
                     logger.info(f"🎁 Bump recusado: {session['order_bumps'][bump_index].get('description', 'Bônus')}")
                     
+                    # ✅ REDIS MIGRATION: Salvar sessão atualizada no Redis (TTL 10 min renovado)
+                    redis_conn.setex(session_key, 600, json.dumps(session))
+                    
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
-                    # ✅ IDEMPOTÊNCIA: Verificar cache de PIX antes de mostrar erro
-                    if user_key in self.generated_pix_cache:
-                        cached = self.generated_pix_cache[user_key]
-                        logger.info(f"🔄 Callback 'NÃO' - Reenviando PIX do cache: {cached['pix_data'].get('payment_id')}")
+                    # ✅ REDIS MIGRATION: Verificar cache de PIX no Redis antes de mostrar erro
+                    pix_cache_json = redis_conn.get(pix_cache_key)
+                    if pix_cache_json:
+                        cached = json.loads(pix_cache_json)
+                        logger.info(f"🔄 Callback 'NÃO' - Reenviando PIX do cache Redis: {cached['pix_data'].get('payment_id')}")
                         self._send_pix_message(token, chat_id_from_callback, cached['pix_data'], "🔄 Reenviando seu PIX:")
                         return  # ✅ Sucesso - não é erro
                     
                     # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
-                    # Callback já foi respondido acima, apenas logar como warning
-                    logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
+                    logger.warning(f"⚠️ Sessão de order bump não encontrada no Redis (já finalizada): {user_key} | Callback já processado")
             
             # ✅ NOVO: Order Bump Downsell - Aceitar
             elif callback_data.startswith('downsell_bump_yes_'):
@@ -6070,23 +6041,28 @@ class BotManager:
                 enabled_order_bumps = [bump for bump in order_bumps if bump.get('enabled')]
                 
                 if enabled_order_bumps:
-                    # ✅ CORREÇÃO CRÍTICA: Permitir que usuário escolha dentro do funil
-                    # Se já existe sessão ativa, CANCELAR automaticamente e iniciar nova
-                    # Isso permite que o usuário continue no funil sem perder leads
+                    # ✅ REDIS MIGRATION: Permitir que usuário escolha dentro do funil
+                    # Se já existe sessão ativa no Redis, CANCELAR automaticamente e iniciar nova
                     user_key = f"orderbump_{chat_id}"
-                    if user_key in self.order_bump_sessions:
-                        existing_session = self.order_bump_sessions[user_key]
+                    session_key = f"gb:ob_session:{user_key}"
+                    
+                    redis_conn = get_redis_connection()
+                    existing_session_json = redis_conn.get(session_key)
+                    
+                    if existing_session_json:
+                        existing_session = json.loads(existing_session_json)
                         existing_button_index = existing_session.get('button_index')
                         existing_description = existing_session.get('original_description', 'Produto')
                         
                         # ✅ SOLUÇÃO: Cancelar sessão anterior automaticamente
-                        # O usuário está manifestando nova intenção de compra - respeitar isso
                         logger.info(f"🔄 Nova intenção de compra detectada! Cancelando sessão anterior (botão {existing_button_index}) e iniciando nova (botão {button_index})")
                         
-                        # Remover sessão anterior
-                        del self.order_bump_sessions[user_key]
+                        # Remover sessão anterior do Redis
+                        redis_conn.delete(session_key)
+                        # Também limpar cache de PIX associado
+                        pix_cache_key = f"gb:pix_cache:{user_key}"
+                        redis_conn.delete(pix_cache_key)
                         
-                        # Informar usuário que nova oferta foi iniciada (opcional - não bloquear)
                         logger.info(f"✅ Sessão anterior cancelada automaticamente. Nova oferta iniciada para botão {button_index}")
                     
                     # Responder callback - AGUARDANDO order bump
@@ -7206,101 +7182,25 @@ Seu pagamento ainda não foi confirmado.
                     
                     logger.info(f"⏳ Cliente avisado que pagamento ainda está pendente")
         
-        except Exception as e:
-            logger.error(f"❌ Erro ao verificar pagamento: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def _show_multiple_order_bumps(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
-                                   original_price: float, original_description: str, button_index: int,
-                                   order_bumps: List[Dict[str, Any]]):
-        """
-        Exibe múltiplos Order Bumps SEQUENCIAIS
+# Reenviar botão de verificar
+buttons = [{
+    'text': '✅ Verificar Pagamento',
+    'callback_data': f'verify_{payment_id}'
+}]
         
-        Args:
-            bot_id: ID do bot
-            token: Token do bot
-            chat_id: ID do chat
-            user_info: Dados do usuário
-            original_price: Preço original
-            original_description: Descrição original
-            button_index: Índice do botão
-            order_bumps: Lista de order bumps habilitados
-        """
-        try:
-            # ✅ CORREÇÃO CRÍTICA: user_key deve ser independente do bot_id
-            # Usar apenas chat_id para garantir que sessão seja encontrada independente do bot que processa o callback
-            user_key = f"orderbump_{chat_id}"
-            
-            # ✅ CORREÇÃO CRÍTICA: Se já existe sessão, cancelar e substituir automaticamente
-            # Isso permite que o usuário continue no funil sem perder leads
-            if user_key in self.order_bump_sessions:
-                existing_session = self.order_bump_sessions[user_key]
-                existing_button = existing_session.get('button_index', 'N/A')
-                logger.info(f"🔄 Substituindo sessão anterior (botão {existing_button}) por nova (botão {button_index})")
-                # Remover sessão anterior para permitir nova escolha do usuário
-                del self.order_bump_sessions[user_key]
-            
-            # ✅ IMPLEMENTAÇÃO QI 600+: Copiar tracking do Redis para sessão (anela perda se sessão substituída)
-            session_tracking = None
-            try:
-                import redis
-                r = get_redis_connection()
-                
-                # Tentar recuperar tracking por chat_id (fallback robusto)
-                chat_tracking_key = f'tracking:chat:{chat_id}'
-                chat_tracking_json = r.get(chat_tracking_key)
-                if chat_tracking_json:
-                    session_tracking = json.loads(chat_tracking_json)
-                    logger.info(f"🔑 Tracking copiado para sessão de order bump via tracking:chat:{chat_id}")
-                
-                # Se não encontrou por chat, tentar buscar via BotUser
-                if not session_tracking:
-                    from flask import current_app
-                    from internal_logic.core.extensions import db
-                    from internal_logic.core.models import BotUser
-                    with current_app.app_context():
-                        bot_user = BotUser.query.filter_by(
-                            bot_id=bot_id,
-                            telegram_user_id=str(chat_id)
-                        ).first()
-                        if bot_user and bot_user.fbclid:
-                            # Tentar buscar tracking:fbclid:{fbclid}
-                            fbclid_key = f'tracking:fbclid:{bot_user.fbclid}'
-                            fbclid_tracking_json = r.get(fbclid_key)
-                            if fbclid_tracking_json:
-                                session_tracking = json.loads(fbclid_tracking_json)
-                                logger.info(f"🔑 Tracking copiado para sessão via tracking:fbclid:{bot_user.fbclid[:20]}...")
-            except Exception as tracking_error:
-                logger.warning(f"⚠️ Erro ao copiar tracking para sessão: {tracking_error}")
-            
-            # Criar nova sessão com tracking copiado
-            self.order_bump_sessions[user_key] = {
-                'bot_id': bot_id,  # ✅ CRÍTICO: Salvar bot_id na sessão para garantir consistência
-                'chat_id': chat_id,  # ✅ Salvar chat_id também para validação
-                'original_price': original_price,
-                'original_description': original_description,
-                'button_index': button_index,
-                'order_bumps': order_bumps,
-                'current_index': 0,
-                'accepted_bumps': [],
-                'total_bump_value': 0.0,
-                'created_at': time.time(),  # ✅ Timestamp para limpeza de sessões antigas
-                'fbclid': session_tracking.get('fbclid') if session_tracking else None,  # ✅ Copiar fbclid
-                'tracking': session_tracking  # ✅ Copiar tracking completo para não perder dados
-            }
-            
-            # Exibir primeiro order bump
-            self._show_next_order_bump(bot_id, token, chat_id, user_key)
-            
-        except Exception as e:
+self.send_telegram_message(
+    token=token,
+    chat_id=str(chat_id),
+    message=pending_message.strip(),
+    buttons=buttons
+)
             logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
             import traceback
             traceback.print_exc()
     
     def _show_next_order_bump(self, bot_id: int, token: str, chat_id: int, user_key: str):
         """
-        Exibe o próximo order bump na sequência
+        Exibe o próximo order bump na sequência - MIGRADO PARA REDIS (Multi-Worker)
         
         Args:
             bot_id: ID do bot
@@ -7309,11 +7209,16 @@ Seu pagamento ainda não foi confirmado.
             user_key: Chave da sessão do usuário
         """
         try:
-            if user_key not in self.order_bump_sessions:
-                logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+            # ✅ REDIS MIGRATION: Buscar sessão do Redis
+            redis_key = f"gb:ob_session:{user_key}"
+            redis_conn = get_redis_connection()
+            session_json = redis_conn.get(redis_key)
+            
+            if not session_json:
+                logger.error(f"❌ Sessão de order bump não encontrada no Redis: {redis_key}")
                 return
             
-            session = self.order_bump_sessions[user_key]
+            session = json.loads(session_json)
             
             # ✅ VALIDAÇÃO: Verificar se chat_id corresponde ao chat_id da sessão
             session_chat_id = session.get('chat_id')
@@ -7422,7 +7327,7 @@ Seu pagamento ainda não foi confirmado.
     def _finalize_order_bump_session(self, bot_id: int, token: str, chat_id: int, user_key: str):
         """
         Finaliza a sessão de order bumps e gera PIX final
-        VERSÃO CORRIGIDA: Com idempotência e TTL de sessão
+        VERSÃO REDIS: Com idempotência multi-worker via Redis
         
         Args:
             bot_id: ID do bot
@@ -7434,40 +7339,37 @@ Seu pagamento ainda não foi confirmado.
             import time
             current_time = time.time()
             
-            # ✅ IDEMPOTÊNCIA: Verificar se PIX já foi gerado recentemente
-            if user_key in self.generated_pix_cache:
-                cached = self.generated_pix_cache[user_key]
-                cache_age = current_time - cached.get('timestamp', 0)
-                
-                if cache_age < self.PIX_CACHE_TTL:
-                    # PIX já existe no cache - reenviar o mesmo (idempotência!)
-                    pix_data = cached['pix_data']
-                    logger.info(f"🔄 PIX em cache reutilizado (idempotência): {pix_data.get('payment_id')}")
-                    
-                    # Reenviar mensagem com PIX do cache
-                    self._send_pix_message(token, chat_id, pix_data, "🔄 Reenviando seu PIX:")
-                    return  # NÃO gerar novo PIX
+            # ✅ REDIS MIGRATION: Chaves para sessão e cache PIX
+            redis_conn = get_redis_connection()
+            session_key = f"gb:ob_session:{user_key}"
+            pix_cache_key = f"gb:pix_cache:{user_key}"
             
-            # Verificar sessão (pode ter sido marcada como 'pix_generated')
-            if user_key not in self.order_bump_sessions:
-                logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
-                # ✅ CORREÇÃO: Tentar recuperar do cache mesmo sem sessão
-                if user_key in self.generated_pix_cache:
-                    cached = self.generated_pix_cache[user_key]
-                    logger.info(f"🔄 Recuperando PIX do cache (sessão perdida): {cached['pix_data'].get('payment_id')}")
-                    self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
-                    return
+            # ✅ IDEMPOTÊNCIA: Verificar se PIX já foi gerado recentemente (Redis)
+            pix_cache_json = redis_conn.get(pix_cache_key)
+            if pix_cache_json:
+                cached = json.loads(pix_cache_json)
+                pix_data = cached.get('pix_data')
+                logger.info(f"🔄 PIX em cache Redis reutilizado (idempotência): {pix_data.get('payment_id')}")
+                # Reenviar mensagem com PIX do cache
+                self._send_pix_message(token, chat_id, pix_data, "🔄 Reenviando seu PIX:")
+                return  # NÃO gerar novo PIX
+            
+            # ✅ REDIS MIGRATION: Buscar sessão do Redis
+            session_json = redis_conn.get(session_key)
+            if not session_json:
+                logger.error(f"❌ Sessão de order bump não encontrada no Redis: {session_key}")
                 return  # Realmente não temos dados - erro
             
-            session = self.order_bump_sessions[user_key]
+            session = json.loads(session_json)
             
             # ✅ IDEMPOTÊNCIA: Verificar se sessão já gerou PIX
             if session.get('status') == 'pix_generated':
                 payment_id = session.get('payment_id')
                 logger.info(f"🔄 Sessão já gerou PIX anteriormente: {payment_id}")
-                # Tentar recuperar do cache
-                if user_key in self.generated_pix_cache:
-                    cached = self.generated_pix_cache[user_key]
+                # Tentar recuperar do cache (já verificado acima, mas double-check)
+                pix_cache_json = redis_conn.get(pix_cache_key)
+                if pix_cache_json:
+                    cached = json.loads(pix_cache_json)
                     self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
                     return
             
@@ -7481,12 +7383,10 @@ Seu pagamento ainda não foi confirmado.
             session_bot_id = session.get('bot_id', bot_id)
             if session_bot_id != bot_id:
                 logger.warning(f"⚠️ Bot ID mismatch em _finalize_order_bump_session: recebido {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
-                # Buscar token correto para o bot da sessão
-                # ✅ REDIS BRAIN: Buscar do Redis
                 session_bot_data = self.bot_state.get_bot_data(session_bot_id)
                 if session_bot_data:
                     token = session_bot_data['token']
-                    bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                    bot_id = session_bot_id
                 else:
                     logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo no Redis!")
                     return
@@ -7501,19 +7401,18 @@ Seu pagamento ainda não foi confirmado.
             
             logger.info(f"🎁 Finalizando sessão - Preço original: R$ {original_price:.2f}, Bumps aceitos: {len(accepted_bumps)}, Valor total: R$ {final_price:.2f}")
             
-            # ✅ CRÍTICO: Buscar config do bot para agendar downsells depois
+            # Buscar config do bot
             from internal_logic.core.models import Bot, BotUser
             from flask import current_app
             from internal_logic.core.extensions import db
             
-            # Buscar config do bot
             bot_config = None
             with current_app.app_context():
                 bot_model = Bot.query.get(bot_id)
                 if bot_model and bot_model.config:
                     bot_config = bot_model.config.to_dict()
             
-            # ✅ CRÍTICO: Buscar BotUser para obter nome e username (necessário para tracking Meta Pixel)
+            # Buscar BotUser para tracking
             customer_name = ""
             customer_username = ""
             with current_app.app_context():
@@ -7532,11 +7431,12 @@ Seu pagamento ainda não foi confirmado.
                 description=f"{original_description} + {len(accepted_bumps)} bônus" if accepted_bumps else original_description,
                 customer_name=customer_name,
                 customer_username=customer_username,
-                customer_user_id=str(chat_id),  # ✅ CRÍTICO: Usar chat_id para encontrar BotUser e tracking
+                customer_user_id=str(chat_id),
                 order_bump_shown=True,
                 order_bump_accepted=len(accepted_bumps) > 0,
                 order_bump_value=total_bump_value
             )
+            
             # ✅ UX FIX: Tratamento Amigável de Rate Limit
             if pix_data and pix_data.get('rate_limit'):
                 wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
@@ -7562,38 +7462,32 @@ Seu pagamento ainda não foi confirmado.
                 
                 logger.info(f"✅ PIX FINAL COM {len(accepted_bumps)} ORDER BUMPS ENVIADO! ID: {pix_data.get('payment_id')}")
                 
-                # ✅ IDEMPOTÊNCIA: Salvar no cache ANTES de alterar sessão
+                # ✅ REDIS MIGRATION: Salvar no cache PIX com TTL 5 minutos
                 if pix_data.get('payment_id'):
-                    self.generated_pix_cache[user_key] = {
+                    cache_data = {
                         'pix_data': pix_data,
                         'timestamp': current_time,
                         'payment_id': pix_data.get('payment_id')
                     }
-                    logger.info(f"💾 PIX salvo no cache de idempotência: {pix_data.get('payment_id')}")
+                    redis_conn.setex(pix_cache_key, 300, json.dumps(cache_data))
+                    logger.info(f"💾 PIX salvo no cache Redis: {pix_cache_key} (TTL 5min)")
                 
-                # ✅ CRÍTICO: Agendar downsells após gerar PIX (mesmo comportamento dos outros fluxos)
+                # Agendar downsells
                 if bot_config:
                     try:
                         if bot_config.get('downsells_enabled', False):
                             downsells = bot_config.get('downsells', [])
-                            logger.info(f"🔍 DEBUG Downsells (_finalize_order_bump_session) - downsells encontrados: {len(downsells)}")
                             if downsells and len(downsells) > 0:
                                 self.schedule_downsells(
                                     bot_id=bot_id,
                                     payment_id=pix_data.get('payment_id'),
                                     chat_id=chat_id,
                                     downsells=downsells,
-                                    original_price=original_price,  # ✅ Preço original (sem order bumps)
+                                    original_price=original_price,
                                     original_button_index=button_index
                                 )
-                            else:
-                                logger.warning(f"⚠️ Downsells habilitados mas lista vazia! (_finalize_order_bump_session)")
-                        else:
-                            logger.info(f"ℹ️ Downsells desabilitados ou não configurados (_finalize_order_bump_session)")
                     except Exception as e:
-                        logger.error(f"❌ Erro ao agendar downsells em _finalize_order_bump_session: {e}", exc_info=True)
-                else:
-                    logger.warning(f"⚠️ Config do bot não encontrada - não é possível agendar downsells")
+                        logger.error(f"❌ Erro ao agendar downsells: {e}", exc_info=True)
             else:
                 self.send_telegram_message(
                     token=token,
@@ -7601,12 +7495,13 @@ Seu pagamento ainda não foi confirmado.
                     message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
                 )
             
-            # ✅ CORREÇÃO: NÃO excluir sessão imediatamente!
-            # Marcar como 'pix_generated' para idempotência
+            # ✅ REDIS MIGRATION: Atualizar sessão com status 'pix_generated'
             session['status'] = 'pix_generated'
             session['pix_generated_at'] = current_time
             session['payment_id'] = pix_data.get('payment_id') if pix_data else None
-            logger.info(f"🔄 Sessão marcada como 'pix_generated': {user_key}")
+            # ✅ Atualizar no Redis com TTL renovado de 10 minutos
+            redis_conn.setex(session_key, 600, json.dumps(session))
+            logger.info(f"🔄 Sessão marcada como 'pix_generated' no Redis: {session_key}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao finalizar sessão de order bumps: {e}")
