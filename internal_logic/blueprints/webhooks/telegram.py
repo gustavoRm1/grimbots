@@ -1,8 +1,8 @@
 """
-Webhooks Telegram Blueprint - VERSÃO HÍBRIDA (Fallback Legado)
+Webhooks Telegram Blueprint - VERSÃO INVERSA (Via Expressa Primeiro)
 ===============================================================
 Recebe webhooks de atualizações do Telegram para bots.
-Implementação com Fallback para bots grandes (10k+ usuários).
+Implementação: Tenta Via Expressa (direta) primeiro, Redis apenas se necessário.
 """
 
 import logging
@@ -21,14 +21,13 @@ telegram_bp = Blueprint('telegram_webhooks', __name__)
 def telegram_webhook(bot_id):
     """
     Webhook para receber atualizações do Telegram.
-    VERSÃO HÍBRIDA: Tenta Redis primeiro, Fallback direto se falhar.
+    VERSÃO INVERSA: Via Expressa (direta) primeiro, Redis como fallback opcional.
     """
     # 🔥 CRÍTICO: Limpar qualquer transação pendente de requisições anteriores
-    # Isso previne "InFailedSqlTransaction" quando uma transação anterior falhou
     try:
         db.session.rollback()
     except Exception:
-        pass  # Ignora erro aqui, vamos tentar de qualquer forma
+        pass
     
     try:
         update = request.get_json()
@@ -37,11 +36,11 @@ def telegram_webhook(bot_id):
         
         logger.info(f"📨 Webhook Telegram: Bot {bot_id} | Update ID: {update.get('update_id')}")
         
-        # 1. Buscar bot no banco (query pura)
+        # 1. Buscar bot no banco
         try:
             bot = Bot.query.get(bot_id)
         except Exception as db_error:
-            db.session.rollback()  # Limpa transação suja
+            db.session.rollback()
             logger.error(f"❌ Erro DB ao buscar bot {bot_id}: {db_error}")
             return jsonify({'status': 'ok'}), 200
         
@@ -49,43 +48,24 @@ def telegram_webhook(bot_id):
             logger.warning(f"⚠️ Webhook para bot inexistente: {bot_id}")
             return jsonify({'status': 'ok'}), 200
         
-        # 2. TENTATIVA 1: Processar via BotManager (com Redis/state)
+        # ============================================================================
+        # 🔥 TENTATIVA 1: VIA EXPRESSA (Processamento Direto Legado) - PRIMEIRO!
+        # ============================================================================
+        # Esta é a via à prova de balas - processa direto sem Redis, sem burocracia
         try:
-            from bot_manager import BotManager
-            # 🔥 CRÍTICO: NÃO passar user_id - webhook é stateless, não tem contexto de usuário logado
-            bot_manager = BotManager(socketio=None, scheduler=None)
-            
-            # Processar com state (pode falhar se Redis não tiver o bot)
-            # 🔥 CRÍTICO: NÃO validar user_id - o token do Telegram já é a autenticação
-            result = bot_manager._process_telegram_update(bot_id, None, update)
-            
-            # Se chegou aqui, processou com sucesso via Redis path
-            logger.info(f"✅ Bot {bot_id} processado via Redis/State")
-            return jsonify({'status': 'ok'}), 200
-            
-        except Exception as redis_error:
-            # Redis path falhou - vamos para Fallback Legado
-            logger.warning(f"⚠️ Redis path falhou para bot {bot_id}: {redis_error}")
-            logger.info(f"🔄 Acionando FALLBACK LEGADO para bot {bot_id}")
-            # NÃO dar rollback aqui - o fallback ainda precisa do bot object
-        
-        # 3. TENTATIVA 2: FALLBACK LEGADO (Processamento Direto)
-        try:
-            # Fallback: Buscar config direto do banco
+            # Buscar config direto do banco
             try:
                 bot_config = bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
                 config_dict = bot_config.to_dict() if bot_config else {}
             except Exception as config_error:
                 db.session.rollback()
-                logger.error(f"❌ Erro DB ao buscar config: {config_error}")
+                logger.warning(f"⚠️ Erro ao buscar config (não crítico): {config_error}")
                 config_dict = {}  # Continua sem config
             
-            # Processar via método fallback
+            # Processar via método direto (Via Expressa)
             from bot_manager import BotManager
-            # 🔥 CRÍTICO: NÃO passar user_id - webhook é stateless
             bot_manager = BotManager(socketio=None, scheduler=None)
             
-            # Forçar processamento direto sem verificar Redis
             bot_manager._process_telegram_update_direct(
                 bot_id=bot_id,
                 token=bot.token,
@@ -93,11 +73,27 @@ def telegram_webhook(bot_id):
                 update=update
             )
             
-            logger.info(f"✅ Bot {bot_id} processado via FALLBACK LEGADO")
+            logger.info(f"✅ Bot {bot_id} processado via VIA EXPRESSA (direto)")
             return jsonify({'status': 'ok'}), 200
             
         except Exception as direct_error:
-            logger.error(f"❌ Fallback legado também falhou para bot {bot_id}: {direct_error}")
+            logger.error(f"⚠️ Via Expressa falhou para bot {bot_id}: {direct_error}")
+            logger.info(f"🔄 Acionando fallback Redis para bot {bot_id}")
+        
+        # ============================================================================
+        # TENTATIVA 2: VIA BUROCRÁTICA (Redis/State) - Fallback opcional
+        # ============================================================================
+        try:
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, scheduler=None)
+            
+            result = bot_manager._process_telegram_update(bot_id, None, update)
+            
+            logger.info(f"✅ Bot {bot_id} processado via Redis/State (fallback)")
+            return jsonify({'status': 'ok'}), 200
+            
+        except Exception as redis_error:
+            logger.error(f"❌ Via Burocrática também falhou para bot {bot_id}: {redis_error}")
             # Limpa transação antes de retornar
             try:
                 db.session.rollback()
@@ -107,7 +103,6 @@ def telegram_webhook(bot_id):
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no webhook Telegram: {e}")
-        # SEMPRE limpar transação em erro fatal
         try:
             db.session.rollback()
         except Exception:
