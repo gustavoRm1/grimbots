@@ -215,6 +215,11 @@ class PaymentService:
         customer_cpf: Optional[str] = None,
         external_id: Optional[str] = None
     ) -> PixPaymentResponse:
+        # Initialize distributed lock variables - MUST be first line
+        lock_key = None
+        lock_acquired = False
+        redis_conn = None
+        
         """
         Gera um pagamento PIX através do gateway configurado.
         
@@ -231,11 +236,6 @@ class PaymentService:
         Returns:
             PixPaymentResponse com QR code ou erro
         """
-        # Initialize distributed lock variables
-        lock_key = None
-        lock_acquired = False
-        redis_conn = None
-        
         # 1. Log de início da requisição
         self.logger.info(f"Gerando PIX - BotID: {bot_id} | Valor: {amount} | UserID: {external_id}")
         

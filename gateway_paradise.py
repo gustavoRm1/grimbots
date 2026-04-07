@@ -44,6 +44,26 @@ VALID_CPFS = [
     '15721994746'
 ]
 
+def _load_identities_if_needed():
+    """
+    Carrega identidades válidas do CSV para o cache global
+    """
+    global _VALID_IDENTITIES_CACHE
+    if not _VALID_IDENTITIES_CACHE:
+        try:
+            import csv
+            import os
+            csv_path = os.path.join(os.path.dirname(__file__), 'cpf_nome_formatado.csv')
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)  # Pular cabeçalho
+                for row in reader:
+                    if len(row) >= 2:
+                        _VALID_IDENTITIES_CACHE.append({'cpf': row[0].strip(), 'nome': row[1].strip()})
+            logger.info(f"✅ KYC Cache (Paradise): {len(_VALID_IDENTITIES_CACHE)} identidades carregadas.")
+        except Exception as e:
+            logger.error(f"❌ KYC Cache (Paradise) Erro: {e}")
+
 
 def _load_identities_to_redis(redis_client, user_id: int):
     """
