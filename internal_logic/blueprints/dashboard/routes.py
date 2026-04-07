@@ -193,19 +193,46 @@ def dashboard():
     else:
         recent_payments = []
     
-    # Mapear bots para dict serializável
+    # Mapear bots para dict serializável - V2: Stats On-Demand via SQL
     bots_list = []
     for b in bots:
+        # ============================================================================
+        # ✅ ARQUITETURA LEGADA RESTAURADA: Stats On-Demand por Bot via SQL
+        # As colunas total_sales/total_revenue NUNCA existiram no schema Bot.
+        # Calculamos em tempo real via COUNT/SUM para cada bot individualmente.
+        # ============================================================================
+        
+        # Contagem de leads para este bot
+        bot_total_users = BotUser.query.filter_by(bot_id=b.id, archived=False).count()
+        
+        # Vendas pagas para este bot
+        bot_total_sales = Payment.query.filter(
+            Payment.bot_id == b.id,
+            Payment.status == 'paid'
+        ).count()
+        
+        # Receita total para este bot
+        bot_total_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.bot_id == b.id,
+            Payment.status == 'paid'
+        ).scalar() or 0.0
+        
+        # Vendas pendentes para este bot
+        bot_pending_sales = Payment.query.filter(
+            Payment.bot_id == b.id,
+            Payment.status == 'pending'
+        ).count()
+        
         bots_list.append({
             'id': b.id,
             'name': b.name,
             'username': getattr(b, 'username', ''),
             'is_running': getattr(b, 'is_running', False),
             'is_active': getattr(b, 'is_active', True),
-            'total_users': getattr(b, 'total_users', 0),
-            'total_sales': getattr(b, 'total_sales', 0),
-            'total_revenue': float(getattr(b, 'total_revenue', 0) or 0),
-            'pending_sales': getattr(b, 'pending_sales', 0),
+            'total_users': bot_total_users,       # ✅ Calculado via SQL On-Demand
+            'total_sales': bot_total_sales,       # ✅ Calculado via SQL On-Demand
+            'total_revenue': float(bot_total_revenue),  # ✅ Calculado via SQL On-Demand
+            'pending_sales': bot_pending_sales,   # ✅ Calculado via SQL On-Demand
             'created_at': b.created_at.isoformat() if b.created_at else None
         })
     
@@ -1895,21 +1922,52 @@ def update_meta_pixel_config(bot_id):
 @dashboard_bp.route('/api/bots', methods=['GET'])
 @login_required
 def api_get_bots():
-    """Retorna lista de bots do usuário (JSON)"""
+    """Retorna lista de bots do usuário (JSON) - V2: Stats On-Demand via SQL"""
+    from sqlalchemy import func
+    from internal_logic.core.models import BotUser, Payment
+    
     bots = Bot.query.filter_by(user_id=current_user.id).all()
     
     bots_list = []
     for bot in bots:
+        # ============================================================================
+        # ✅ ARQUITETURA LEGADA RESTAURADA: Stats On-Demand via SQL
+        # As colunas total_sales/total_revenue NUNCA existiram no schema.
+        # Calculamos em tempo real via COUNT/SUM que é stateless e funciona
+        # perfeitamente em multi-worker sem race conditions.
+        # ============================================================================
+        
+        # Contagem de leads (total_users)
+        total_users = BotUser.query.filter_by(bot_id=bot.id, archived=False).count()
+        
+        # Vendas pagas (total_sales)
+        total_sales = Payment.query.filter(
+            Payment.bot_id == bot.id,
+            Payment.status == 'paid'
+        ).count()
+        
+        # Receita total (total_revenue)
+        total_revenue = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.bot_id == bot.id,
+            Payment.status == 'paid'
+        ).scalar() or 0.0
+        
+        # Vendas pendentes
+        pending_sales = Payment.query.filter(
+            Payment.bot_id == bot.id,
+            Payment.status == 'pending'
+        ).count()
+        
         bots_list.append({
             'id': bot.id,
             'name': bot.name,
             'username': getattr(bot, 'username', ''),
             'is_running': getattr(bot, 'is_running', False),
             'is_active': getattr(bot, 'is_active', True),
-            'total_users': getattr(bot, 'total_users', 0),
-            'total_sales': getattr(bot, 'total_sales', 0),
-            'total_revenue': float(getattr(bot, 'total_revenue', 0) or 0),
-            'pending_sales': getattr(bot, 'pending_sales', 0),
+            'total_users': total_users,       # ✅ Calculado via SQL On-Demand
+            'total_sales': total_sales,       # ✅ Calculado via SQL On-Demand  
+            'total_revenue': float(total_revenue),  # ✅ Calculado via SQL On-Demand
+            'pending_sales': pending_sales,   # ✅ Calculado via SQL On-Demand
             'created_at': bot.created_at.isoformat() if bot.created_at else None,
             'token': bot.token[:10] + '...' if bot.token else None  # Parcial por segurança
         })

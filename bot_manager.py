@@ -6416,41 +6416,41 @@ Desculpe, não foi possível processar seu pagamento.
                                 logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
                                 logger.info(f"   Atualizando pagamento para 'paid'...")
                                 
+                                # ============================================================================
+                                # ✅ FASE 1: GARANTIA DE RECEITA - Commit Imediato do Status
+                                # ============================================================================
                                 try:
                                     payment.status = 'paid'
                                     payment.paid_at = get_brazil_time()
-                                    payment.bot.total_sales += 1
-                                    payment.bot.total_revenue += payment.amount
-                                    payment.bot.owner.total_sales += 1
-                                    payment.bot.owner.total_revenue += payment.amount
+                                    
+                                    # ✅ COMMIT IMEDIATO - Nunca rollback após confirmar receita
+                                    db.session.commit()
+                                    logger.info(f"💰 [VERIFY UMBRELLAPAY] Pagamento CONFIRMADO e COMMITADO - ID: {payment.payment_id}")
+                                    
+                                except Exception as commit_error:
+                                    db.session.rollback()
+                                    logger.error(f"❌ [VERIFY UMBRELLAPAY] ERRO CRÍTICO ao confirmar pagamento: {commit_error}", exc_info=True)
+                                    return  # Abortar sem processar liberação
+                                
+                                # ============================================================================
+                                # ✅ FASE 2: PROCESSAMENTO DE LIBERAÇÃO (Isolado - pode falhar sem perder venda)
+                                # ============================================================================
+                                try:
+                                    # ✅ Recarregar objeto para garantir estado atualizado
+                                    db.session.refresh(payment)
                                     
                                     # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
                                     # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
-                                    logger.info(f"✅ [VERIFY UMBRELLAPAY] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                                    logger.info(f"✅ [VERIFY UMBRELLAPAY] Purchase será disparado apenas quando lead acessar link de entrega")
                                     
-                                    # ✅ COMMIT ATÔMICO com rollback em caso de erro
-                                    db.session.commit()
-                                    logger.info(f"💾 [VERIFY UMBRELLAPAY] Pagamento atualizado via verificação dupla")
-                                    
-                                    # ✅ CRÍTICO: Recarregar objeto do banco para garantir status atualizado
-                                    db.session.refresh(payment)
-                                    
-                                    # ✅ VALIDAÇÃO PÓS-UPDATE: Verificar se status foi atualizado corretamente
-                                    if payment.status == 'paid':
-                                        logger.info(f"✅ [VERIFY UMBRELLAPAY] Validação pós-update: Status confirmado como 'paid'")
-                                    else:
-                                        logger.error(f"🚨 [VERIFY UMBRELLAPAY] ERRO CRÍTICO: Status não foi atualizado corretamente!")
-                                        logger.error(f"   Esperado: 'paid', Atual: {payment.status}")
-                                        logger.error(f"   Payment ID: {payment.payment_id}")
-                                    
-                                    # ✅ VERIFICAR CONQUISTAS
+                                    # ✅ VERIFICAR CONQUISTAS (não crítico)
                                     try:
                                         from internal_logic.services.achievements import check_and_unlock_achievements
                                         new_achievements = check_and_unlock_achievements(payment.bot.owner)
                                         if new_achievements:
                                             logger.info(f"🏆 [VERIFY UMBRELLAPAY] {len(new_achievements)} conquista(s) desbloqueada(s)!")
                                     except Exception as e:
-                                        logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Erro ao verificar conquistas: {e}", exc_info=True)
+                                        logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Erro ao verificar conquistas (não crítico): {e}")
                                     
                                     # ============================================================================
                                     # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL
@@ -6605,30 +6605,42 @@ Desculpe, não foi possível processar seu pagamento.
                                 if api_status and api_status.get('status') == 'paid':
                                     if payment.status == 'pending':
                                         logger.info(f"✅ API confirmou pagamento! Atualizando status...")
-                                        payment.status = 'paid'
-                                        from internal_logic.core.models import get_brazil_time
-                                        payment.paid_at = get_brazil_time()
-                                        payment.bot.total_sales += 1
-                                        payment.bot.total_revenue += payment.amount
-                                        payment.bot.owner.total_sales += 1
-                                        payment.bot.owner.total_revenue += payment.amount
                                         
-                                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
-                                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
-                                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
-                                        
-                                        db.session.commit()
-                                        logger.info(f"💾 Pagamento atualizado via consulta ativa")
-                                        
-                                        db.session.refresh(payment)
-                                        
+                                        # ============================================================================
+                                        # ✅ FASE 1: GARANTIA DE RECEITA - Commit Imediato do Status
+                                        # ============================================================================
                                         try:
-                                            from internal_logic.services.achievements import check_and_unlock_achievements
-                                            new_achievements = check_and_unlock_achievements(payment.bot.owner)
-                                            if new_achievements:
-                                                logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
-                                        except Exception as e:
-                                            logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
+                                            payment.status = 'paid'
+                                            from internal_logic.core.models import get_brazil_time
+                                            payment.paid_at = get_brazil_time()
+                                            
+                                            # ✅ COMMIT IMEDIATO - Nunca rollback após confirmar receita
+                                            db.session.commit()
+                                            logger.info(f"💰 Pagamento CONFIRMADO e COMMITADO - ID: {payment.payment_id}")
+                                            
+                                        except Exception as commit_error:
+                                            db.session.rollback()
+                                            logger.error(f"❌ ERRO CRÍTICO ao confirmar pagamento: {commit_error}", exc_info=True)
+                                            return  # Abortar sem processar liberação
+                                        
+                                        # ============================================================================
+                                        # ✅ FASE 2: PROCESSAMENTO DE LIBERAÇÃO (Isolado)
+                                        # ============================================================================
+                                        try:
+                                            # ✅ Recarregar objeto para garantir estado atualizado
+                                            db.session.refresh(payment)
+                                            
+                                            # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                                            logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega")
+                                            
+                                            # ✅ VERIFICAR CONQUISTAS (não crítico)
+                                            try:
+                                                from internal_logic.services.achievements import check_and_unlock_achievements
+                                                new_achievements = check_and_unlock_achievements(payment.bot.owner)
+                                                if new_achievements:
+                                                    logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
+                                            except Exception as e:
+                                                logger.warning(f"⚠️ Erro ao verificar conquistas (não crítico): {e}")
                                         
                                         # ============================================================================
                                         # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL (OUTROS GATEWAYS)
