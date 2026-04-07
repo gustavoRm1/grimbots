@@ -234,7 +234,7 @@
                         <div class="stats-cell">
                             <span class="stat-badge bots">
                                 <i class="fas fa-robot"></i>
-                                {{ item.bot_count }} bot{{ 's' if item.bot_count > 1 else '' }}
+                                {{ (item.bot_count or 0) }} bot{{ 's' if (item.bot_count or 0) > 1 else '' }}
                             </span>
                             <span class="stat-badge leads">
                                 <i class="fas fa-paper-plane"></i>
@@ -243,7 +243,7 @@
                         </div>
                     </td>
                     <td>
-                        <a href="/remarketing/group/{{ item.group_id }}" class="action-btn">
+                        <a href="/remarketing/group/{{ item.group_id or 'N/A' }}" class="action-btn">
                             <i class="fas fa-chart-line"></i>
                             Ver Analytics
                         </a>

@@ -66,11 +66,13 @@ def remarketing_history_page():
             campaign_dict['group_id'] = str(campaign.id) if campaign.id else 'N/A'
         
         # Garantir chaves obrigatórias para o template
-        campaign_dict['last_activity'] = campaign.updated_at or campaign.created_at
+        # RemarketingCampaign não tem updated_at, usar created_at ou completed_at
+        campaign_dict['last_activity'] = campaign.completed_at or campaign.started_at or campaign.created_at
         campaign_dict['status'] = campaign.status or 'unknown'
         campaign_dict['total_sent'] = campaign.total_sent or 0
         campaign_dict['success_count'] = campaign.total_sent or 0  # success_count = total_sent para compatibilidade
         campaign_dict['bot_name'] = bot.name
+        campaign_dict['bot_count'] = 1  # Por enquanto, cada campanha representa 1 bot
         
         history_by_bot[bot_id] = campaign_dict  # Usar a campanha mais recente como representante do bot
     
