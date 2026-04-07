@@ -6,7 +6,7 @@ Implementação performática com queries SQL diretas para evitar problemas de s
 
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import text
+from sqlalchemy import text, extract, func
 from internal_logic.core.extensions import db
 
 logger = logging.getLogger(__name__)
@@ -38,142 +38,138 @@ class StatsService:
         Returns:
             dict: Métricas calculadas
         """
-        try:
-            # Filtro de período
-            date_filter = StatsService.get_period_filter(period_days)
-            date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S') if period_days != 'all' else None
-            
-            # Usar SQL direto para evitar problemas de schema
-            engine = db.get_engine()
-            connection = engine.connect()
-            
-            # Total de vendas pagas
-            if date_filter_str:
-                sales_query = text("""
-                    SELECT COUNT(*) as count 
-                    FROM payments 
-                    WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
-                """)
-                total_sales = connection.execute(sales_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
-            else:
-                sales_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
-                total_sales = connection.execute(sales_query, {"bot_id": bot_id}).scalar()
-            
-            # Receita total
-            if date_filter_str:
-                revenue_query = text("""
-                    SELECT COALESCE(SUM(amount), 0) as revenue 
-                    FROM payments 
-                    WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
-                """)
-                total_revenue = connection.execute(revenue_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
-            else:
-                revenue_query = text("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
-                total_revenue = connection.execute(revenue_query, {"bot_id": bot_id}).scalar()
-            
-            # Total de checkouts iniciados (todos os status)
-            if date_filter_str:
-                checkout_query = text("""
-                    SELECT COUNT(*) as count 
-                    FROM payments 
-                    WHERE bot_id = :bot_id AND created_at >= :date_filter
-                """)
-                total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
-            else:
-                checkout_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id")
-                total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id}).scalar()
-            
-            # Taxa de conversão
-            conversion_rate = (total_sales / total_checkouts * 100) if total_checkouts > 0 else 0.0
-            
-            # Ticket médio
-            avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0.0
-            
-            # Métricas de hoje
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_start_str = today_start.strftime('%Y-%m-%d %H:%M:%S')
-            today_end_str = (today_start + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
-            
-            today_sales = connection.execute(
-                text("""SELECT COUNT(*) FROM payments 
-                   WHERE bot_id = :bot_id AND status = 'paid' 
-                   AND created_at >= :start_date AND created_at < :end_date"""),
-                {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
+        # REMOVIDO: try/except temporariamente para expor erros SQL
+        # Filtro de período
+        date_filter = StatsService.get_period_filter(period_days)
+        date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S') if period_days != 'all' else None
+        
+        # Usar SQL direto para evitar problemas de schema
+        engine = db.engine
+        connection = engine.connect()
+        
+        # Total de vendas pagas
+        if date_filter_str:
+            sales_query = text("""
+                SELECT COUNT(*) as count 
+                FROM payments 
+                WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
+            """)
+            total_sales = connection.execute(sales_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+        else:
+            sales_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
+            total_sales = connection.execute(sales_query, {"bot_id": bot_id}).scalar()
+        
+        # Receita total
+        if date_filter_str:
+            revenue_query = text("""
+                SELECT COALESCE(SUM(amount), 0) as revenue 
+                FROM payments 
+                WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
+            """)
+            total_revenue = connection.execute(revenue_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+        else:
+            revenue_query = text("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
+            total_revenue = connection.execute(revenue_query, {"bot_id": bot_id}).scalar()
+        
+        # Total de checkouts iniciados (todos os status)
+        if date_filter_str:
+            checkout_query = text("""
+                SELECT COUNT(*) as count 
+                FROM payments 
+                WHERE bot_id = :bot_id AND created_at >= :date_filter
+            """)
+            total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+        else:
+            checkout_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id")
+            total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id}).scalar()
+        
+        # Taxa de conversão
+        conversion_rate = (total_sales / total_checkouts * 100) if total_checkouts > 0 else 0.0
+        
+        # Ticket médio
+        avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0.0
+        
+        # Métricas de hoje
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_str = today_start.strftime('%Y-%m-%d %H:%M:%S')
+        today_end_str = (today_start + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        today_sales = connection.execute(
+            text("""SELECT COUNT(*) FROM payments 
+               WHERE bot_id = :bot_id AND status = 'paid' 
+               AND created_at >= :start_date AND created_at < :end_date"""),
+            {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
+        ).scalar()
+        
+        today_revenue = connection.execute(
+            text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
+               WHERE bot_id = :bot_id AND status = 'paid' 
+               AND created_at >= :start_date AND created_at < :end_date"""),
+            {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
+        ).scalar()
+        
+        # Métricas de ontem
+        yesterday_start_str = (today_start - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        yesterday_sales = connection.execute(
+            text("""SELECT COUNT(*) FROM payments 
+               WHERE bot_id = :bot_id AND status = 'paid' 
+               AND created_at >= :start_date AND created_at < :end_date"""),
+            {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
+        ).scalar()
+        
+        yesterday_revenue = connection.execute(
+            text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
+               WHERE bot_id = :bot_id AND status = 'paid' 
+               AND created_at >= :start_date AND created_at < :end_date"""),
+            {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
+        ).scalar()
+        
+        # Variação percentual
+        revenue_change = StatsService._calculate_percentage_change(today_revenue, yesterday_revenue)
+        sales_change = StatsService._calculate_percentage_change(today_sales, yesterday_sales)
+        
+        # Métricas de usuários
+        total_users = connection.execute(
+            text("SELECT COUNT(*) FROM bot_users WHERE bot_id = :bot_id"), 
+            {"bot_id": bot_id}
+        ).scalar()
+        
+        # Usuários ativos (com interação no período)
+        if date_filter_str:
+            active_users = connection.execute(
+                text("""SELECT COUNT(*) FROM bot_users 
+                   WHERE bot_id = :bot_id AND last_interaction >= :date_filter"""),
+                {"bot_id": bot_id, "date_filter": date_filter_str}
             ).scalar()
-            
-            today_revenue = connection.execute(
-                text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
-                   WHERE bot_id = :bot_id AND status = 'paid' 
-                   AND created_at >= :start_date AND created_at < :end_date"""),
-                {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
+        else:
+            active_users = total_users
+        
+        # Novos usuários no período
+        if date_filter_str:
+            new_users = connection.execute(
+                text("""SELECT COUNT(*) FROM bot_users 
+                   WHERE bot_id = :bot_id AND first_interaction >= :date_filter"""),
+                {"bot_id": bot_id, "date_filter": date_filter_str}
             ).scalar()
-            
-            # Métricas de ontem
-            yesterday_start_str = (today_start - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
-            
-            yesterday_sales = connection.execute(
-                text("""SELECT COUNT(*) FROM payments 
-                   WHERE bot_id = :bot_id AND status = 'paid' 
-                   AND created_at >= :start_date AND created_at < :end_date"""),
-                {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
-            ).scalar()
-            
-            yesterday_revenue = connection.execute(
-                text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
-                   WHERE bot_id = :bot_id AND status = 'paid' 
-                   AND created_at >= :start_date AND created_at < :end_date"""),
-                {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
-            ).scalar()
-            
-            # Variação percentual
-            revenue_change = StatsService._calculate_percentage_change(today_revenue, yesterday_revenue)
-            sales_change = StatsService._calculate_percentage_change(today_sales, yesterday_sales)
-            
-            # Métricas de usuários
-            total_users = connection.execute(
-                text("SELECT COUNT(*) FROM bot_users WHERE bot_id = :bot_id"), 
-                {"bot_id": bot_id}
-            ).scalar()
-            
-            # Usuários ativos (com interação no período)
-            if date_filter_str:
-                active_users = connection.execute(
-                    text("""SELECT COUNT(*) FROM bot_users 
-                       WHERE bot_id = :bot_id AND last_interaction >= :date_filter"""),
-                    {"bot_id": bot_id, "date_filter": date_filter_str}
-                ).scalar()
-            else:
-                active_users = total_users
-            
-            # Novos usuários no período
-            if date_filter_str:
-                new_users = connection.execute(
-                    text("""SELECT COUNT(*) FROM bot_users 
-                       WHERE bot_id = :bot_id AND created_at >= :date_filter"""),
-                    {"bot_id": bot_id, "date_filter": date_filter_str}
-                ).scalar()
-            else:
-                new_users = 0
-            
-            connection.close()
-            
-            return {
-                'total_sales': total_sales or 0,
-                'total_revenue': float(total_revenue or 0.0),
-                'avg_ticket': round(float(avg_ticket), 2),
-                'conversion_rate': round(float(conversion_rate), 2),
-                'today_sales': today_sales or 0,
-                'today_revenue': float(today_revenue or 0.0),
-                'revenue_change': round(float(revenue_change), 1),
-                'sales_change': round(float(sales_change), 1),
-                'total_users': total_users or 0,
-                'active_users': active_users or 0,
-                'new_users': new_users or 0
-            }
-            
-        except Exception as e:
-            logger.error(f"Error calculating bot metrics for bot {bot_id}: {e}")
-            return StatsService._get_empty_metrics()
+        else:
+            new_users = 0
+        
+        connection.close()
+        
+        return {
+            'total_sales': total_sales or 0,
+            'total_revenue': float(total_revenue or 0.0),
+            'avg_ticket': round(float(avg_ticket), 2),
+            'conversion_rate': round(float(conversion_rate), 2),
+            'today_sales': today_sales or 0,
+            'today_revenue': float(today_revenue or 0.0),
+            'revenue_change': round(float(revenue_change), 1),
+            'sales_change': round(float(sales_change), 1),
+            'total_users': total_users or 0,
+            'active_users': active_users or 0,
+            'new_users': new_users or 0
+        }
     
     @staticmethod
     def get_sales_chart_data(bot_id, period_days=30):
