@@ -123,6 +123,12 @@ def create_app():
         return User.query.get(int(user_id))
     
     # ============================================================================
+    # REGISTRAR COMANDOS CLI
+    # ============================================================================
+    from internal_logic.core.commands import register_commands
+    register_commands(app)
+    
+    # ============================================================================
     # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS
     # ============================================================================
     @app.teardown_request

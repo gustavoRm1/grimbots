@@ -1947,6 +1947,18 @@ def api_create_bot():
         db.session.add(bot)
         db.session.commit()
         
+        # 🔥 CRÍTICO: Enfileirar sincronização do webhook no RQ
+        # Garante que o bot está sempre online recebendo mensagens
+        try:
+            from tasks_async import task_queue
+            from internal_logic.tasks.telegram_tasks import task_sync_single_webhook
+            
+            if task_queue:
+                task_queue.enqueue(task_sync_single_webhook, bot.id)
+                logger.info(f"📥 Webhook sync enfileirado para bot {bot.id}")
+        except Exception as queue_error:
+            logger.warning(f"⚠️ Falha ao enfileirar webhook sync (não crítico): {queue_error}")
+        
         logger.info(f"Bot criado via API: {bot.name} (ID: {bot.id}) por {current_user.email}")
         
         return jsonify({
