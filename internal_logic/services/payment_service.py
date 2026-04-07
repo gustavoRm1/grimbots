@@ -12,6 +12,21 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
+# Import real gateway implementations
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from gateway_paradise import ParadisePaymentGateway
+from gateways.gateway_aguia import AguiaGateway
+from gateway_bolt import BoltGateway
+from gateway_syncpay import SyncPayGateway
+from gateway_wiinpay import WiinPayGateway
+# from gateway_atomopay import AtomoGateway  # Commented out - requires encryption setup
+# from gateway_orionpay import OrionPayGateway  # Commented out - requires encryption setup
+# from gateway_pushyn import PushynGateway  # Commented out - requires encryption setup
+# from gateway_umbrellapag import UmbrellaPagGateway  # Commented out - requires encryption setup
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,153 +83,6 @@ class BaseGateway(ABC):
         return f"****{key[-4:]}" if len(key) > 4 else "****"
 
 
-class WiinPayGateway(BaseGateway):
-    """Gateway WiinPay - Split de pagamentos"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação WiinPay para geração de PIX.
-        Endpoint: POST /api/v1/payments/pix
-        """
-        self.logger.info(f"Gerando PIX WiinPay - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API WiinPay
-        # Headers: Authorization: Bearer {config.api_key}
-        # Body: { amount, description, customer, split_config }
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="WiinPay gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        self.logger.info(f"Verificando status WiinPay: {transaction_id}")
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        self.logger.info(f"Cancelando transação WiinPay: {transaction_id}")
-        return False
-
-
-class AguiaPagsGateway(BaseGateway):
-    """Gateway AguiarPags - Simplificado"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação AguiarPags para geração de PIX.
-        """
-        self.logger.info(f"Gerando PIX AguiarPags - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API AguiarPags
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="AguiarPags gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        return False
-
-
-class SyncPayGateway(BaseGateway):
-    """Gateway SyncPay - Sincronização multi-gateway"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação SyncPay para geração de PIX.
-        """
-        self.logger.info(f"Gerando PIX SyncPay - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API SyncPay
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="SyncPay gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        return False
-
-
-class ParadiseGateway(BaseGateway):
-    """Gateway Paradise Pay - Checkout completo"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação Paradise para geração de PIX.
-        Usa product_hash e offer_hash para identificação.
-        """
-        self.logger.info(f"Gerando PIX Paradise - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API Paradise
-        # Usa: config._product_hash, config._offer_hash
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="Paradise gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        return False
-
-
-class HooPayGateway(BaseGateway):
-    """Gateway HooPay - Organizações e subcontas"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação HooPay para geração de PIX.
-        Usa organization_id para identificação.
-        """
-        self.logger.info(f"Gerando PIX HooPay - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API HooPay
-        # Usa: config._organization_id
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="HooPay gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        return False
-
-
-class AtomoGateway(BaseGateway):
-    """Gateway Atomo - Producer hash based"""
-    
-    def generate_pix(self, payment_request: PixPaymentRequest) -> PixPaymentResponse:
-        """
-        Implementação Atomo para geração de PIX.
-        Usa producer_hash para identificação.
-        """
-        self.logger.info(f"Gerando PIX Atomo - Amount: {payment_request.amount}")
-        
-        # TODO: Implementar chamada real à API Atomo
-        # Usa: config.producer_hash
-        
-        return PixPaymentResponse(
-            success=False,
-            error_message="Atomo gateway não implementado (scaffold)"
-        )
-    
-    def check_status(self, transaction_id: str) -> str:
-        return "pending"
-    
-    def cancel_transaction(self, transaction_id: str) -> bool:
-        return False
 
 
 class GatewayFactory:
@@ -226,19 +94,22 @@ class GatewayFactory:
         response = gateway.generate_pix(payment_request)
     """
     
-    # Mapeamento de gateway_type para classe
+    # Mapeamento de gateway_type para classe real
     _GATEWAYS = {
         'wiinpay': WiinPayGateway,
-        'aguiapags': AguiaPagsGateway,
-        'aguia': AguiaPagsGateway,
+        'aguia': AguiaGateway,
+        'aguiapags': AguiaGateway,
         'syncpay': SyncPayGateway,
-        'paradise': ParadiseGateway,
-        'hoopay': HooPayGateway,
-        'atomo': AtomoGateway,
+        'paradise': ParadisePaymentGateway,
+        'bolt': BoltGateway,
+        # 'atomo': AtomoGateway,  # Commented out - requires encryption setup
+        # 'orionpay': OrionPayGateway,  # Commented out - requires encryption setup
+        # 'pushyn': PushynGateway,  # Commented out - requires encryption setup
+        # 'umbrellapag': UmbrellaPagGateway,  # Commented out - requires encryption setup
     }
     
     @classmethod
-    def create(cls, gateway_config: Any) -> Optional[BaseGateway]:
+    def create(cls, gateway_config: Any) -> Optional[Any]:
         """
         Cria instância do gateway apropriado baseado no gateway_type.
         
@@ -260,10 +131,53 @@ class GatewayFactory:
             return None
         
         gateway_class = cls._GATEWAYS[gateway_type]
-        gateway_instance = gateway_class(gateway_config)
         
-        logger.info(f"GatewayFactory: Criado {gateway_class.__name__} para {gateway_type}")
-        return gateway_instance
+        try:
+            # Extrair credenciais do gateway_config
+            credentials = {}
+            if hasattr(gateway_config, 'api_key') and gateway_config.api_key:
+                credentials['api_key'] = gateway_config.api_key
+            if hasattr(gateway_config, 'secret_key') and gateway_config.secret_key:
+                credentials['secret_key'] = gateway_config.secret_key
+            if hasattr(gateway_config, 'product_hash') and gateway_config.product_hash:
+                credentials['product_hash'] = gateway_config.product_hash
+            if hasattr(gateway_config, 'offer_hash') and gateway_config.offer_hash:
+                credentials['offer_hash'] = gateway_config.offer_hash
+            if hasattr(gateway_config, 'store_id') and gateway_config.store_id:
+                credentials['store_id'] = gateway_config.store_id
+            if hasattr(gateway_config, 'company_id') and gateway_config.company_id:
+                credentials['company_id'] = gateway_config.company_id
+            if hasattr(gateway_config, 'split_user_id') and gateway_config.split_user_id:
+                credentials['split_user_id'] = gateway_config.split_user_id
+            if hasattr(gateway_config, 'split_percentage') and gateway_config.split_percentage:
+                credentials['split_percentage'] = gateway_config.split_percentage
+            
+            # Instanciar gateway baseado no tipo
+            if gateway_type == 'paradise':
+                gateway_instance = gateway_class(credentials)
+            elif gateway_type == 'aguia' or gateway_type == 'aguiapags':
+                api_key = credentials.get('api_key', '')
+                gateway_instance = gateway_class(api_key=api_key, sandbox=True)
+            elif gateway_type == 'bolt':
+                api_key = credentials.get('api_key', '')
+                company_id = credentials.get('company_id', '')
+                gateway_instance = gateway_class(api_key=api_key, company_id=company_id)
+            elif gateway_type == 'wiinpay':
+                api_key = credentials.get('api_key', '')
+                split_user_id = credentials.get('split_user_id')
+                split_percentage = credentials.get('split_percentage')
+                gateway_instance = gateway_class(api_key=api_key, split_user_id=split_user_id, split_percentage=split_percentage)
+            else:
+                # Para outros gateways, tentar passar apenas api_key
+                api_key = credentials.get('api_key', '')
+                gateway_instance = gateway_class(api_key=api_key)
+            
+            logger.info(f"GatewayFactory: Criado {gateway_class.__name__} para {gateway_type}")
+            return gateway_instance
+            
+        except Exception as e:
+            logger.error(f"GatewayFactory: Erro ao criar gateway {gateway_type}: {e}")
+            return None
     
     @classmethod
     def register_gateway(cls, gateway_type: str, gateway_class: type):
