@@ -5292,6 +5292,7 @@ class BotManager:
             # ✅ NOVO: Múltiplos Order Bumps - Aceitar
             elif callback_data.startswith('multi_bump_yes_'):
                 # ✅ REDIS MIGRATION: Formato: multi_bump_yes_CHAT_ID_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
+                import json as json_lib  # ✅ Proteção contra shadowing do módulo json
                 parts = callback_data.replace('multi_bump_yes_', '').split('_')
                 chat_id_from_callback = int(parts[0])
                 user_key = f"orderbump_{chat_id_from_callback}"
@@ -5313,7 +5314,7 @@ class BotManager:
                 
                 session_json = redis_conn.get(session_key)
                 if session_json:
-                    session = json.loads(session_json)
+                    session = json_lib.loads(session_json)
                     
                     # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
                     session_chat_id = session.get('chat_id')
@@ -5348,7 +5349,7 @@ class BotManager:
                     logger.info(f"🎁 Bump aceito: {current_bump.get('description', 'Bônus')} (+R$ {bump_price:.2f})")
                     
                     # ✅ REDIS MIGRATION: Salvar sessão atualizada no Redis (TTL 10 min renovado)
-                    redis_conn.setex(session_key, 600, json.dumps(session))
+                    redis_conn.setex(session_key, 600, json_lib.dumps(session))
                     
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
@@ -5356,7 +5357,7 @@ class BotManager:
                     # ✅ REDIS MIGRATION: Verificar cache de PIX no Redis antes de mostrar erro
                     pix_cache_json = redis_conn.get(pix_cache_key)
                     if pix_cache_json:
-                        cached = json.loads(pix_cache_json)
+                        cached = json_lib.loads(pix_cache_json)
                         logger.info(f"🔄 Callback 'SIM' - Reenviando PIX do cache Redis: {cached['pix_data'].get('payment_id')}")
                         self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
                         return  # ✅ Sucesso - não é erro
@@ -5367,6 +5368,7 @@ class BotManager:
             # ✅ NOVO: Múltiplos Order Bumps - Recusar
             elif callback_data.startswith('multi_bump_no_'):
                 # ✅ REDIS MIGRATION: Formato: multi_bump_no_CHAT_ID_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
+                import json as json_lib  # ✅ Proteção contra shadowing do módulo json
                 parts = callback_data.replace('multi_bump_no_', '').split('_')
                 chat_id_from_callback = int(parts[0])
                 user_key = f"orderbump_{chat_id_from_callback}"
@@ -5388,7 +5390,7 @@ class BotManager:
                 
                 session_json = redis_conn.get(session_key)
                 if session_json:
-                    session = json.loads(session_json)
+                    session = json_lib.loads(session_json)
                     
                     # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
                     session_chat_id = session.get('chat_id')
@@ -5417,7 +5419,7 @@ class BotManager:
                     logger.info(f"🎁 Bump recusado: {session['order_bumps'][bump_index].get('description', 'Bônus')}")
                     
                     # ✅ REDIS MIGRATION: Salvar sessão atualizada no Redis (TTL 10 min renovado)
-                    redis_conn.setex(session_key, 600, json.dumps(session))
+                    redis_conn.setex(session_key, 600, json_lib.dumps(session))
                     
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
@@ -5425,7 +5427,7 @@ class BotManager:
                     # ✅ REDIS MIGRATION: Verificar cache de PIX no Redis antes de mostrar erro
                     pix_cache_json = redis_conn.get(pix_cache_key)
                     if pix_cache_json:
-                        cached = json.loads(pix_cache_json)
+                        cached = json_lib.loads(pix_cache_json)
                         logger.info(f"🔄 Callback 'NÃO' - Reenviando PIX do cache Redis: {cached['pix_data'].get('payment_id')}")
                         self._send_pix_message(token, chat_id_from_callback, cached['pix_data'], "🔄 Reenviando seu PIX:")
                         return  # ✅ Sucesso - não é erro
@@ -6043,6 +6045,7 @@ class BotManager:
                 if enabled_order_bumps:
                     # ✅ REDIS MIGRATION: Permitir que usuário escolha dentro do funil
                     # Se já existe sessão ativa no Redis, CANCELAR automaticamente e iniciar nova
+                    import json as json_lib  # ✅ Proteção contra shadowing do módulo json
                     user_key = f"orderbump_{chat_id}"
                     session_key = f"gb:ob_session:{user_key}"
                     
@@ -6050,7 +6053,7 @@ class BotManager:
                     existing_session_json = redis_conn.get(session_key)
                     
                     if existing_session_json:
-                        existing_session = json.loads(existing_session_json)
+                        existing_session = json_lib.loads(existing_session_json)
                         existing_button_index = existing_session.get('button_index')
                         existing_description = existing_session.get('original_description', 'Produto')
                         
@@ -7205,6 +7208,8 @@ Seu pagamento ainda não foi confirmado.
             order_bumps: Lista de order bumps habilitados
         """
         try:
+            import json as json_lib  # ✅ Proteção contra shadowing do módulo json
+            
             # ✅ REDIS MIGRATION: user_key e chave Redis
             user_key = f"orderbump_{chat_id}"
             redis_key = f"gb:ob_session:{user_key}"
@@ -7214,7 +7219,7 @@ Seu pagamento ainda não foi confirmado.
             existing_session_json = redis_conn.get(redis_key)
             
             if existing_session_json:
-                existing_session = json.loads(existing_session_json)
+                existing_session = json_lib.loads(existing_session_json)
                 existing_button = existing_session.get('button_index', 'N/A')
                 logger.info(f"🔄 Substituindo sessão anterior (botão {existing_button}) por nova (botão {button_index})")
                 # Redis delete + setex vai substituir
@@ -7226,7 +7231,7 @@ Seu pagamento ainda não foi confirmado.
                 chat_tracking_key = f'tracking:chat:{chat_id}'
                 chat_tracking_json = redis_conn.get(chat_tracking_key)
                 if chat_tracking_json:
-                    session_tracking = json.loads(chat_tracking_json)
+                    session_tracking = json_lib.loads(chat_tracking_json)
                     logger.info(f"🔑 Tracking copiado para sessão via tracking:chat:{chat_id}")
                 
                 if not session_tracking:
@@ -7242,7 +7247,7 @@ Seu pagamento ainda não foi confirmado.
                             fbclid_key = f'tracking:fbclid:{bot_user.fbclid}'
                             fbclid_tracking_json = redis_conn.get(fbclid_key)
                             if fbclid_tracking_json:
-                                session_tracking = json.loads(fbclid_tracking_json)
+                                session_tracking = json_lib.loads(fbclid_tracking_json)
                                 logger.info(f"🔑 Tracking copiado via tracking:fbclid:{bot_user.fbclid[:20]}...")
             except Exception as tracking_error:
                 logger.warning(f"⚠️ Erro ao copiar tracking para sessão: {tracking_error}")
@@ -7265,7 +7270,7 @@ Seu pagamento ainda não foi confirmado.
             }
             
             # ✅ REDIS MIGRATION: Persistir no Redis com TTL 10 minutos
-            redis_conn.setex(redis_key, 600, json.dumps(session_data))
+            redis_conn.setex(redis_key, 600, json_lib.dumps(session_data))
             logger.info(f"💾 Sessão de order bump salva no Redis: {redis_key} (TTL 10min)")
             
             # Exibir primeiro order bump
@@ -7287,6 +7292,8 @@ Seu pagamento ainda não foi confirmado.
             user_key: Chave da sessão do usuário
         """
         try:
+            import json as json_lib  # ✅ Proteção contra shadowing do módulo json
+            
             # ✅ REDIS MIGRATION: Buscar sessão do Redis
             redis_key = f"gb:ob_session:{user_key}"
             redis_conn = get_redis_connection()
@@ -7296,7 +7303,7 @@ Seu pagamento ainda não foi confirmado.
                 logger.error(f"❌ Sessão de order bump não encontrada no Redis: {redis_key}")
                 return
             
-            session = json.loads(session_json)
+            session = json_lib.loads(session_json)
             
             # ✅ VALIDAÇÃO: Verificar se chat_id corresponde ao chat_id da sessão
             session_chat_id = session.get('chat_id')
@@ -7415,6 +7422,7 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             import time
+            import json as json_lib  # ✅ Proteção contra shadowing do módulo json
             current_time = time.time()
             
             # ✅ REDIS MIGRATION: Chaves para sessão e cache PIX
@@ -7425,7 +7433,7 @@ Seu pagamento ainda não foi confirmado.
             # ✅ IDEMPOTÊNCIA: Verificar se PIX já foi gerado recentemente (Redis)
             pix_cache_json = redis_conn.get(pix_cache_key)
             if pix_cache_json:
-                cached = json.loads(pix_cache_json)
+                cached = json_lib.loads(pix_cache_json)
                 pix_data = cached.get('pix_data')
                 logger.info(f"🔄 PIX em cache Redis reutilizado (idempotência): {pix_data.get('payment_id')}")
                 # Reenviar mensagem com PIX do cache
@@ -7438,7 +7446,7 @@ Seu pagamento ainda não foi confirmado.
                 logger.error(f"❌ Sessão de order bump não encontrada no Redis: {session_key}")
                 return  # Realmente não temos dados - erro
             
-            session = json.loads(session_json)
+            session = json_lib.loads(session_json)
             
             # ✅ IDEMPOTÊNCIA: Verificar se sessão já gerou PIX
             if session.get('status') == 'pix_generated':
@@ -7447,7 +7455,7 @@ Seu pagamento ainda não foi confirmado.
                 # Tentar recuperar do cache (já verificado acima, mas double-check)
                 pix_cache_json = redis_conn.get(pix_cache_key)
                 if pix_cache_json:
-                    cached = json.loads(pix_cache_json)
+                    cached = json_lib.loads(pix_cache_json)
                     self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
                     return
             
@@ -7547,7 +7555,7 @@ Seu pagamento ainda não foi confirmado.
                         'timestamp': current_time,
                         'payment_id': pix_data.get('payment_id')
                     }
-                    redis_conn.setex(pix_cache_key, 300, json.dumps(cache_data))
+                    redis_conn.setex(pix_cache_key, 300, json_lib.dumps(cache_data))
                     logger.info(f"💾 PIX salvo no cache Redis: {pix_cache_key} (TTL 5min)")
                 
                 # Agendar downsells
@@ -7578,7 +7586,7 @@ Seu pagamento ainda não foi confirmado.
             session['pix_generated_at'] = current_time
             session['payment_id'] = pix_data.get('payment_id') if pix_data else None
             # ✅ Atualizar no Redis com TTL renovado de 10 minutos
-            redis_conn.setex(session_key, 600, json.dumps(session))
+            redis_conn.setex(session_key, 600, json_lib.dumps(session))
             logger.info(f"🔄 Sessão marcada como 'pix_generated' no Redis: {session_key}")
             
         except Exception as e:
