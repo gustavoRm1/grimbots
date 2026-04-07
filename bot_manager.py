@@ -6072,6 +6072,7 @@ class BotManager:
                     }, timeout=3)
                     
                     logger.info(f"🎁 {len(enabled_order_bumps)} Order Bumps detectados para este botão!")
+                    # ✅ CORREÇÃO: Chamar _show_multiple_order_bumps (função correta restaurada)
                     self._show_multiple_order_bumps(bot_id, token, chat_id, user_info, 
                                                    price, description, button_index, enabled_order_bumps)
                     return  # Aguarda resposta dos order bumps
@@ -7182,6 +7183,94 @@ Seu pagamento ainda não foi confirmado.
                     
                     logger.info(f"⏳ Cliente avisado que pagamento ainda está pendente")
         
+        except Exception as e:
+            logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _show_multiple_order_bumps(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
+                                   original_price: float, original_description: str, button_index: int,
+                                   order_bumps: List[Dict[str, Any]]):
+        """
+        Exibe múltiplos Order Bumps SEQUENCIAIS - VERSÃO REDIS (Multi-Worker)
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot
+            chat_id: ID do chat
+            user_info: Dados do usuário
+            original_price: Preço original
+            original_description: Descrição original
+            button_index: Índice do botão
+            order_bumps: Lista de order bumps habilitados
+        """
+        try:
+            # ✅ REDIS MIGRATION: user_key e chave Redis
+            user_key = f"orderbump_{chat_id}"
+            redis_key = f"gb:ob_session:{user_key}"
+            
+            # ✅ REDIS MIGRATION: Verificar se já existe sessão
+            redis_conn = get_redis_connection()
+            existing_session_json = redis_conn.get(redis_key)
+            
+            if existing_session_json:
+                existing_session = json.loads(existing_session_json)
+                existing_button = existing_session.get('button_index', 'N/A')
+                logger.info(f"🔄 Substituindo sessão anterior (botão {existing_button}) por nova (botão {button_index})")
+                # Redis delete + setex vai substituir
+                redis_conn.delete(redis_key)
+            
+            # ✅ IMPLEMENTAÇÃO QI 600+: Copiar tracking do Redis para sessão
+            session_tracking = None
+            try:
+                chat_tracking_key = f'tracking:chat:{chat_id}'
+                chat_tracking_json = redis_conn.get(chat_tracking_key)
+                if chat_tracking_json:
+                    session_tracking = json.loads(chat_tracking_json)
+                    logger.info(f"🔑 Tracking copiado para sessão via tracking:chat:{chat_id}")
+                
+                if not session_tracking:
+                    from flask import current_app
+                    from internal_logic.core.extensions import db
+                    from internal_logic.core.models import BotUser
+                    with current_app.app_context():
+                        bot_user = BotUser.query.filter_by(
+                            bot_id=bot_id,
+                            telegram_user_id=str(chat_id)
+                        ).first()
+                        if bot_user and bot_user.fbclid:
+                            fbclid_key = f'tracking:fbclid:{bot_user.fbclid}'
+                            fbclid_tracking_json = redis_conn.get(fbclid_key)
+                            if fbclid_tracking_json:
+                                session_tracking = json.loads(fbclid_tracking_json)
+                                logger.info(f"🔑 Tracking copiado via tracking:fbclid:{bot_user.fbclid[:20]}...")
+            except Exception as tracking_error:
+                logger.warning(f"⚠️ Erro ao copiar tracking para sessão: {tracking_error}")
+            
+            # ✅ REDIS MIGRATION: Criar sessão e salvar no Redis
+            session_data = {
+                'bot_id': bot_id,
+                'chat_id': chat_id,
+                'original_price': original_price,
+                'original_description': original_description,
+                'button_index': button_index,
+                'order_bumps': order_bumps,
+                'current_index': 0,
+                'accepted_bumps': [],
+                'total_bump_value': 0.0,
+                'created_at': time.time(),
+                'fbclid': session_tracking.get('fbclid') if session_tracking else None,
+                'tracking': session_tracking,
+                'status': 'active'
+            }
+            
+            # ✅ REDIS MIGRATION: Persistir no Redis com TTL 10 minutos
+            redis_conn.setex(redis_key, 600, json.dumps(session_data))
+            logger.info(f"💾 Sessão de order bump salva no Redis: {redis_key} (TTL 10min)")
+            
+            # Exibir primeiro order bump
+            self._show_next_order_bump(bot_id, token, chat_id, user_key)
+            
         except Exception as e:
             logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
             import traceback
