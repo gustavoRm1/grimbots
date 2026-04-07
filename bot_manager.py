@@ -7182,18 +7182,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     logger.info(f"⏳ Cliente avisado que pagamento ainda está pendente")
         
-# Reenviar botão de verificar
-buttons = [{
-    'text': '✅ Verificar Pagamento',
-    'callback_data': f'verify_{payment_id}'
-}]
-        
-self.send_telegram_message(
-    token=token,
-    chat_id=str(chat_id),
-    message=pending_message.strip(),
-    buttons=buttons
-)
+        except Exception as e:
             logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
             import traceback
             traceback.print_exc()
