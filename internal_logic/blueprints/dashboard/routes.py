@@ -2090,6 +2090,209 @@ def bot_config_page(bot_id):
 
 
 # ============================================================================
+# BOT CONFIGURATION APIs (Lazy Loading + Auto-Cura)
+# ============================================================================
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/config', methods=['GET'])
+@login_required
+def get_bot_config(bot_id):
+    """Obtém configuração de um bot com Lazy Loading"""
+    try:
+        logger.info(f"🔍 Buscando config do bot {bot_id}...")
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        logger.info(f"✅ Bot encontrado: {bot.name}")
+        
+        # ✅ LAZY LOADING: Se não tiver config, cria automaticamente
+        if not bot.config:
+            logger.warning(f"⚠️ Bot {bot_id} não tem config, criando nova...")
+            config = BotConfig(bot_id=bot.id)
+            db.session.add(config)
+            db.session.commit()
+            db.session.refresh(config)
+            logger.info(f"✅ Config nova criada para bot {bot_id}")
+        else:
+            logger.info(f"✅ Config existente encontrada (ID: {bot.config.id})")
+        
+        config_dict = bot.config.to_dict()
+        logger.info(f"📦 Config serializado com sucesso")
+        logger.info(f"   - welcome_message: {len(config_dict.get('welcome_message', ''))} chars")
+        logger.info(f"   - main_buttons: {len(config_dict.get('main_buttons', []))} botões")
+        logger.info(f"   - downsells: {len(config_dict.get('downsells', []))} downsells")
+        logger.info(f"   - upsells: {len(config_dict.get('upsells', []))} upsells")
+        
+        # ✅ METADADOS ADICIONAIS: Verificar Meta Pixel do pool
+        pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        has_meta_pixel = False
+        pool_name = None
+        if pool_bot and pool_bot.pool:
+            pool = pool_bot.pool
+            has_meta_pixel = pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token
+            pool_name = pool.name
+        
+        config_dict['has_meta_pixel'] = has_meta_pixel
+        config_dict['pool_name'] = pool_name
+        
+        logger.info(f"   - Meta Pixel ativo: {'✅ Sim' if has_meta_pixel else '❌ Não'} (Pool: {pool_name or 'N/A'})")
+        
+        return jsonify(config_dict)
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao buscar configuração: {str(e)}'}), 500
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_bot_config(bot_id):
+    """Atualiza configuração de um bot com validações Poka-Yoke"""
+    logger.info(f"🔄 Iniciando atualização de config para bot {bot_id}")
+    
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    raw_data = request.get_json() or {}
+    
+    # ✅ CORREÇÃO CRÍTICA: NÃO sanitizar welcome_message - preservar emojis
+    data = raw_data.copy() if isinstance(raw_data, dict) else {}
+    
+    # Sanitizar apenas outros campos (não welcome_message)
+    if 'welcome_message' in raw_data:
+        data['welcome_message'] = raw_data['welcome_message']  # Preserva emojis!
+    
+    logger.info(f"📊 Dados recebidos: {list(data.keys())}")
+    
+    # ✅ LAZY LOADING: Cria config se não existir
+    if not bot.config:
+        logger.info(f"📝 Criando nova configuração para bot {bot_id}")
+        config = BotConfig(bot_id=bot.id)
+        db.session.add(config)
+    else:
+        logger.info(f"📝 Atualizando configuração existente para bot {bot_id}")
+        config = bot.config
+    
+    try:
+        # === CAMPOS ATUALIZÁVEIS ===
+        
+        # 1. Mensagem de boas-vindas
+        if 'welcome_message' in data:
+            config.welcome_message = data['welcome_message']
+        
+        # 2. Mídia de boas-vindas
+        if 'welcome_media_url' in data:
+            config.welcome_media_url = data['welcome_media_url']
+        if 'welcome_media_type' in data:
+            config.welcome_media_type = data['welcome_media_type']
+        if 'welcome_audio_enabled' in data:
+            config.welcome_audio_enabled = bool(data['welcome_audio_enabled'])
+        if 'welcome_audio_url' in data:
+            config.welcome_audio_url = data['welcome_audio_url']
+        
+        # 3. Botões principais com validação Poka-Yoke
+        if 'main_buttons' in data:
+            main_buttons = data['main_buttons']
+            # ✅ VALIDAÇÃO: Tratar None como array vazio
+            if main_buttons is None:
+                main_buttons = []
+            # ✅ VALIDAÇÃO: Impedir preços negativos
+            for button in main_buttons:
+                if isinstance(button, dict) and 'price' in button:
+                    try:
+                        price = float(button['price'])
+                        if price < 0:
+                            logger.warning(f"⚠️ Preço negativo detectado: {price} -> ajustando para 0")
+                            button['price'] = 0
+                    except (ValueError, TypeError):
+                        logger.warning(f"⚠️ Preço inválido detectado: {button['price']} -> ajustando para 0")
+                        button['price'] = 0
+            config.set_main_buttons(main_buttons)
+        
+        # 4. Botões de redirecionamento
+        if 'redirect_buttons' in data:
+            redirect_buttons = data['redirect_buttons']
+            # ✅ VALIDAÇÃO: Tratar None como array vazio
+            if redirect_buttons is None:
+                redirect_buttons = []
+            config.set_redirect_buttons(redirect_buttons)
+        
+        # 5. Downsells com validação Poka-Yoke
+        if 'downsells' in data:
+            downsells = data['downsells']
+            # ✅ VALIDAÇÃO: Tratar None como array vazio
+            if downsells is None:
+                downsells = []
+            config.set_downsells(downsells)
+        if 'downsells_enabled' in data:
+            config.downsells_enabled = bool(data['downsells_enabled'])
+        
+        # 6. Upsells com validação Poka-Yoke
+        if 'upsells' in data:
+            upsells = data['upsells']
+            # ✅ VALIDAÇÃO: Tratar None como array vazio
+            if upsells is None:
+                upsells = []
+            # ✅ VALIDAÇÃO: Impedir preços negativos nos upsells
+            for upsell in upsells:
+                if isinstance(upsell, dict) and 'price' in upsell:
+                    try:
+                        price = float(upsell['price'])
+                        if price < 0:
+                            logger.warning(f"⚠️ Preço de upsell negativo: {price} -> ajustando para 0")
+                            upsell['price'] = 0
+                    except (ValueError, TypeError):
+                        logger.warning(f"⚠️ Preço de upsell inválido: {upsell['price']} -> ajustando para 0")
+                        upsell['price'] = 0
+            config.set_upsells(upsells)
+        if 'upsells_enabled' in data:
+            config.upsells_enabled = bool(data['upsells_enabled'])
+        
+        # 7. Link de acesso
+        if 'access_link' in data:
+            config.access_link = data['access_link']
+        
+        # 8. Mensagens personalizadas
+        if 'success_message' in data:
+            config.success_message = data['success_message']
+        if 'pending_message' in data:
+            config.pending_message = data['pending_message']
+        
+        # 9. Fluxo visual
+        if 'flow_enabled' in data:
+            config.flow_enabled = bool(data['flow_enabled'])
+        if 'flow_steps' in data:
+            flow_steps = data['flow_steps']
+            # ✅ VALIDAÇÃO: Tratar None como array vazio
+            if flow_steps is None:
+                flow_steps = []
+            config.set_flow_steps(flow_steps)
+        if 'flow_start_step_id' in data:
+            config.flow_start_step_id = data['flow_start_step_id']
+        
+        # Salvar alterações
+        db.session.commit()
+        logger.info(f"✅ Configuração do bot {bot_id} atualizada com sucesso")
+        
+        # Retornar configuração atualizada
+        updated_config = config.to_dict()
+        
+        # Adicionar metadados novamente
+        pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        has_meta_pixel = False
+        pool_name = None
+        if pool_bot and pool_bot.pool:
+            pool = pool_bot.pool
+            has_meta_pixel = pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token
+            pool_name = pool.name
+        
+        updated_config['has_meta_pixel'] = has_meta_pixel
+        updated_config['pool_name'] = pool_name
+        
+        return jsonify(updated_config)
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao atualizar config do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao atualizar configuração: {str(e)}'}), 500
+
+
+# ============================================================================
 # NOTIFICATION SETTINGS APIs (Resgatadas da migração)
 # ============================================================================
 
