@@ -1774,22 +1774,18 @@ window.botStatsApp = function botStatsApp() {
         },
         
         async init() {
-            // ✅ FIX: Prevenir inicialização dupla
-            if (this._initialized) {
-                console.log('⚠️ Bot Stats já foi inicializado, ignorando...');
-                return;
-            }
+            console.log('=== BOT STATS INITIALIZATION ===');
+            console.log('Bot ID:', this.botId);
+            console.log('Loading state:', this.loading);
             
             try {
-                this._initialized = true;
+                console.log('Starting initialization...');
                 
-                console.log('📊 Bot Stats inicializando... Bot ID:', this.botId);
-                
-                // ✅ CARREGAR ANALYTICS V2.0 (QI 540) - Não bloquear se falhar
+                // CARREGAR ANALYTICS V2.0 (QI 540) - Não bloquear se falhar
                 try {
                     await this.loadAnalyticsV2();
                 } catch (error) {
-                    console.error('❌ Erro ao carregar Analytics V2.0 (continuando...):', error);
+                    console.error(' Erro ao carregar Analytics V2.0 (continuando...):', error);
                 }
                 
                 // ✅ CRÍTICO: Carregar stats normais - ESSENCIAL
@@ -1894,9 +1890,17 @@ window.botStatsApp = function botStatsApp() {
                 
                 const data = await response.json();
                 
-                // ✅ VALIDAÇÃO: Garantir que os dados têm a estrutura esperada
+                // DEBUG: Log completo dos dados recebidos
+                console.log("=== DADOS RECEBIDOS DO BACKEND ===");
+                console.log("Response completa:", data);
+                console.log("data.general:", data.general);
+                console.log("data.daily_chart:", data.daily_chart);
+                console.log("data.remarketing:", data.remarketing);
+                console.log("=====================================");
+                
+                // VALIDAÇÃO: Garantir que os dados têm a estrutura esperada
                 if (!data || typeof data !== 'object') {
-                    console.error('❌ Dados inválidos recebidos:', data);
+                    console.error(' Dados inválidos recebidos:', data);
                     alert('Erro: Dados recebidos são inválidos. Por favor, recarregue a página.');
                     return;
                 }
