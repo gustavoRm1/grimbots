@@ -1,14 +1,13 @@
 """
 Stats Service - Lógica de Negócio para Estatísticas de Bots
 ============================================================
-Implementação performática com queries otimizadas SQLAlchemy
+Implementação performática com queries SQL diretas para evitar problemas de schema
 """
 
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import func, extract
 from internal_logic.core.extensions import db
-from internal_logic.core.models import Payment, BotUser, RemarketingCampaign
+from internal_logic.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class StatsService:
     @staticmethod
     def get_bot_metrics(bot_id, period_days=30):
         """
-        Calcula métricas principais do bot de forma otimizada
+        Calcula métricas principais do bot usando SQL direto
         
         Args:
             bot_id: ID do bot
@@ -42,28 +41,53 @@ class StatsService:
         try:
             # Filtro de período
             date_filter = StatsService.get_period_filter(period_days)
+            date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S') if period_days != 'all' else None
             
-            # Query base para pagamentos do bot
-            payment_base = Payment.query.filter(
-                Payment.bot_id == bot_id,
-                Payment.created_at >= date_filter if period_days != 'all' else True
-            )
-            
-            # Métricas de vendas (apenas pagamentos confirmados)
-            paid_payments = payment_base.filter(Payment.status == 'paid')
+            # Usar SQL direto para evitar problemas de schema
+            engine = db.get_engine()
+            connection = engine.connect()
             
             # Total de vendas pagas
-            total_sales = paid_payments.count()
+            if date_filter_str:
+                sales_query = """
+                    SELECT COUNT(*) as count 
+                    FROM payments 
+                    WHERE bot_id = ? AND status = 'paid' AND created_at >= ?
+                """
+                total_sales = connection.execute(sales_query, (bot_id, date_filter_str)).scalar()
+            else:
+                total_sales = connection.execute(
+                    "SELECT COUNT(*) FROM payments WHERE bot_id = ? AND status = 'paid'", 
+                    (bot_id,)
+                ).scalar()
             
-            # Receita total (query otimizada com func.sum)
-            total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= date_filter if period_days != 'all' else True
-            ).scalar() or 0.0
+            # Receita total
+            if date_filter_str:
+                revenue_query = """
+                    SELECT COALESCE(SUM(amount), 0) as revenue 
+                    FROM payments 
+                    WHERE bot_id = ? AND status = 'paid' AND created_at >= ?
+                """
+                total_revenue = connection.execute(revenue_query, (bot_id, date_filter_str)).scalar()
+            else:
+                total_revenue = connection.execute(
+                    "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE bot_id = ? AND status = 'paid'",
+                    (bot_id,)
+                ).scalar()
             
             # Total de checkouts iniciados (todos os status)
-            total_checkouts = payment_base.count()
+            if date_filter_str:
+                checkout_query = """
+                    SELECT COUNT(*) as count 
+                    FROM payments 
+                    WHERE bot_id = ? AND created_at >= ?
+                """
+                total_checkouts = connection.execute(checkout_query, (bot_id, date_filter_str)).scalar()
+            else:
+                total_checkouts = connection.execute(
+                    "SELECT COUNT(*) FROM payments WHERE bot_id = ?",
+                    (bot_id,)
+                ).scalar()
             
             # Taxa de conversão
             conversion_rate = (total_sales / total_checkouts * 100) if total_checkouts > 0 else 0.0
@@ -73,68 +97,84 @@ class StatsService:
             
             # Métricas de hoje
             today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_end = today_start + timedelta(days=1)
+            today_start_str = today_start.strftime('%Y-%m-%d %H:%M:%S')
+            today_end_str = (today_start + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
             
-            today_sales = Payment.query.filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= today_start,
-                Payment.created_at < today_end
-            ).count()
+            today_sales = connection.execute(
+                """SELECT COUNT(*) FROM payments 
+                   WHERE bot_id = ? AND status = 'paid' 
+                   AND created_at >= ? AND created_at < ?""",
+                (bot_id, today_start_str, today_end_str)
+            ).scalar()
             
-            today_revenue = db.session.query(func.sum(Payment.amount)).filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= today_start,
-                Payment.created_at < today_end
-            ).scalar() or 0.0
+            today_revenue = connection.execute(
+                """SELECT COALESCE(SUM(amount), 0) FROM payments 
+                   WHERE bot_id = ? AND status = 'paid' 
+                   AND created_at >= ? AND created_at < ?""",
+                (bot_id, today_start_str, today_end_str)
+            ).scalar()
             
             # Métricas de ontem
-            yesterday_start = today_start - timedelta(days=1)
+            yesterday_start_str = (today_start - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
             
-            yesterday_sales = Payment.query.filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= yesterday_start,
-                Payment.created_at < today_start
-            ).count()
+            yesterday_sales = connection.execute(
+                """SELECT COUNT(*) FROM payments 
+                   WHERE bot_id = ? AND status = 'paid' 
+                   AND created_at >= ? AND created_at < ?""",
+                (bot_id, yesterday_start_str, today_start_str)
+            ).scalar()
             
-            yesterday_revenue = db.session.query(func.sum(Payment.amount)).filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= yesterday_start,
-                Payment.created_at < today_start
-            ).scalar() or 0.0
+            yesterday_revenue = connection.execute(
+                """SELECT COALESCE(SUM(amount), 0) FROM payments 
+                   WHERE bot_id = ? AND status = 'paid' 
+                   AND created_at >= ? AND created_at < ?""",
+                (bot_id, yesterday_start_str, today_start_str)
+            ).scalar()
             
             # Variação percentual
             revenue_change = StatsService._calculate_percentage_change(today_revenue, yesterday_revenue)
             sales_change = StatsService._calculate_percentage_change(today_sales, yesterday_sales)
             
             # Métricas de usuários
-            total_users = BotUser.query.filter_by(bot_id=bot_id).count()
+            total_users = connection.execute(
+                "SELECT COUNT(*) FROM bot_users WHERE bot_id = ?", 
+                (bot_id,)
+            ).scalar()
             
-            active_users = BotUser.query.filter(
-                BotUser.bot_id == bot_id,
-                BotUser.last_interaction >= date_filter if period_days != 'all' else True
-            ).count()
+            # Usuários ativos (com interação no período)
+            if date_filter_str:
+                active_users = connection.execute(
+                    """SELECT COUNT(*) FROM bot_users 
+                       WHERE bot_id = ? AND last_interaction >= ?""",
+                    (bot_id, date_filter_str)
+                ).scalar()
+            else:
+                active_users = total_users
             
-            new_users = BotUser.query.filter(
-                BotUser.bot_id == bot_id,
-                BotUser.created_at >= date_filter if period_days != 'all' else True
-            ).count()
+            # Novos usuários no período
+            if date_filter_str:
+                new_users = connection.execute(
+                    """SELECT COUNT(*) FROM bot_users 
+                       WHERE bot_id = ? AND created_at >= ?""",
+                    (bot_id, date_filter_str)
+                ).scalar()
+            else:
+                new_users = 0
+            
+            connection.close()
             
             return {
-                'total_sales': total_sales,
-                'total_revenue': float(total_revenue),
+                'total_sales': total_sales or 0,
+                'total_revenue': float(total_revenue or 0.0),
                 'avg_ticket': round(float(avg_ticket), 2),
                 'conversion_rate': round(float(conversion_rate), 2),
-                'today_sales': today_sales,
-                'today_revenue': float(today_revenue),
+                'today_sales': today_sales or 0,
+                'today_revenue': float(today_revenue or 0.0),
                 'revenue_change': round(float(revenue_change), 1),
                 'sales_change': round(float(sales_change), 1),
-                'total_users': total_users,
-                'active_users': active_users,
-                'new_users': new_users
+                'total_users': total_users or 0,
+                'active_users': active_users or 0,
+                'new_users': new_users or 0
             }
             
         except Exception as e:
@@ -144,7 +184,7 @@ class StatsService:
     @staticmethod
     def get_sales_chart_data(bot_id, period_days=30):
         """
-        Gera dados para gráfico de vendas diárias
+        Gera dados para gráfico de vendas diárias usando SQL direto
         
         Args:
             bot_id: ID do bot
@@ -157,20 +197,29 @@ class StatsService:
             # Determinar número de dias para o gráfico
             chart_days = min(int(period_days), 30) if str(period_days).isdigit() else 30
             date_filter = StatsService.get_period_filter(chart_days)
+            date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S')
             
-            # Query otimizada para vendas por dia
-            daily_data = db.session.query(
-                func.date(Payment.created_at).label('date'),
-                func.count(Payment.id).label('sales'),
-                func.sum(Payment.amount).label('revenue')
-            ).filter(
-                Payment.bot_id == bot_id,
-                Payment.status == 'paid',
-                Payment.created_at >= date_filter
-            ).group_by(func.date(Payment.created_at)).all()
+            # Query SQL para vendas por dia
+            engine = db.get_engine()
+            connection = engine.connect()
+            
+            chart_query = """
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as sales,
+                    COALESCE(SUM(amount), 0) as revenue
+                FROM payments 
+                WHERE bot_id = ? 
+                    AND status = 'paid' 
+                    AND created_at >= ?
+                GROUP BY DATE(created_at)
+                ORDER BY date
+            """
+            
+            daily_data = connection.execute(chart_query, (bot_id, date_filter_str)).fetchall()
             
             # Converter para dicionário para lookup rápido
-            data_by_date = {str(row.date): {'sales': row.sales, 'revenue': float(row.revenue or 0)} 
+            data_by_date = {str(row.date): {'sales': row.sales, 'revenue': float(row.revenue)} 
                            for row in daily_data}
             
             # Preencher todos os dias do período (inclusive sem vendas)
@@ -190,6 +239,7 @@ class StatsService:
                     'revenue': day_data['revenue']
                 })
             
+            connection.close()
             return chart_data
             
         except Exception as e:

@@ -3156,5 +3156,17 @@ window.botStatsApp = function botStatsApp() {
     };
 };
 </script>
+
+<!-- Gamification System -->
+<script src="{{ url_for('static', filename='js/gamification.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar gamification se disponível
+    if (typeof initGamification === 'function') {
+        initGamification();
+    }
+});
+</script>
+
 {% endblock %}
 
