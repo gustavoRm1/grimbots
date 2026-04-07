@@ -74,7 +74,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(delivery_bp)
-    app.register_blueprint(remarketing_bp)
+    app.register_blueprint(remarketing_bp, url_prefix='/remarketing')
     
     # ============================================================================
     # REGISTRAR BLUEPRINT DE GAMIFICAÇÃO (se disponível)

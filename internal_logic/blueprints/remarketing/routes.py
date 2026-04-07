@@ -42,7 +42,7 @@ def bot_remarketing_page(bot_id):
     return render_template('bot_remarketing.html', bot=bot, campaigns=campaigns_list)
 
 
-@remarketing_bp.route('/remarketing/history')
+@remarketing_bp.route('/history')
 @login_required
 def remarketing_history_page():
     """Página de histórico de todas as campanhas"""
