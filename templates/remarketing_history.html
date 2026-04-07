@@ -218,7 +218,7 @@
                 {% for item in history %}
                 <tr>
                     <td>
-                        <span class="group-id-cell">{{ item.group_id[:8] }}...</span>
+                        <span class="group-id-cell">{{ (item.group_id or '---')[:8] }}...</span>
                     </td>
                     <td>
                         <div class="date-cell">

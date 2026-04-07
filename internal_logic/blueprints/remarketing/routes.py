@@ -69,7 +69,7 @@ def remarketing_history_page():
         # Adicionar group_id aos dados da campanha para o template
         campaign_dict = campaign.to_dict()
         if 'group_id' not in campaign_dict:
-            campaign_dict['group_id'] = campaign.id  # Fallback: usar ID como group_id
+            campaign_dict['group_id'] = str(campaign.id) if campaign.id else 'N/A'  # Fallback: usar ID como group_id string
         
         history_by_bot[bot_id]['campaigns'].append(campaign_dict)
     

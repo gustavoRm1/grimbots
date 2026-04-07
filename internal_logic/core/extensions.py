@@ -70,7 +70,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(webhooks_bp)
-    app.register_blueprint(telegram_bp, url_prefix='')
+    app.register_blueprint(telegram_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(delivery_bp)
