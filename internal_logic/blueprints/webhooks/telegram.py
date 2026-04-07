@@ -52,10 +52,12 @@ def telegram_webhook(bot_id):
         # 2. TENTATIVA 1: Processar via BotManager (com Redis/state)
         try:
             from bot_manager import BotManager
-            bot_manager = BotManager(socketio=None, scheduler=None, user_id=bot.user_id)
+            # 🔥 CRÍTICO: NÃO passar user_id - webhook é stateless, não tem contexto de usuário logado
+            bot_manager = BotManager(socketio=None, scheduler=None)
             
             # Processar com state (pode falhar se Redis não tiver o bot)
-            result = bot_manager._process_telegram_update(bot_id, bot.user_id, update)
+            # 🔥 CRÍTICO: NÃO validar user_id - o token do Telegram já é a autenticação
+            result = bot_manager._process_telegram_update(bot_id, None, update)
             
             # Se chegou aqui, processou com sucesso via Redis path
             logger.info(f"✅ Bot {bot_id} processado via Redis/State")
@@ -80,7 +82,8 @@ def telegram_webhook(bot_id):
             
             # Processar via método fallback
             from bot_manager import BotManager
-            bot_manager = BotManager(socketio=None, scheduler=None, user_id=bot.user_id)
+            # 🔥 CRÍTICO: NÃO passar user_id - webhook é stateless
+            bot_manager = BotManager(socketio=None, scheduler=None)
             
             # Forçar processamento direto sem verificar Redis
             bot_manager._process_telegram_update_direct(

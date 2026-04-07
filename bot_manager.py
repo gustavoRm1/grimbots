@@ -1110,11 +1110,17 @@ class BotManager:
             try:
                 # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
                 from internal_logic.core.models import get_brazil_time
-                self.socketio.emit('bot_heartbeat', {
-                    'bot_id': bot_id,
-                    'timestamp': get_brazil_time().isoformat(),
-                    'status': 'online'
-                }, room=f'bot_{bot_id}')
+                # 🔥 CRÍTICO: Blindagem UI - não deixar WebSocket afetar processamento core
+                try:
+                    if self.socketio:
+                        self.socketio.emit('bot_heartbeat', {
+                            'bot_id': bot_id,
+                            'timestamp': get_brazil_time().isoformat(),
+                            'status': 'online'
+                        }, room=f'bot_{bot_id}')
+                except Exception as ws_error:
+                    logger.debug(f"Falha não-crítica na UI (WebSocket ignorado): {ws_error}")
+                    pass  # O processamento da mensagem DEVE continuar!
 
                 # Registrar heartbeat compartilhado (Redis) para ambientes multi-worker
                 try:
@@ -1510,7 +1516,7 @@ class BotManager:
                         from internal_logic.core.models import Bot, BotConfig
                         with current_app.app_context():
                             bot = db.session.get(Bot, bot_id)
-                            if bot and bot.is_active and bot.user_id == user_id:  # ✅ Verificar ownership
+                            if bot and bot.is_active:  # 🔥 CRÍTICO: Removida verificação de user_id - webhook é stateless
                                 config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
                                 config_dict = config_obj.to_dict() if config_obj else {}
                                 # ✅ Usar o método de registro do bot_state isolado
@@ -4768,14 +4774,20 @@ class BotManager:
                 with current_app.app_context():
                     bot = db.session.get(Bot, bot_id)
                     if bot:
-                        self.socketio.emit('bot_interaction', {
-                            'bot_id': bot_id,
-                            'type': 'start',
-                            'chat_id': chat_id,
-                            'user': message.get('from', {}).get('first_name', 'Usuário')
-                        }, room=f'user_{bot.user_id}')
-            except Exception as ws_error:
-                logger.warning(f"⚠️ Erro ao emitir WebSocket bot_interaction: {ws_error}")
+                        # 🔥 CRÍTICO: Blindagem UI - WebSocket nunca deve abortar transação
+                        try:
+                            if self.socketio:
+                                self.socketio.emit('bot_interaction', {
+                                    'bot_id': bot_id,
+                                    'type': 'start',
+                                    'chat_id': chat_id,
+                                    'user': message.get('from', {}).get('first_name', 'Usuário')
+                                }, room=f'user_{bot.user_id}')
+                        except Exception as ws_error:
+                            logger.debug(f"Falha não-crítica na UI (WebSocket ignorado): {ws_error}")
+                            pass  # Processamento continua mesmo se UI falhar
+            except Exception as db_error:
+                logger.warning(f"⚠️ Erro ao buscar bot para WebSocket (não crítico): {db_error}")
             
             logger.info(f"{'='*60}\n")
             
