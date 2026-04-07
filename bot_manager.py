@@ -1539,14 +1539,22 @@ class BotManager:
                     from internal_logic.core.models import Bot, BotConfig
                     
                     with current_app.app_context():
+                        # 🔥 CRÍTICO: Limpar transação pendente antes de começar
+                        db.session.rollback()
+                        
                         db_bot = db.session.get(Bot, bot_id)
                         if not db_bot:
                             logger.error(f"❌ Bot {bot_id} não existe no banco de dados!")
                             return  # Bot realmente não existe
                             
                         # Buscar config
-                        db_config = db_bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
-                        config_dict = db_config.to_dict() if db_config else {}
+                        try:
+                            db_config = db_bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
+                            config_dict = db_config.to_dict() if db_config else {}
+                        except Exception as config_err:
+                            db.session.rollback()  # Limpa erro de transação
+                            logger.error(f"⚠️ Erro ao buscar config: {config_err}")
+                            config_dict = {}  # Continua sem config
                         
                         # Criar bot_info manualmente do banco
                         bot_info = {
@@ -1557,6 +1565,11 @@ class BotManager:
                         
                 except Exception as fallback_error:
                     logger.error(f"❌ FALLBACK falhou para bot {bot_id}: {fallback_error}")
+                    # 🔥 CRÍTICO: Limpar transação suja antes de retornar
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                     return  # Se fallback falhou, realmente não podemos processar
             
             token = bot_info['token']
@@ -1918,6 +1931,14 @@ class BotManager:
         try:
             logger.info(f"🚀 [FALLBACK DIRECT] Processando update para bot {bot_id}")
             
+            # 🔥 CRÍTICO: Limpar transação pendente no início
+            try:
+                from flask import current_app
+                from internal_logic.core.extensions import db
+                db.session.rollback()
+            except Exception:
+                pass  # Ignora se não conseguir
+            
             update_id = update.get('update_id')
             
             # Processar mensagem diretamente (sem Redis locks/state)
@@ -1973,6 +1994,12 @@ class BotManager:
             
         except Exception as e:
             logger.error(f"❌ [FALLBACK DIRECT] Erro ao processar: {e}")
+            # 🔥 CRÍTICO: Limpar transação suja antes de propagar erro
+            try:
+                from internal_logic.core.extensions import db
+                db.session.rollback()
+            except Exception:
+                pass
             import traceback
             traceback.print_exc()
             raise  # Propagar erro para que o caller saiba que falhou

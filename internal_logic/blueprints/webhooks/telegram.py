@@ -23,6 +23,13 @@ def telegram_webhook(bot_id):
     Webhook para receber atualizações do Telegram.
     VERSÃO HÍBRIDA: Tenta Redis primeiro, Fallback direto se falhar.
     """
+    # 🔥 CRÍTICO: Limpar qualquer transação pendente de requisições anteriores
+    # Isso previne "InFailedSqlTransaction" quando uma transação anterior falhou
+    try:
+        db.session.rollback()
+    except Exception:
+        pass  # Ignora erro aqui, vamos tentar de qualquer forma
+    
     try:
         update = request.get_json()
         if not update:
@@ -31,7 +38,13 @@ def telegram_webhook(bot_id):
         logger.info(f"📨 Webhook Telegram: Bot {bot_id} | Update ID: {update.get('update_id')}")
         
         # 1. Buscar bot no banco (query pura)
-        bot = Bot.query.get(bot_id)
+        try:
+            bot = Bot.query.get(bot_id)
+        except Exception as db_error:
+            db.session.rollback()  # Limpa transação suja
+            logger.error(f"❌ Erro DB ao buscar bot {bot_id}: {db_error}")
+            return jsonify({'status': 'ok'}), 200
+        
         if not bot:
             logger.warning(f"⚠️ Webhook para bot inexistente: {bot_id}")
             return jsonify({'status': 'ok'}), 200
@@ -52,12 +65,18 @@ def telegram_webhook(bot_id):
             # Redis path falhou - vamos para Fallback Legado
             logger.warning(f"⚠️ Redis path falhou para bot {bot_id}: {redis_error}")
             logger.info(f"🔄 Acionando FALLBACK LEGADO para bot {bot_id}")
+            # NÃO dar rollback aqui - o fallback ainda precisa do bot object
         
         # 3. TENTATIVA 2: FALLBACK LEGADO (Processamento Direto)
         try:
             # Fallback: Buscar config direto do banco
-            bot_config = bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
-            config_dict = bot_config.to_dict() if bot_config else {}
+            try:
+                bot_config = bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
+                config_dict = bot_config.to_dict() if bot_config else {}
+            except Exception as config_error:
+                db.session.rollback()
+                logger.error(f"❌ Erro DB ao buscar config: {config_error}")
+                config_dict = {}  # Continua sem config
             
             # Processar via método fallback
             from bot_manager import BotManager
@@ -76,10 +95,20 @@ def telegram_webhook(bot_id):
             
         except Exception as direct_error:
             logger.error(f"❌ Fallback legado também falhou para bot {bot_id}: {direct_error}")
+            # Limpa transação antes de retornar
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             return jsonify({'status': 'ok'}), 200  # Retornar 200 para não retry
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no webhook Telegram: {e}")
+        # SEMPRE limpar transação em erro fatal
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({'status': 'ok'}), 200  # Sempre retornar 200 para Telegram
 
 
