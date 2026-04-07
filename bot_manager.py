@@ -472,6 +472,10 @@ class BotManager:
         # ✅ SESSÕES DE MÚLTIPLOS ORDER BUMPS
         self.order_bump_sessions = {}  # {user_key: session_data}
         
+        # ✅ CACHE DE IDEMPOTÊNCIA: PIX já gerados (evita duplicação em cliques repetidos)
+        self.generated_pix_cache = {}  # {user_key: {'pix_data': {...}, 'timestamp': time.time(), 'payment_id': '...'}}
+        self.PIX_CACHE_TTL = 300  # 5 minutos de cache
+        
         # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
         def cleanup_cache():
             while True:
@@ -517,8 +521,17 @@ class BotManager:
                     del self.order_bump_sessions[key]
                     logger.info(f"🧹 Sessão de order bump expirada removida: {key}")
                 
-                if expired_sessions:
-                    logger.info(f"🧹 Order bump sessions limpo: {len(expired_sessions)} sessões expiradas removidas")
+                # ✅ NOVO: Limpar cache de PIX expirado (TTL de 5 minutos)
+                expired_pix_cache = []
+                for user_key, cached in self.generated_pix_cache.items():
+                    if current_time - cached.get('timestamp', 0) > self.PIX_CACHE_TTL:
+                        expired_pix_cache.append(user_key)
+                
+                for key in expired_pix_cache:
+                    del self.generated_pix_cache[key]
+                
+                if expired_sessions or expired_pix_cache:
+                    logger.info(f"🧹 Order bump cleanup: {len(expired_sessions)} sessões, {len(expired_pix_cache)} cache PIX")
         
         cleanup_ob_thread = threading.Thread(target=cleanup_order_bump_sessions, daemon=True)
         cleanup_ob_thread.start()
@@ -5374,6 +5387,13 @@ class BotManager:
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
+                    # ✅ IDEMPOTÊNCIA: Verificar cache de PIX antes de mostrar erro
+                    if user_key in self.generated_pix_cache:
+                        cached = self.generated_pix_cache[user_key]
+                        logger.info(f"🔄 Callback 'SIM' - Reenviando PIX do cache: {cached['pix_data'].get('payment_id')}")
+                        self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
+                        return  # ✅ Sucesso - não é erro
+                    
                     # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
                     # Callback já foi respondido acima, apenas logar como warning
                     logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
@@ -5431,6 +5451,13 @@ class BotManager:
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
+                    # ✅ IDEMPOTÊNCIA: Verificar cache de PIX antes de mostrar erro
+                    if user_key in self.generated_pix_cache:
+                        cached = self.generated_pix_cache[user_key]
+                        logger.info(f"🔄 Callback 'NÃO' - Reenviando PIX do cache: {cached['pix_data'].get('payment_id')}")
+                        self._send_pix_message(token, chat_id_from_callback, cached['pix_data'], "🔄 Reenviando seu PIX:")
+                        return  # ✅ Sucesso - não é erro
+                    
                     # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
                     # Callback já foi respondido acima, apenas logar como warning
                     logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
@@ -7395,6 +7422,7 @@ Seu pagamento ainda não foi confirmado.
     def _finalize_order_bump_session(self, bot_id: int, token: str, chat_id: int, user_key: str):
         """
         Finaliza a sessão de order bumps e gera PIX final
+        VERSÃO CORRIGIDA: Com idempotência e TTL de sessão
         
         Args:
             bot_id: ID do bot
@@ -7403,11 +7431,45 @@ Seu pagamento ainda não foi confirmado.
             user_key: Chave da sessão do usuário
         """
         try:
+            import time
+            current_time = time.time()
+            
+            # ✅ IDEMPOTÊNCIA: Verificar se PIX já foi gerado recentemente
+            if user_key in self.generated_pix_cache:
+                cached = self.generated_pix_cache[user_key]
+                cache_age = current_time - cached.get('timestamp', 0)
+                
+                if cache_age < self.PIX_CACHE_TTL:
+                    # PIX já existe no cache - reenviar o mesmo (idempotência!)
+                    pix_data = cached['pix_data']
+                    logger.info(f"🔄 PIX em cache reutilizado (idempotência): {pix_data.get('payment_id')}")
+                    
+                    # Reenviar mensagem com PIX do cache
+                    self._send_pix_message(token, chat_id, pix_data, "🔄 Reenviando seu PIX:")
+                    return  # NÃO gerar novo PIX
+            
+            # Verificar sessão (pode ter sido marcada como 'pix_generated')
             if user_key not in self.order_bump_sessions:
                 logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
-                return
+                # ✅ CORREÇÃO: Tentar recuperar do cache mesmo sem sessão
+                if user_key in self.generated_pix_cache:
+                    cached = self.generated_pix_cache[user_key]
+                    logger.info(f"🔄 Recuperando PIX do cache (sessão perdida): {cached['pix_data'].get('payment_id')}")
+                    self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
+                    return
+                return  # Realmente não temos dados - erro
             
             session = self.order_bump_sessions[user_key]
+            
+            # ✅ IDEMPOTÊNCIA: Verificar se sessão já gerou PIX
+            if session.get('status') == 'pix_generated':
+                payment_id = session.get('payment_id')
+                logger.info(f"🔄 Sessão já gerou PIX anteriormente: {payment_id}")
+                # Tentar recuperar do cache
+                if user_key in self.generated_pix_cache:
+                    cached = self.generated_pix_cache[user_key]
+                    self._send_pix_message(token, chat_id, cached['pix_data'], "🔄 Reenviando seu PIX:")
+                    return
             
             # ✅ VALIDAÇÃO: Verificar se chat_id corresponde ao chat_id da sessão
             session_chat_id = session.get('chat_id')
@@ -7492,34 +7554,24 @@ Seu pagamento ainda não foi confirmado.
                 if bump_descriptions:
                     description_text += f" + {', '.join(bump_descriptions)}"
                 
-                payment_message = f"""🎯 <b>Produto:</b> {description_text}
-💰 <b>Valor:</b> R$ {final_price:.2f}
-
-📱 <b>PIX Copia e Cola:</b>
-<code>{pix_data['pix_code']}</code>
-
-<i>👆 Toque no código acima para copiar</i>
-
-⏰ <b>Válido por:</b> 30 minutos
-
-💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                # Adicionar amount ao pix_data para cache completo
+                pix_data['amount'] = final_price
+                pix_data['description'] = description_text
                 
-                buttons = [{
-                    'text': '✅ Verificar Pagamento',
-                    'callback_data': f'verify_{pix_data.get("payment_id")}'
-                }]
-                
-                self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=payment_message.strip(),
-                    buttons=buttons
-                )
+                self._send_pix_message(token, chat_id, pix_data, "🎁 Seu PIX com bônus:")
                 
                 logger.info(f"✅ PIX FINAL COM {len(accepted_bumps)} ORDER BUMPS ENVIADO! ID: {pix_data.get('payment_id')}")
                 
+                # ✅ IDEMPOTÊNCIA: Salvar no cache ANTES de alterar sessão
+                if pix_data.get('payment_id'):
+                    self.generated_pix_cache[user_key] = {
+                        'pix_data': pix_data,
+                        'timestamp': current_time,
+                        'payment_id': pix_data.get('payment_id')
+                    }
+                    logger.info(f"💾 PIX salvo no cache de idempotência: {pix_data.get('payment_id')}")
+                
                 # ✅ CRÍTICO: Agendar downsells após gerar PIX (mesmo comportamento dos outros fluxos)
-                # PROBLEMA IDENTIFICADO: Esta função não estava agendando downsells!
                 if bot_config:
                     try:
                         if bot_config.get('downsells_enabled', False):
@@ -7549,13 +7601,74 @@ Seu pagamento ainda não foi confirmado.
                     message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
                 )
             
-            # Limpar sessão
-            del self.order_bump_sessions[user_key]
+            # ✅ CORREÇÃO: NÃO excluir sessão imediatamente!
+            # Marcar como 'pix_generated' para idempotência
+            session['status'] = 'pix_generated'
+            session['pix_generated_at'] = current_time
+            session['payment_id'] = pix_data.get('payment_id') if pix_data else None
+            logger.info(f"🔄 Sessão marcada como 'pix_generated': {user_key}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao finalizar sessão de order bumps: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _send_pix_message(self, token: str, chat_id: int, pix_data: dict, header_msg: str):
+        """
+        Envia mensagem de PIX de forma idempotente.
+        
+        Args:
+            token: Token do bot
+            chat_id: ID do chat
+            pix_data: Dados do PIX (pix_code, payment_id, amount, description)
+            header_msg: Mensagem de cabeçalho
+        """
+        try:
+            if not pix_data or not pix_data.get('pix_code'):
+                logger.error(f"❌ _send_pix_message chamado sem pix_code válido")
+                return False
+            
+            pix_code = pix_data.get('pix_code', '')
+            payment_id = pix_data.get('payment_id', '')
+            amount = pix_data.get('amount', 0)
+            description = pix_data.get('description', 'Produto')
+            
+            payment_message = f"""{header_msg}
+
+🎯 <b>Produto:</b> {description}
+💰 <b>Valor:</b> R$ {amount:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_code}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo!</b>"""
+            
+            buttons = [{
+                'text': '✅ Verificar Pagamento',
+                'callback_data': f'verify_{payment_id}'
+            }]
+            
+            result = self.send_telegram_message(
+                token=token,
+                chat_id=str(chat_id),
+                message=payment_message.strip(),
+                buttons=buttons
+            )
+            
+            if result:
+                logger.info(f"✅ Mensagem PIX enviada (idempotente): payment_id={payment_id}")
+            else:
+                logger.warning(f"⚠️ Falha ao enviar mensagem PIX: payment_id={payment_id}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro em _send_pix_message: {e}")
+            return False
     
     def _show_downsell_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
                                  downsell_price: float, downsell_description: str, downsell_index: int,
