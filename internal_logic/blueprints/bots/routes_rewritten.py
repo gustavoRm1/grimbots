@@ -185,6 +185,7 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco SUMMARY para bot {bot_id}: {e}", exc_info=True)
+        # Mantém valores default
 
     # ============================================================================
     # BLOCO 2: USERS (Métricas de Usuários)
