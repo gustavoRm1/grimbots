@@ -2663,3 +2663,301 @@ def api_delete_gateway(gateway_id):
         logger.error(f"Erro ao deletar gateway: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# ==================== API CHECK UPDATES (Polling para novos pagamentos) ====================
+
+@dashboard_bp.route('/api/dashboard/check-updates', methods=['GET'])
+@login_required
+def check_dashboard_updates():
+    """
+    API: Verifica se há novos pagamentos (polling para notificações em tempo real)
+    
+    PARÂMETROS:
+    - last_check: timestamp da última verificação
+    
+    RETORNA:
+    - has_new_payments: boolean
+    - new_count: quantidade de novos pagamentos
+    - latest_payment_id: ID do último pagamento
+    """
+    try:
+        from internal_logic.core.models import Payment, Bot
+        
+        last_check_timestamp = request.args.get('last_check', type=float)
+        user_bot_ids = [bot.id for bot in Bot.query.filter_by(user_id=current_user.id, is_active=True).all()]
+        
+        if not user_bot_ids:
+            return jsonify({'has_new_payments': False, 'new_count': 0, 'latest_payment_id': 0})
+        
+        if not last_check_timestamp:
+            latest_payment = Payment.query.filter(
+                Payment.bot_id.in_(user_bot_ids)
+            ).order_by(Payment.id.desc()).first()
+            
+            return jsonify({
+                'has_new_payments': False,
+                'new_count': 0,
+                'latest_payment_id': latest_payment.id if latest_payment else 0
+            })
+        
+        from datetime import datetime
+        last_check_dt = datetime.fromtimestamp(last_check_timestamp)
+        
+        new_payments_query = Payment.query.filter(
+            Payment.bot_id.in_(user_bot_ids),
+            Payment.created_at > last_check_dt
+        )
+        
+        new_count = new_payments_query.count()
+        has_new = new_count > 0
+        
+        latest_payment = Payment.query.filter(
+            Payment.bot_id.in_(user_bot_ids)
+        ).order_by(Payment.id.desc()).first()
+        
+        return jsonify({
+            'has_new_payments': has_new,
+            'new_count': new_count,
+            'latest_payment_id': latest_payment.id if latest_payment else 0
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao verificar atualizações do dashboard: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== BOT CRUD APIs (Faltantes) ====================
+
+@dashboard_bp.route('/api/bots/<int:bot_id>', methods=['GET'])
+@login_required
+def api_get_bot(bot_id):
+    """Obtém detalhes completos de um bot específico"""
+    from internal_logic.core.models import Bot
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    return jsonify(bot.to_dict())
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>', methods=['PUT'])
+@login_required
+@csrf.exempt
+def api_update_bot(bot_id):
+    """
+    Atualiza dados do bot (nome, configurações)
+    NÃO atualiza token (use /api/bots/<id>/token)
+    """
+    from internal_logic.core.models import Bot, BotConfig
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Dados inválidos'}), 400
+    
+    try:
+        # Atualiza nome se fornecido
+        if 'name' in data:
+            bot.name = data['name'].strip()
+        
+        # Atualiza configurações se fornecidas
+        if 'config' in data:
+            config = BotConfig.query.filter_by(bot_id=bot_id).first()
+            if not config:
+                config = BotConfig(bot_id=bot_id)
+                db.session.add(config)
+            
+            config_data = data['config']
+            if 'welcome_message' in config_data:
+                config.welcome_message = config_data['welcome_message']
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Bot atualizado!', 'bot': bot.to_dict()})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/toggle', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_toggle_bot(bot_id):
+    """Liga/desliga bot"""
+    from internal_logic.core.models import Bot, BotConfig
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        if bot.is_running:
+            # Parar bot
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+            bot_manager.stop_bot(bot.id)
+            bot.is_running = False
+            bot.last_stopped = get_brazil_time()
+            message = 'Bot parado com sucesso'
+        else:
+            # Iniciar bot
+            from bot_manager import BotManager
+            bot_manager = BotManager(socketio=None, user_id=current_user.id)
+            config = BotConfig.query.filter_by(bot_id=bot.id).first()
+            bot_manager.start_bot(
+                bot_id=bot.id,
+                token=bot.token,
+                config=config.to_dict() if config else {}
+            )
+            bot.is_running = True
+            bot.last_started = get_brazil_time()
+            bot.last_error = None
+            message = 'Bot iniciado com sucesso'
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': message, 'is_running': bot.is_running})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao toggle bot {bot_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/test-connection', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_test_bot_connection(bot_id):
+    """Testa conexão do bot com a API do Telegram"""
+    from internal_logic.core.models import Bot
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        result = bot_manager.validate_token(bot.token)
+        
+        return jsonify({
+            'success': True,
+            'valid': True,
+            'bot_info': result.get('bot_info', {})
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao testar conexão do bot {bot_id}: {e}")
+        return jsonify({'success': False, 'valid': False, 'error': str(e)}), 400
+
+
+@dashboard_bp.route('/api/bots/<int:bot_id>/token', methods=['PUT'])
+@login_required
+@csrf.exempt
+def api_update_bot_token(bot_id):
+    """
+    Atualiza token do bot (V2 - AUTO-STOP)
+    
+    FUNCIONALIDADES:
+    - Para bot automaticamente antes de trocar token
+    - Valida novo token com Telegram
+    - Arquiva usuários do token antigo
+    - Preserva faturamento histórico
+    """
+    from internal_logic.core.models import Bot, BotConfig, BotUser
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    new_token = data.get('token', '').strip()
+    
+    if not new_token:
+        return jsonify({'error': 'Token é obrigatório'}), 400
+    
+    if new_token == bot.token:
+        return jsonify({'error': 'Este token já está em uso neste bot'}), 400
+    
+    if Bot.query.filter(Bot.token == new_token, Bot.id != bot_id).first():
+        return jsonify({'error': 'Este token já está cadastrado em outro bot'}), 400
+    
+    try:
+        from bot_manager import BotManager
+        bot_manager = BotManager(socketio=None, user_id=current_user.id)
+        
+        # AUTO-STOP
+        was_running = bot.is_running
+        if was_running:
+            try:
+                bot_manager.stop_bot(bot_id)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao parar bot: {e}")
+            
+            bot.is_running = False
+            bot.last_stopped = get_brazil_time()
+            db.session.commit()
+        
+        validation_result = bot_manager.validate_token(new_token)
+        bot_info = validation_result.get('bot_info')
+        
+        # Preserva dados financeiros
+        preserved_sales = bot.total_sales
+        preserved_revenue = bot.total_revenue
+        
+        # Atualiza dados do bot
+        bot.token = new_token
+        bot.username = bot_info.get('username')
+        bot.name = bot_info.get('first_name', bot.name)
+        bot.bot_id = str(bot_info.get('id'))
+        bot.is_running = False
+        bot.last_error = None
+        
+        # ARQUIVAR USUÁRIOS DO TOKEN ANTIGO
+        archived_count = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
+        if archived_count > 0:
+            BotUser.query.filter_by(bot_id=bot_id, archived=False).update({
+                'archived': True,
+                'archived_reason': 'token_changed',
+                'archived_at': get_brazil_time()
+            })
+        
+        bot.total_users = 0
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Token atualizado! {archived_count} usuários arquivados.',
+            'bot': bot.to_dict(),
+            'changes': {
+                'old_username': bot.username,
+                'new_username': bot_info.get('username'),
+                'users_archived': archived_count,
+                'was_auto_stopped': was_running
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar token do bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+# ==================== POOL BOTS API (Endpoint alternativo) ====================
+
+@dashboard_bp.route('/api/pool-bots/<int:pool_bot_id>', methods=['DELETE'])
+@login_required
+@csrf.exempt
+def api_delete_pool_bot(pool_bot_id):
+    """
+    Remove bot do pool usando o ID da associação PoolBot
+    Endpoint alternativo para /api/redirect-pools/<id>/bots/<id>
+    """
+    from internal_logic.core.models import PoolBot, RedirectPool
+    
+    pool_bot = PoolBot.query.join(RedirectPool).filter(
+        PoolBot.id == pool_bot_id,
+        RedirectPool.user_id == current_user.id
+    ).first_or_404()
+    
+    try:
+        db.session.delete(pool_bot)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Bot removido do pool!'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao remover bot do pool {pool_bot_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
