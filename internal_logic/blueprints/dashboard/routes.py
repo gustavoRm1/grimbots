@@ -267,122 +267,172 @@ def dashboard():
 @dashboard_bp.route('/api/dashboard/stats')
 @login_required
 def api_dashboard_stats():
-    """API para estatísticas do dashboard (usado pelo JavaScript)"""
+    """API para estatísticas do dashboard (usado pelo JavaScript) - ARQUITETURA LEGADA RESTAURADA"""
     from sqlalchemy import func
     from internal_logic.core.models import BotUser
+    import pytz
+    from datetime import datetime, timedelta
     
-    # IDs dos bots do usuário
-    user_bot_ids = [bot.id for bot in current_user.bots]
-    
-    if not user_bot_ids:
+    try:
+        # ============================================================================
+        # CAMADA 2: MATEMÁTICA DO "HOJE" COM TIMEZONE CORRETO
+        # Converte 00:00 de Brasília para UTC (naive) para comparar com o banco
+        # ============================================================================
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+        utc_tz = pytz.UTC
+        
+        # Pega agora em Brasília e zera para meia-noite
+        now_br = datetime.now(brasilia_tz)
+        today_start_br = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Converte para UTC e remove timezone (naive) para consultar o banco
+        today_start_utc = today_start_br.astimezone(utc_tz).replace(tzinfo=None)
+        
+        # ============================================================================
+        # CAMADA 1: QUERIES VIA JOIN(Bot) - ARQUITETURA LEGADA
+        # ============================================================================
+        
+        # RECEITA DE HOJE: JOIN Payment -> Bot para filtrar por user_id
+        today_revenue_result = db.session.query(
+            func.coalesce(func.sum(Payment.amount), 0).label('revenue'),
+            func.count(Payment.id).label('sales')
+        ).join(Bot, Payment.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= today_start_utc
+        ).first()
+        
+        today_revenue = float(today_revenue_result.revenue or 0.0)
+        today_sales = today_revenue_result.sales or 0
+        
+        # USUÁRIOS NOVOS HOJE: JOIN BotUser -> Bot
+        today_users = db.session.query(
+            func.count(db.distinct(BotUser.telegram_user_id))
+        ).join(Bot, BotUser.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            BotUser.archived == False,
+            BotUser.first_interaction >= today_start_utc
+        ).scalar() or 0
+        
+        # RECEITA TOTAL (todo período)
+        total_revenue = db.session.query(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).join(Bot, Payment.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid'
+        ).scalar() or 0.0
+        
+        # CONTAGEM DE BOTS
+        active_bots = Bot.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).count()
+        
+        total_bots = Bot.query.filter_by(
+            user_id=current_user.id
+        ).count()
+        
+        # TAXA DE CONVERSÃO (vendas / leads)
+        total_leads = db.session.query(
+            func.count(db.distinct(BotUser.telegram_user_id))
+        ).join(Bot, BotUser.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            BotUser.archived == False
+        ).scalar() or 0
+        
+        total_sales_all_time = db.session.query(
+            func.count(Payment.id)
+        ).join(Bot, Payment.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid'
+        ).scalar() or 0
+        
+        conversion_rate = (total_sales_all_time / total_leads * 100) if total_leads > 0 else 0.0
+        
+        # ============================================================================
+        # RETORNO COMPLETO DO JSON (Contrato Legado)
+        # ============================================================================
+        return jsonify({
+            'today_sales': today_sales,
+            'today_revenue': today_revenue,
+            'today_users': today_users,
+            'total_revenue': float(total_revenue),
+            'conversion_rate': round(conversion_rate, 2),
+            'active_bots': active_bots,
+            'total_bots': total_bots
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro nas estatísticas do dashboard: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'today_sales': 0,
-            'today_revenue': 0,
-            'total_revenue': 0,
-            'conversion_rate': 0,
+            'today_revenue': 0.0,
+            'today_users': 0,
+            'total_revenue': 0.0,
+            'conversion_rate': 0.0,
             'active_bots': 0,
             'total_bots': 0
-        })
-    
-    # Vendas hoje
-    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_stats = db.session.query(
-        func.count(Payment.id).label('count'),
-        func.sum(Payment.amount).label('revenue')
-    ).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid',
-        Payment.created_at >= today_start
-    ).first()
-    
-    # Receita total
-    total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid'
-    ).scalar() or 0.0
-    
-    # Bots
-    total_bots = len(user_bot_ids)
-    active_bots = Bot.query.filter(
-        Bot.id.in_(user_bot_ids),
-        Bot.is_active == True
-    ).count()
-    
-    # Taxa de conversão
-    total_clicks = BotUser.query.filter(BotUser.bot_id.in_(user_bot_ids)).count()
-    total_purchases = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid'
-    ).count()
-    conversion_rate = (total_purchases / total_clicks * 100) if total_clicks > 0 else 0
-    
-    return jsonify({
-        'today_sales': today_stats.count if today_stats else 0,
-        'today_revenue': float(today_stats.revenue) if today_stats and today_stats.revenue else 0.0,
-        'total_revenue': float(total_revenue),
-        'conversion_rate': round(conversion_rate, 2),
-        'active_bots': active_bots,
-        'total_bots': total_bots
-    })
+        }), 500
 
 
 @dashboard_bp.route('/api/dashboard/sales-chart')
 @login_required
 def api_sales_chart():
-    """API para dados do gráfico de vendas (últimos N dias: 7/30/90)"""
+    """API para gráfico de vendas dos últimos 7 dias - ARQUITETURA LEGADA RESTAURADA"""
     from sqlalchemy import func
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     
-    # Ler período desejado (default 7). Aceitar apenas 7, 30, 90
     try:
-        period = int(request.args.get('period', 7))
-    except Exception:
         period = 7
-    if period not in (7, 30, 90):
-        period = 7
-    
-    start_date = get_brazil_time() - timedelta(days=period)
-    
-    # IDs dos bots do usuário
-    user_bot_ids = [bot.id for bot in current_user.bots]
-    
-    if not user_bot_ids:
-        # Retornar dados vazios
+        
+        start_date = get_brazil_time() - timedelta(days=period)
+        
+        # IDs dos bots do usuário
+        user_bot_ids = [bot.id for bot in current_user.bots]
+        
+        if not user_bot_ids:
+            # Retornar dados vazios
+            result = []
+            for i in range(period):
+                date = (get_brazil_time() - timedelta(days=(period - 1 - i))).date()
+                result.append({
+                    'date': date.strftime('%d/%m'),
+                    'sales': 0,
+                    'revenue': 0.0
+                })
+            return jsonify(result)
+        
+        # Query para vendas por dia
+        sales_by_day = db.session.query(
+            func.date(Payment.created_at).label('date'),
+            func.count(Payment.id).label('sales'),
+            func.sum(Payment.amount).label('revenue')
+        ).filter(
+            Payment.bot_id.in_(user_bot_ids),
+            Payment.created_at >= start_date,
+            Payment.status == 'paid'
+        ).group_by(func.date(Payment.created_at))\
+         .order_by(func.date(Payment.created_at))\
+         .all()
+        
+        # Preencher dias sem vendas (do mais antigo ao mais recente)
         result = []
         for i in range(period):
             date = (get_brazil_time() - timedelta(days=(period - 1 - i))).date()
+            day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
             result.append({
                 'date': date.strftime('%d/%m'),
-                'sales': 0,
-                'revenue': 0.0
+                'sales': day_data.sales if day_data else 0,
+                'revenue': float(day_data.revenue) if day_data and day_data.revenue is not None else 0.0
             })
+        
         return jsonify(result)
-    
-    # Query para vendas por dia
-    sales_by_day = db.session.query(
-        func.date(Payment.created_at).label('date'),
-        func.count(Payment.id).label('sales'),
-        func.sum(Payment.amount).label('revenue')
-    ).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.created_at >= start_date,
-        Payment.status == 'paid'
-    ).group_by(func.date(Payment.created_at))\
-     .order_by(func.date(Payment.created_at))\
-     .all()
-    
-    # Preencher dias sem vendas (do mais antigo ao mais recente)
-    result = []
-    for i in range(period):
-        date = (get_brazil_time() - timedelta(days=(period - 1 - i))).date()
-        day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
-        result.append({
-            'date': date.strftime('%d/%m'),
-            'sales': day_data.sales if day_data else 0,
-            'revenue': float(day_data.revenue) if day_data and day_data.revenue is not None else 0.0
-        })
-    
-    return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Erro no gráfico de vendas: {e}")
+        return jsonify([]), 500
 
 
 @dashboard_bp.route('/api/dashboard/analytics')
@@ -2685,58 +2735,99 @@ def api_delete_gateway(gateway_id):
 def check_dashboard_updates():
     """
     API: Verifica se há novos pagamentos (polling para notificações em tempo real)
-    
-    PARÂMETROS:
-    - last_check: timestamp da última verificação
-    
-    RETORNA:
-    - has_new_payments: boolean
-    - new_count: quantidade de novos pagamentos
-    - latest_payment_id: ID do último pagamento
+    RESTAURADO: Com query JOIN e timezone UTC correto
     """
     try:
         from internal_logic.core.models import Payment, Bot
+        from sqlalchemy import func
+        import pytz
+        from datetime import datetime
+        
+        # ============================================================================
+        # TIMEZONE CORRETO: Pegar hoje em Brasília e converter para UTC (naive)
+        # ============================================================================
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+        utc_tz = pytz.UTC
+        
+        now_br = datetime.now(brasilia_tz)
+        today_start_br = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start_br.astimezone(utc_tz).replace(tzinfo=None)
         
         last_check_timestamp = request.args.get('last_check', type=float)
+        
+        # Query via JOIN (arquitetura legada)
         user_bot_ids = [bot.id for bot in Bot.query.filter_by(user_id=current_user.id, is_active=True).all()]
         
         if not user_bot_ids:
-            return jsonify({'has_new_payments': False, 'new_count': 0, 'latest_payment_id': 0})
+            return jsonify({
+                'has_new_payments': False,
+                'new_count': 0,
+                'latest_payment_id': 0,
+                'today_sales': 0,
+                'today_revenue': 0.0
+            })
         
+        # Se não tem timestamp, retorna só o status
         if not last_check_timestamp:
-            latest_payment = Payment.query.filter(
-                Payment.bot_id.in_(user_bot_ids)
+            # Query de hoje via JOIN
+            today_stats = db.session.query(
+                func.count(Payment.id).label('sales'),
+                func.coalesce(func.sum(Payment.amount), 0).label('revenue')
+            ).join(Bot, Payment.bot_id == Bot.id).filter(
+                Bot.user_id == current_user.id,
+                Payment.status == 'paid',
+                Payment.created_at >= today_start_utc
+            ).first()
+            
+            latest_payment = Payment.query.join(Bot).filter(
+                Bot.user_id == current_user.id
             ).order_by(Payment.id.desc()).first()
             
             return jsonify({
                 'has_new_payments': False,
                 'new_count': 0,
-                'latest_payment_id': latest_payment.id if latest_payment else 0
+                'latest_payment_id': latest_payment.id if latest_payment else 0,
+                'today_sales': today_stats.sales or 0,
+                'today_revenue': float(today_stats.revenue or 0.0)
             })
         
-        from datetime import datetime
+        # Verificar novos pagamentos desde o último check
         last_check_dt = datetime.fromtimestamp(last_check_timestamp)
         
-        new_payments_query = Payment.query.filter(
-            Payment.bot_id.in_(user_bot_ids),
+        new_payments_query = Payment.query.join(Bot).filter(
+            Bot.user_id == current_user.id,
             Payment.created_at > last_check_dt
         )
         
         new_count = new_payments_query.count()
         has_new = new_count > 0
         
-        latest_payment = Payment.query.filter(
-            Payment.bot_id.in_(user_bot_ids)
+        # Query de hoje via JOIN
+        today_stats = db.session.query(
+            func.count(Payment.id).label('sales'),
+            func.coalesce(func.sum(Payment.amount), 0).label('revenue')
+        ).join(Bot, Payment.bot_id == Bot.id).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= today_start_utc
+        ).first()
+        
+        latest_payment = Payment.query.join(Bot).filter(
+            Bot.user_id == current_user.id
         ).order_by(Payment.id.desc()).first()
         
         return jsonify({
             'has_new_payments': has_new,
             'new_count': new_count,
-            'latest_payment_id': latest_payment.id if latest_payment else 0
+            'latest_payment_id': latest_payment.id if latest_payment else 0,
+            'today_sales': today_stats.sales or 0,
+            'today_revenue': float(today_stats.revenue or 0.0)
         })
         
     except Exception as e:
         logger.error(f"Erro ao verificar atualizações do dashboard: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
