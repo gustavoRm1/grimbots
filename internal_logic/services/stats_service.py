@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from sqlalchemy import text, extract, func
 from internal_logic.core.extensions import db
+from internal_logic.core.models import Payment, BotUser
 
 logger = logging.getLogger(__name__)
 
@@ -355,24 +356,8 @@ class StatsService:
         Calcula estatísticas por gateway de pagamento
         """
         try:
-            # Implementação simplificada que retorna lista vazia
-            return []
-        except Exception as e:
-            logger.error(f"Error calculating gateway stats for bot {bot_id}: {e}")
-            return []
-    
-    @staticmethod
-    def get_peak_hours(bot_id, period_days=30):
-        """
-        Calcula horários de pico de vendas
-        """
-        try:
-            # Implementação simplificada que retorna lista vazia
-            return []
-        except Exception as e:
-            logger.error(f"Error calculating peak hours for bot {bot_id}: {e}")
-            return []
-            
+            date_filter = StatsService.get_period_filter(period_days)
+
             gateway_data = db.session.query(
                 Payment.gateway_type,
                 func.count(Payment.id).label('sales'),
@@ -382,17 +367,16 @@ class StatsService:
                 Payment.status == 'paid',
                 Payment.created_at >= date_filter if period_days != 'all' else True
             ).group_by(Payment.gateway_type).all()
-            
+
             return [{
                 'type': row.gateway_type,
                 'sales': row.sales,
                 'revenue': float(row.revenue or 0)
             } for row in gateway_data]
-            
         except Exception as e:
             logger.error(f"Error calculating gateway stats for bot {bot_id}: {e}")
             return []
-    
+
     @staticmethod
     def get_peak_hours(bot_id, period_days=30):
         """
@@ -428,14 +412,7 @@ class StatsService:
         except Exception as e:
             logger.error(f"Error calculating peak hours for bot {bot_id}: {e}")
             return []
-    
-    @staticmethod
-    def _calculate_percentage_change(current, previous):
-        """Calcula variação percentual de forma segura"""
-        if previous == 0:
-            return 100.0 if current > 0 else 0.0
-        return ((current - previous) / previous) * 100
-    
+
     @staticmethod
     def _get_empty_metrics():
         """Retorna métricas vazias para fallback"""
