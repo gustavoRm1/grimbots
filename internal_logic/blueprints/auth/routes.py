@@ -98,7 +98,8 @@ def login():
                 return render_template('login.html')
             
             login_user(user, remember=data.get('remember') == 'on')
-            user.last_login = user.get_brazil_time()  # Assumindo método no model
+            from internal_logic.core.models import get_brazil_time
+            user.last_login = get_brazil_time()
             user.last_ip = get_user_ip()
             db.session.commit()
             
