@@ -2452,21 +2452,33 @@ def api_get_remarketing_campaigns(bot_id):
     
     try:
         from internal_logic.core.models import RemarketingCampaign
-        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).all()
+        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(RemarketingCampaign.created_at.desc()).all()
         
         campaigns_data = []
         for campaign in campaigns:
-            campaigns_data.append({
-                'id': campaign.id,
-                'name': campaign.name,
-                'message': campaign.message,
-                'segment': campaign.segment,
-                'is_active': campaign.is_active,
-                'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
-                'executed_at': campaign.executed_at.isoformat() if campaign.executed_at else None,
-                'executed_count': campaign.executed_count,
-                'created_at': campaign.created_at.isoformat() if campaign.created_at else None
-            })
+            # Usar to_dict() se disponível, senão mapear campos manualmente
+            if hasattr(campaign, 'to_dict'):
+                campaign_dict = campaign.to_dict()
+            else:
+                # Mapeamento manual com campos REAIS do modelo
+                campaign_dict = {
+                    'id': campaign.id,
+                    'bot_id': campaign.bot_id,
+                    'name': campaign.name,
+                    'message': campaign.message,
+                    'status': campaign.status,
+                    'target_audience': campaign.target_audience,
+                    'total_targets': campaign.total_targets,
+                    'total_sent': campaign.total_sent,
+                    'total_clicks': campaign.total_clicks,
+                    'total_sales': campaign.total_sales,
+                    'revenue_generated': float(campaign.revenue_generated or 0),
+                    'created_at': campaign.created_at.isoformat() if campaign.created_at else None,
+                    'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+                    'started_at': campaign.started_at.isoformat() if campaign.started_at else None,
+                    'completed_at': campaign.completed_at.isoformat() if campaign.completed_at else None
+                }
+            campaigns_data.append(campaign_dict)
         
         return jsonify(campaigns_data)
         
@@ -2486,7 +2498,7 @@ def api_create_remarketing_campaign(bot_id):
     
     name = data.get('name', '').strip()
     message = data.get('message', '').strip()
-    segment = data.get('segment', 'all_users')
+    target_audience = data.get('target_audience', data.get('segment', 'all_users'))
     
     if not name or not message:
         return jsonify({'error': 'Nome e mensagem são obrigatórios'}), 400
@@ -2499,10 +2511,9 @@ def api_create_remarketing_campaign(bot_id):
             bot_id=bot_id,
             name=name,
             message=message,
-            segment=segment,
-            is_active=True,
-            scheduled_at=datetime.now(),
-            executed_count=0
+            target_audience=target_audience,
+            status='draft',
+            scheduled_at=datetime.now()
         )
         
         db.session.add(campaign)
@@ -2516,8 +2527,8 @@ def api_create_remarketing_campaign(bot_id):
                 'id': campaign.id,
                 'name': campaign.name,
                 'message': campaign.message,
-                'segment': campaign.segment,
-                'is_active': campaign.is_active,
+                'target_audience': campaign.target_audience,
+                'status': campaign.status,
                 'created_at': campaign.created_at.isoformat() if campaign.created_at else None
             }
         }), 201
