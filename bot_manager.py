@@ -6452,51 +6452,55 @@ Desculpe, não foi possível processar seu pagamento.
                                     except Exception as e:
                                         logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Erro ao verificar conquistas (não crítico): {e}")
                                     
-                                    # ============================================================================
-                                    # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL
-                                    # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento é confirmado via verificação manual
-                                    # ============================================================================
-                                    logger.info(f"🔍 [UPSELLS VERIFY] Verificando condições: status='{payment.status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
-                                    
-                                    if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
-                                        logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
-                                        try:
-                                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                            from internal_logic.core.models import Payment as PaymentModel
-                                            payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
+                                except Exception as phase2_error:
+                                    # ✅ FASE 2 é NÃO-CRÍTICA: Falhas aqui não afetam a venda confirmada
+                                    logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro não crítico após confirmação: {phase2_error}", exc_info=True)
+                                
+                                # ============================================================================
+                                # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL
+                                # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento é confirmado via verificação manual
+                                # ============================================================================
+                                logger.info(f"🔍 [UPSELLS VERIFY] Verificando condições: status='{payment.status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+                                
+                                if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+                                    logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                                    try:
+                                        # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                        from internal_logic.core.models import Payment as PaymentModel
+                                        payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
+                                        
+                                        # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
+                                        if not self.scheduler:
+                                            logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                                            logger.error(f"   Payment ID: {payment.payment_id}")
+                                            logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                                        else:
+                                            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                                            try:
+                                                scheduler_running = self.scheduler.running
+                                                if not scheduler_running:
+                                                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                                    logger.error(f"   Payment ID: {payment.payment_id}")
+                                                    logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                                            except Exception as scheduler_check_error:
+                                                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
                                             
-                                            # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
-                                            if not self.scheduler:
-                                                logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                                logger.error(f"   Payment ID: {payment.payment_id}")
-                                                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                                            else:
-                                                # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                                try:
-                                                    scheduler_running = self.scheduler.running
-                                                    if not scheduler_running:
-                                                        logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                                        logger.error(f"   Payment ID: {payment.payment_id}")
-                                                        logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
-                                                except Exception as scheduler_check_error:
-                                                    logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
-                                                
-                                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                                upsells_already_scheduled = False
-                                                try:
-                                                    # Verificar se já existe job de upsell para este payment
-                                                    for i in range(10):  # Verificar até 10 upsells possíveis
-                                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
-                                                        existing_job = self.scheduler.get_job(job_id)
-                                                        if existing_job:
-                                                            upsells_already_scheduled = True
-                                                            logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
-                                                            logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
-                                                            break
-                                                except Exception as check_error:
-                                                    logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
-                                                    logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
-                                                    # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
+                                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                            upsells_already_scheduled = False
+                                            try:
+                                                # Verificar se já existe job de upsell para este payment
+                                                for i in range(10):  # Verificar até 10 upsells possíveis
+                                                    job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                                    existing_job = self.scheduler.get_job(job_id)
+                                                    if existing_job:
+                                                        upsells_already_scheduled = True
+                                                        logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                                        logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
+                                                        break
+                                            except Exception as check_error:
+                                                logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                                logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                                # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
                                             
                                             if self.scheduler and not upsells_already_scheduled:
                                                 upsells = payment.bot.config.get_upsells()
@@ -6536,18 +6540,10 @@ Desculpe, não foi possível processar seu pagamento.
                                                     logger.error(f"❌ [UPSELLS VERIFY] Scheduler não disponível - upsells não serão agendados")
                                                 else:
                                                     logger.info(f"ℹ️ [UPSELLS VERIFY] Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
-                                                
-                                        except Exception as e:
-                                            logger.error(f"❌ [UPSELLS VERIFY] Erro ao processar upsells: {e}", exc_info=True)
-                                            import traceback
-                                            traceback.print_exc()
                                         
-                                except Exception as e:
-                                    logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao atualizar payment: {e}", exc_info=True)
-                                    db.session.rollback()
-                                    logger.error(f"   Rollback executado. Payment não foi atualizado.")
-                                    return
-                            
+                                    except Exception as upsell_error:
+                                        logger.error(f"❌ [UPSELLS VERIFY] Erro ao processar upsells: {upsell_error}", exc_info=True)
+                                
                             elif status_1 == 'paid' and status_2 != 'paid':
                                 logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] DISCREPÂNCIA DETECTADA: Consulta 1=paid, Consulta 2={status_2}")
                                 logger.warning(f"   Transaction ID: {payment.gateway_transaction_id}")
@@ -6641,6 +6637,10 @@ Desculpe, não foi possível processar seu pagamento.
                                                     logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
                                             except Exception as e:
                                                 logger.warning(f"⚠️ Erro ao verificar conquistas (não crítico): {e}")
+                                        
+                                        except Exception as phase2_error:
+                                            # ✅ FASE 2 é NÃO-CRÍTICA: Falhas aqui não afetam a venda confirmada
+                                            logger.error(f"❌ Erro não crítico após confirmação de pagamento: {phase2_error}", exc_info=True)
                                         
                                         # ============================================================================
                                         # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL (OUTROS GATEWAYS)
