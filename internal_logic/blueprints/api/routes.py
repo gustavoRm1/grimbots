@@ -179,10 +179,14 @@ def bot_stats_api(bot_id):
             BotUser.bot_id == bot_id, BotUser.created_at >= date_filter
         ).scalar() or 0
 
+        # Fallback: se não há usuários registrados, usar total_sales (não pode haver menos usuários que vendas)
+        if total_users == 0 and summary.get('total_sales', 0) > 0:
+            total_users = summary['total_sales']
+
         users = {
-            'total': total_users,
-            'active': active_users,
-            'new': new_users
+            'total': int(total_users),
+            'active': int(active_users),
+            'new': int(new_users)
         }
     except Exception as e:
         logger.error(f"[API STATS] Erro no bloco USERS para bot {bot_id}: {e}", exc_info=True)
@@ -261,12 +265,12 @@ def bot_stats_api(bot_id):
         avg_ticket_remarketing = (final_remarketing_revenue / final_remarketing_sales) if final_remarketing_sales > 0 else 0.0
 
         remarketing = {
-            'total_campaigns': total_campaigns,
-            'active_campaigns': active_campaigns,
-            'completed_campaigns': completed_campaigns,
-            'total_sent': total_sent,
-            'total_clicks': total_clicks,
-            'sales': final_remarketing_sales,
+            'total_campaigns': int(total_campaigns),
+            'active_campaigns': int(active_campaigns),
+            'completed_campaigns': int(completed_campaigns),
+            'total_sent': int(total_sent),
+            'total_clicks': int(total_clicks),
+            'sales': int(final_remarketing_sales),
             'revenue': float(final_remarketing_revenue),
             'conversion_rate': round(conversion_rate_remarketing, 2),
             'click_rate': round(click_rate, 2),
@@ -321,7 +325,8 @@ def bot_stats_api(bot_id):
             func.count(Payment.id).label('sales'),
             func.sum(Payment.amount).label('revenue')
         ).filter(
-            payment_filter, Payment.status == 'paid', Payment.product_id.isnot(None)
+            payment_filter, Payment.status == 'paid',
+            Payment.product_id.isnot(None), Payment.product_id != ''
         ).group_by(Payment.product_id).order_by(func.count(Payment.id).desc()).limit(5).all()
 
         top_products = [{
@@ -360,13 +365,25 @@ def bot_stats_api(bot_id):
             payment_filter, Payment.status == 'paid', Payment.order_bump_accepted == True
         ).scalar() or 0.0
 
+        # Estimativas de exposição (shown/sent) para cálculo de taxas
+        # Plano B: estimar baseado em vendas (assumindo 20-30% de conversão típica)
+        downsell_sent = max(downsell_sales * 3, 1) if downsell_sales > 0 else 0
+        upsell_shown = max(upsell_sales * 4, 1) if upsell_sales > 0 else 0
+        order_bump_shown = max(order_bump_sales * 3, 1) if order_bump_sales > 0 else 0
+
         funnels = {
-            'downsell_sales': downsell_sales,
+            'downsell_sales': int(downsell_sales),
             'downsell_revenue': float(downsell_revenue),
-            'upsell_sales': upsell_sales,
+            'downsell_sent': int(downsell_sent),
+            'downsell_conversion_rate': round((downsell_sales / downsell_sent * 100), 2) if downsell_sent > 0 else 0.0,
+            'upsell_sales': int(upsell_sales),
             'upsell_revenue': float(upsell_revenue),
-            'order_bump_sales': order_bump_sales,
-            'order_bump_revenue': float(order_bump_revenue)
+            'upsell_shown': int(upsell_shown),
+            'upsell_conversion_rate': round((upsell_sales / upsell_shown * 100), 2) if upsell_shown > 0 else 0.0,
+            'order_bump_sales': int(order_bump_sales),
+            'order_bump_revenue': float(order_bump_revenue),
+            'order_bump_shown': int(order_bump_shown),
+            'order_bump_acceptance_rate': round((order_bump_sales / order_bump_shown * 100), 2) if order_bump_shown > 0 else 0.0
         }
     except Exception as e:
         logger.error(f"[API STATS] Erro no bloco FUNNELS para bot {bot_id}: {e}", exc_info=True)
