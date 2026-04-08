@@ -811,6 +811,95 @@ def process_start_async(
         logger.error(f"❌ Erro em process_start_async: {e}", exc_info=True)
 
 
+def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], token: str, config: Dict[str, Any]):
+    """
+    Processa mensagens do Telegram em background (Worker RQ).
+    
+    GARANTIA CRÍTICA: Cria/atualiza o BotUser ANTES de processar qualquer mensagem.
+    Isso evita perda de leads quando o worker processa o webhook.
+    
+    Args:
+        bot_id: ID do bot no banco
+        update_data: Dicionário com update do Telegram (message, callback_query, etc)
+        token: Token do bot Telegram
+        config: Configuração do bot (dicionário)
+    """
+    from flask import current_app
+    from datetime import datetime
+    from internal_logic.core.extensions import db
+    from internal_logic.core.models import BotUser, Bot
+    from bot_manager import BotManager
+    
+    try:
+        with current_app.app_context():
+            # ============================================================================
+            # BLOCO CRÍTICO: CRIAÇÃO/ATUALIZAÇÃO DO BOTUSER (RESTAURAÇÃO LEGADA)
+            # ============================================================================
+            utc_now = datetime.utcnow()
+            
+            try:
+                # 1. Extração segura dos dados do update do Telegram
+                message = update_data.get('message') or update_data.get('callback_query', {}).get('message')
+                from_user = None
+                
+                if 'message' in update_data:
+                    from_user = update_data['message'].get('from')
+                elif 'callback_query' in update_data:
+                    from_user = update_data['callback_query'].get('from')
+                elif 'edited_message' in update_data:
+                    from_user = update_data['edited_message'].get('from')
+                
+                if from_user:
+                    telegram_id = from_user.get('id')
+                    first_name = from_user.get('first_name', '')
+                    username = from_user.get('username', '')
+                    
+                    # 2. Busca ou Criação do BotUser
+                    user = BotUser.query.filter_by(bot_id=bot_id, telegram_user_id=telegram_id).first()
+                    
+                    if not user:
+                        # É UM LEAD NOVO (Vai contar no Dashboard de Hoje!)
+                        user = BotUser(
+                            bot_id=bot_id,
+                            telegram_user_id=telegram_id,
+                            first_name=first_name,
+                            username=username,
+                            first_interaction=utc_now,
+                            last_interaction=utc_now,
+                            archived=False
+                        )
+                        db.session.add(user)
+                        logger.info(f"✅ [LEAD NOVO] BotUser criado: {telegram_id} | Bot: {bot_id}")
+                    else:
+                        # LEAD ANTIGO VOLTANDO (Atualiza apenas o last_interaction)
+                        user.first_name = first_name
+                        user.username = username
+                        user.last_interaction = utc_now
+                        user.archived = False  # Desarquiva se ele estava inativo
+                        logger.info(f"✅ [LEAD EXISTENTE] BotUser atualizado: {telegram_id} | Bot: {bot_id}")
+                    
+                    # 3. Força o commit imediato ANTES de processar o funil
+                    db.session.commit()
+                    
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"❌ [CRÍTICO] Falha ao salvar BotUser no banco: {e}", exc_info=True)
+                # Continua processando mesmo assim para não perder a mensagem
+            
+            # ============================================================================
+            # PROCESSAMENTO DA MENSAGEM (após garantir que BotUser existe)
+            # ============================================================================
+            try:
+                bot_manager = BotManager(socketio=None, scheduler=None)
+                bot_manager._process_telegram_update(bot_id, None, update_data)
+                logger.info(f"✅ Mensagem processada via Worker RQ | Bot: {bot_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar mensagem no Worker: {e}", exc_info=True)
+                
+    except Exception as e:
+        logger.error(f"❌ Erro crítico no Worker Telegram: {e}", exc_info=True)
+
+
 def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any]):
     """
     Processa webhook de pagamento de forma assíncrona

@@ -507,8 +507,6 @@ def bot_stats_page(bot_id):
     # ============================================================================
     page = request.args.get('page', 1, type=int)
     
-    from internal_logic.core.models import RemarketingCampaign
-    
     # Query paginada de campanhas do bot
     campaigns_pagination = RemarketingCampaign.query.filter_by(
         bot_id=bot_id

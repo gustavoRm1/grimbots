@@ -1550,10 +1550,10 @@ if (typeof window.botStatsApp === 'undefined') {
             <div class="text-6xl mb-4">📭</div>
             <h4 class="text-gray-400 font-medium text-lg mb-2">Nenhuma campanha encontrada</h4>
             <p class="text-gray-500 text-sm mb-4">Crie sua primeira campanha de remarketing</p>
-            <a href="{{ url_for('bots.remarketing_campaigns', bot_id=bot.id) }}" 
+            <a href="{{ url_for('remarketing.bot_remarketing_page', bot_id=bot.id) }}" 
                class="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all hover:scale-105"
-               style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white;">
-                <i class="fas fa-plus"></i> Criar Campanha
+               style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); border: none; padding: 10px 24px; border-radius: 8px;">
+                Criar Primeira Campanha
             </a>
         </div>
     </div>

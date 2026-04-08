@@ -62,44 +62,30 @@ def telegram_webhook(bot_id):
                 logger.warning(f"⚠️ Erro ao buscar config (não crítico): {config_error}")
                 config_dict = {}  # Continua sem config
             
-            # Processar via método direto (Via Expressa)
-            from bot_manager import BotManager
-            bot_manager = BotManager(socketio=None, scheduler=None)
-            
-            bot_manager._process_telegram_update_direct(
-                bot_id=bot_id,
-                token=bot.token,
-                config=config_dict,
-                update=update
-            )
-            
-            logger.info(f"✅ Bot {bot_id} processado via VIA EXPRESSA (direto)")
-            return jsonify({'status': 'ok'}), 200
-            
-        except Exception as direct_error:
-            logger.error(f"⚠️ Via Expressa falhou para bot {bot_id}: {direct_error}")
-            logger.info(f"🔄 Acionando fallback Redis para bot {bot_id}")
-        
-        # ============================================================================
-        # TENTATIVA 2: VIA BUROCRÁTICA (Redis/State) - Fallback opcional
-        # ============================================================================
-        try:
-            from bot_manager import BotManager
-            bot_manager = BotManager(socketio=None, scheduler=None)
-            
-            result = bot_manager._process_telegram_update(bot_id, None, update)
-            
-            logger.info(f"✅ Bot {bot_id} processado via Redis/State (fallback)")
-            return jsonify({'status': 'ok'}), 200
-            
-        except Exception as redis_error:
-            logger.error(f"❌ Via Burocrática também falhou para bot {bot_id}: {redis_error}")
-            # Limpa transação antes de retornar
+            # ✅ QI 200: Enfileirar para processamento assíncrono via Worker RQ
+            # GARANTIA: O Worker criará/atualizará o BotUser ANTES de processar a mensagem
             try:
-                db.session.rollback()
-            except Exception:
-                pass
-            return jsonify({'status': 'ok'}), 200  # Retornar 200 para não retry
+                from tasks_async import task_queue, process_telegram_message_async
+                
+                if task_queue:
+                    task_queue.enqueue(
+                        process_telegram_message_async,
+                        bot_id,
+                        update,
+                        bot.token,
+                        config_dict
+                    )
+                    return jsonify({'status': 'queued'}), 200
+                else:
+                    # Fila não disponível - processar síncrono com garantia de BotUser
+                    logger.warning(f"⚠️ Fila RQ não disponível, processando síncrono | Bot: {bot_id}")
+                    from tasks_async import process_telegram_message_async
+                    process_telegram_message_async(bot_id, update, bot.token, config_dict)
+                    return jsonify({'status': 'processed_sync'}), 200
+                    
+            except Exception as e:
+                logger.error(f"❌ Erro ao enfileirar processamento: {e}")
+                return jsonify({'error': 'Processing failed'}), 500
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no webhook Telegram: {e}")
