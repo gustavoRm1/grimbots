@@ -1172,7 +1172,7 @@ class BotUser(db.Model):
     archived = db.Column(db.Boolean, default=False)
     
     # Campos customizados
-    metadata = db.Column(db.JSON, default=dict)  # Quando recebeu
+    metadata_json = db.Column('metadata', db.JSON, default=dict)  # Quando recebeu
     
     # ✅ META PIXEL INTEGRATION
     meta_pageview_sent = db.Column(db.Boolean, default=False)
