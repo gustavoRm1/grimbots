@@ -503,6 +503,34 @@ def bot_stats_page(bot_id):
         }
 
     # ============================================================================
+    # HISTÓRICO DE CAMPANHAS (PAGINADO)
+    # ============================================================================
+    page = request.args.get('page', 1, type=int)
+    
+    from internal_logic.core.models import RemarketingCampaign
+    
+    # Query paginada de campanhas do bot
+    campaigns_pagination = RemarketingCampaign.query.filter_by(
+        bot_id=bot_id
+    ).order_by(
+        RemarketingCampaign.created_at.desc()
+    ).paginate(
+        page=page, 
+        per_page=10, 
+        error_out=False
+    )
+    
+    campaigns = campaigns_pagination.items
+    pagination = {
+        'page': campaigns_pagination.page,
+        'pages': campaigns_pagination.pages,
+        'has_prev': campaigns_pagination.has_prev,
+        'has_next': campaigns_pagination.has_next,
+        'prev_num': campaigns_pagination.prev_num,
+        'next_num': campaigns_pagination.next_num
+    }
+    
+    # ============================================================================
     # MONTAGEM DO RESPONSE JSON
     # ============================================================================
     stats_data = {
@@ -513,7 +541,12 @@ def bot_stats_page(bot_id):
         'gateways': gateways,
         'peak_hours': peak_hours,
         'top_products': top_products,
-        'funnels': funnels
+        'funnels': funnels,
+        # ============================================================
+        # HISTÓRICO DE CAMPANHAS (PAGINADO)
+        # ============================================================
+        'campaigns': campaigns,
+        'pagination': pagination
     }
 
-    return render_template('bot_stats.html', bot=bot, stats=stats_data)
+    return render_template('bot_stats.html', bot=bot, stats=stats_data, campaigns=campaigns, pagination=pagination)
