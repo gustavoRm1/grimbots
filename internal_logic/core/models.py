@@ -1057,8 +1057,7 @@ class Payment(db.Model):
     customer_phone = db.Column(db.String(50), nullable=True, index=True)
     customer_document = db.Column(db.String(50), nullable=True)  # CPF/CNPJ
     
-    # Produto
-    product_id = db.Column(db.String(100), index=True)  # ✅ CRÍTICO para queries de top products
+    # Produto (DB INTROSPECTION: apenas product_name e product_description existem!)
     product_name = db.Column(db.String(100))
     product_description = db.Column(db.Text)
     
@@ -1149,38 +1148,34 @@ class Payment(db.Model):
 
 
 class BotUser(db.Model):
-    """Usuário que interagiu com o bot"""
+    """Usuário que interagiu com o bot - MAPEAMENTO ESTRITO DO BANCO"""
     __tablename__ = 'bot_users'
     
+    # Chaves
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
     telegram_user_id = db.Column(db.BigInteger, nullable=False, index=True)
     
+    # Dados básicos (DB INTROSPECTION: apenas first_name e username existem)
     first_name = db.Column(db.String(100))
-    last_name = db.Column(db.String(100))
     username = db.Column(db.String(100))
-    phone_number = db.Column(db.String(20))
     
-    # Timestamps - ✅ CRÍTICO: created_at adicionado para queries de "novos usuários"
-    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)  # ✅ NOVO
-    first_interaction = db.Column(db.DateTime, default=get_brazil_time)
-    last_interaction = db.Column(db.DateTime, default=get_brazil_time)
-    last_seen = db.Column(db.DateTime, default=get_brazil_time)
-    
-    # Status
-    is_active = db.Column(db.Boolean, default=True)
+    # Arquivamento (campos reais do banco)
     archived = db.Column(db.Boolean, default=False)
+    archived_reason = db.Column(db.String(255), nullable=True)
+    archived_at = db.Column(db.DateTime, nullable=True)
     
-    # Campos customizados
-    metadata_json = db.Column('metadata', db.JSON, default=dict)  # Quando recebeu
+    # Welcome tracking (campos reais do banco)
+    welcome_sent = db.Column(db.Boolean, default=False)
+    welcome_sent_at = db.Column(db.DateTime, nullable=True)
     
-    # ✅ META PIXEL INTEGRATION
+    # Meta Pixel (campos confirmados pelo DB INTROSPECTION)
     meta_pageview_sent = db.Column(db.Boolean, default=False)
     meta_pageview_sent_at = db.Column(db.DateTime, nullable=True)
     meta_viewcontent_sent = db.Column(db.Boolean, default=False)
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
     
-    # ✅ UTM TRACKING
+    # UTM Tracking (campos confirmados)
     utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)
     utm_content = db.Column(db.String(255), nullable=True)
@@ -1188,41 +1183,42 @@ class BotUser(db.Model):
     utm_term = db.Column(db.String(255), nullable=True)
     fbclid = db.Column(db.String(255), nullable=True)
     campaign_code = db.Column(db.String(255), nullable=True)
-    external_id = db.Column(db.String(255), nullable=True)  # Para tracking de cliques
-    # ✅ CONTEXTO DO CLIQUE (capturado no entry do bot para remarketing)
+    external_id = db.Column(db.String(255), nullable=True)
+    
+    # Contexto do clique (campos confirmados)
     last_click_context_url = db.Column(db.Text, nullable=True)
     last_fbclid = db.Column(db.String(255), nullable=True)
     last_fbp = db.Column(db.String(255), nullable=True)
     last_fbc = db.Column(db.String(255), nullable=True)
     
-    # ✅ META PIXEL COOKIES (para matching Purchase com PageView)
-    fbp = db.Column(db.String(255), nullable=True)  # Facebook Browser ID (_fbp cookie)
-    fbc = db.Column(db.String(255), nullable=True)  # Facebook Click ID (_fbc cookie)
+    # Meta Pixel Cookies (campos confirmados)
+    fbp = db.Column(db.String(255), nullable=True)
+    fbc = db.Column(db.String(255), nullable=True)
     
-    # ✅ TRACKING ELITE (IP/User-Agent capturados no redirect)
-    ip_address = db.Column(db.String(255), nullable=True)  # IP do primeiro click
-    user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo
-    tracking_session_id = db.Column(db.String(255), nullable=True)  # UUID para correlação
-    click_timestamp = db.Column(db.DateTime, nullable=True)  # Timestamp do click
+    # Tracking Elite (campos confirmados)
+    ip_address = db.Column(db.String(255), nullable=True)
+    user_agent = db.Column(db.Text, nullable=True)
+    tracking_session_id = db.Column(db.String(255), nullable=True)
+    click_timestamp = db.Column(db.DateTime, nullable=True)
     
-    # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
+    # Demographic Data (campos confirmados)
     customer_age = db.Column(db.Integer, nullable=True)
     customer_city = db.Column(db.String(100), nullable=True)
     customer_state = db.Column(db.String(50), nullable=True)
     customer_country = db.Column(db.String(50), nullable=True, default='BR')
     customer_gender = db.Column(db.String(20), nullable=True)
     
-    # ✅ DEVICE DATA
-    device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
-    os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
-    browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
-    device_model = db.Column(db.String(255), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
+    # Device Data (campos confirmados)
+    device_type = db.Column(db.String(20), nullable=True)
+    os_type = db.Column(db.String(50), nullable=True)
+    browser = db.Column(db.String(50), nullable=True)
+    device_model = db.Column(db.String(255), nullable=True)
     
-    # Datas
+    # Timestamps (campos confirmados - NÃO TEM created_at nem last_seen!)
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
     last_interaction = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
     
-    # Índice único para evitar duplicatas
+    # Índice único
     __table_args__ = (
         db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_bot_user'),
     )

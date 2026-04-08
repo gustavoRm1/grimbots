@@ -202,7 +202,7 @@ def bot_stats_page(bot_id):
 
         new_users = db.session.query(func.count(BotUser.id)).filter(
             BotUser.bot_id == bot_id,
-            BotUser.created_at >= date_filter
+            BotUser.first_interaction >= date_filter
         ).scalar() or 0
 
         users = {
@@ -375,20 +375,22 @@ def bot_stats_page(bot_id):
     # BLOCO 7: TOP PRODUCTS (Produtos Mais Vendidos)
     # ============================================================================
     try:
+        # DB INTROSPECTION: Payment não tem product_id, usa product_name
         top_products_data = db.session.query(
-            Payment.product_id,
+            Payment.product_name,
             func.count(Payment.id).label('sales'),
             func.sum(Payment.amount).label('revenue')
         ).filter(
             payment_filter,
             Payment.status == 'paid',
-            Payment.product_id.isnot(None)
-        ).group_by(Payment.product_id).order_by(
+            Payment.product_name.isnot(None)
+        ).group_by(Payment.product_name).order_by(
             func.count(Payment.id).desc()
         ).limit(5).all()
 
         top_products = [{
-            'id': p.product_id,
+            'id': p.product_name,  # Usando product_name como ID (string)
+            'name': p.product_name,
             'sales': p.sales,
             'revenue': float(p.revenue or 0)
         } for p in top_products_data]
