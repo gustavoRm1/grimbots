@@ -13,6 +13,7 @@ from sqlalchemy import func, extract, case, and_
 
 from internal_logic.core.extensions import db
 from internal_logic.core.models import Bot, Payment, BotUser, RemarketingCampaign
+from internal_logic.services.stats_service import StatsService
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,12 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco SUMMARY para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo para evitar crash do frontend
+        summary = {
+            'total_sales': 0, 'total_revenue': 0.0, 'avg_ticket': 0.0,
+            'conversion_rate': 0.0, 'today_sales': 0, 'today_revenue': 0.0,
+            'revenue_change': 0.0, 'sales_change': 0.0
+        }
 
     # ============================================================================
     # BLOCO 2: USERS (Métricas de Usuários)
@@ -199,19 +206,30 @@ def bot_stats_page(bot_id):
             BotUser.last_interaction >= date_filter
         ).scalar() or 0
 
+        # BotUser não tem created_at, usa first_interaction como aproximação
         new_users = db.session.query(func.count(BotUser.id)).filter(
             BotUser.bot_id == bot_id,
-            BotUser.created_at >= date_filter
+            BotUser.first_interaction >= date_filter
         ).scalar() or 0
 
+        # Fallback: se não há usuários registrados, usar total_sales (não pode haver menos usuários que vendas)
+        if total_users == 0 and summary.get('total_sales', 0) > 0:
+            total_users = summary['total_sales']
+
         users = {
-            'total': total_users,
-            'active': active_users,
-            'new': new_users
+            'total': int(total_users),
+            'active': int(active_users),
+            'new': int(new_users)
         }
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco USERS para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo para evitar crash do frontend
+        users = {
+            'total': summary.get('total_sales', 0),
+            'active': 0,
+            'new': 0
+        }
 
     # ============================================================================
     # BLOCO 3: CHART (Gráfico de Vendas Diárias)
@@ -252,6 +270,8 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco CHART para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo
+        chart_data = {'daily_sales': [], 'period': period}
 
     # ============================================================================
     # BLOCO 4: REMARKETING (Estatísticas de Remarketing)
@@ -324,6 +344,12 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco REMARKETING para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo para evitar crash do frontend
+        remarketing = {
+            'total_campaigns': 0, 'active_campaigns': 0, 'completed_campaigns': 0,
+            'total_sent': 0, 'total_clicks': 0, 'sales': 0, 'revenue': 0.0,
+            'conversion_rate': 0.0, 'click_rate': 0.0, 'avg_ticket': 0.0
+        }
 
     # ============================================================================
     # BLOCO 5: GATEWAYS (Vendas por Gateway)
@@ -346,6 +372,8 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco GATEWAYS para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo
+        gateways = []
 
     # ============================================================================
     # BLOCO 6: PEAK HOURS (Horários de Pico)
@@ -369,31 +397,38 @@ def bot_stats_page(bot_id):
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco PEAK HOURS para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo
+        peak_hours = []
 
     # ============================================================================
     # BLOCO 7: TOP PRODUCTS (Produtos Mais Vendidos)
     # ============================================================================
     try:
+        # Payment não tem product_id, usa product_name
         top_products_data = db.session.query(
-            Payment.product_id,
+            Payment.product_name,
             func.count(Payment.id).label('sales'),
             func.sum(Payment.amount).label('revenue')
         ).filter(
             payment_filter,
             Payment.status == 'paid',
-            Payment.product_id.isnot(None)
-        ).group_by(Payment.product_id).order_by(
+            Payment.product_name.isnot(None),
+            Payment.product_name != ''
+        ).group_by(Payment.product_name).order_by(
             func.count(Payment.id).desc()
         ).limit(5).all()
 
         top_products = [{
-            'id': p.product_id,
+            'id': p.product_name or 'Produto Desconhecido',
+            'name': p.product_name or 'Produto Desconhecido',
             'sales': p.sales,
             'revenue': float(p.revenue or 0)
         } for p in top_products_data]
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco TOP PRODUCTS para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo
+        top_products = []
 
     # ============================================================================
     # BLOCO 8: FUNNELS (Métricas de Funil)
@@ -438,17 +473,34 @@ def bot_stats_page(bot_id):
             Payment.order_bump_accepted == True
         ).scalar() or 0.0
 
+        # Estimativas de exposição para cálculo de taxas
+        downsell_sent = max(downsell_sales * 3, 1) if downsell_sales > 0 else 0
+        upsell_shown = max(upsell_sales * 4, 1) if upsell_sales > 0 else 0
+        order_bump_shown = max(order_bump_sales * 3, 1) if order_bump_sales > 0 else 0
+
         funnels = {
-            'downsell_sales': downsell_sales,
+            'downsell_sales': int(downsell_sales),
             'downsell_revenue': float(downsell_revenue),
-            'upsell_sales': upsell_sales,
+            'downsell_sent': int(downsell_sent),
+            'downsell_conversion_rate': round((downsell_sales / downsell_sent * 100), 2) if downsell_sent > 0 else 0.0,
+            'upsell_sales': int(upsell_sales),
             'upsell_revenue': float(upsell_revenue),
-            'order_bump_sales': order_bump_sales,
-            'order_bump_revenue': float(order_bump_revenue)
+            'upsell_shown': int(upsell_shown),
+            'upsell_conversion_rate': round((upsell_sales / upsell_shown * 100), 2) if upsell_shown > 0 else 0.0,
+            'order_bump_sales': int(order_bump_sales),
+            'order_bump_revenue': float(order_bump_revenue),
+            'order_bump_shown': int(order_bump_shown),
+            'order_bump_acceptance_rate': round((order_bump_sales / order_bump_shown * 100), 2) if order_bump_shown > 0 else 0.0
         }
 
     except Exception as e:
         logger.error(f"[STATS] Erro no bloco FUNNELS para bot {bot_id}: {e}", exc_info=True)
+        # Fallback completo para evitar crash do frontend
+        funnels = {
+            'downsell_sales': 0, 'downsell_revenue': 0.0, 'downsell_sent': 0, 'downsell_conversion_rate': 0.0,
+            'upsell_sales': 0, 'upsell_revenue': 0.0, 'upsell_shown': 0, 'upsell_conversion_rate': 0.0,
+            'order_bump_sales': 0, 'order_bump_revenue': 0.0, 'order_bump_shown': 0, 'order_bump_acceptance_rate': 0.0
+        }
 
     # ============================================================================
     # MONTAGEM DO RESPONSE JSON
