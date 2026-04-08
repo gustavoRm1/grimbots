@@ -49,43 +49,42 @@ def telegram_webhook(bot_id):
             return jsonify({'status': 'ok'}), 200
         
         # ============================================================================
-        # 🔥 TENTATIVA 1: VIA EXPRESSA (Processamento Direto Legado) - PRIMEIRO!
+        # TENTATIVA 1: VIA EXPRESSA (Processamento Direto Legado) - PRIMEIRO!
         # ============================================================================
         # Esta é a via à prova de balas - processa direto sem Redis, sem burocracia
+        # Buscar config direto do banco
         try:
-            # Buscar config direto do banco
-            try:
-                bot_config = bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
-                config_dict = bot_config.to_dict() if bot_config else {}
-            except Exception as config_error:
-                db.session.rollback()
-                logger.warning(f"⚠️ Erro ao buscar config (não crítico): {config_error}")
-                config_dict = {}  # Continua sem config
+            bot_config = bot.config or BotConfig.query.filter_by(bot_id=bot_id).first()
+            config_dict = bot_config.to_dict() if bot_config else {}
+        except Exception as config_error:
+            db.session.rollback()
+            logger.warning(f"⚠️ Erro ao buscar config (não crítico): {config_error}")
+            config_dict = {}  # Continua sem config
+        
+        # ✅ QI 200: Enfileirar para processamento assíncrono via Worker RQ
+        # GARANTIA: O Worker criará/atualizará o BotUser ANTES de processar a mensagem
+        try:
+            from tasks_async import task_queue, process_telegram_message_async
             
-            # ✅ QI 200: Enfileirar para processamento assíncrono via Worker RQ
-            # GARANTIA: O Worker criará/atualizará o BotUser ANTES de processar a mensagem
-            try:
-                from tasks_async import task_queue, process_telegram_message_async
+            if task_queue:
+                task_queue.enqueue(
+                    process_telegram_message_async,
+                    bot_id,
+                    update,
+                    bot.token,
+                    config_dict
+                )
+                return jsonify({'status': 'queued'}), 200
+            else:
+                # Fila não disponível - processar síncrono com garantia de BotUser
+                logger.warning(f"⚠️ Fila RQ não disponível, processando síncrono | Bot: {bot_id}")
+                from tasks_async import process_telegram_message_async
+                process_telegram_message_async(bot_id, update, bot.token, config_dict)
+                return jsonify({'status': 'processed_sync'}), 200
                 
-                if task_queue:
-                    task_queue.enqueue(
-                        process_telegram_message_async,
-                        bot_id,
-                        update,
-                        bot.token,
-                        config_dict
-                    )
-                    return jsonify({'status': 'queued'}), 200
-                else:
-                    # Fila não disponível - processar síncrono com garantia de BotUser
-                    logger.warning(f"⚠️ Fila RQ não disponível, processando síncrono | Bot: {bot_id}")
-                    from tasks_async import process_telegram_message_async
-                    process_telegram_message_async(bot_id, update, bot.token, config_dict)
-                    return jsonify({'status': 'processed_sync'}), 200
-                    
-            except Exception as e:
-                logger.error(f"❌ Erro ao enfileirar processamento: {e}")
-                return jsonify({'error': 'Processing failed'}), 500
+        except Exception as e:
+            logger.error(f"❌ Erro ao enfileirar processamento: {e}")
+            return jsonify({'error': 'Processing failed'}), 500
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no webhook Telegram: {e}")
