@@ -40,18 +40,21 @@ def dashboard():
     # Obter modo (simples ou avançado)
     mode = request.args.get('mode', 'advanced')
     
-    # Buscar bots do usuário
-    bots = Bot.query.filter_by(user_id=current_user.id).all()
-    bot_ids = [b.id for b in bots] if bots else []
+    # Buscar TODOS os bots do usuário (para cálculos de estatísticas)
+    all_bots = Bot.query.filter_by(user_id=current_user.id).all()
+    bot_ids = [b.id for b in all_bots] if all_bots else []
+    
+    # Buscar APENAS bots ativos (para exibição na interface)
+    active_bots_only = Bot.query.filter_by(user_id=current_user.id, is_active=True).all()
     
     # Períodos de tempo
     today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = get_brazil_time().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Estatísticas básicas
-    total_bots = len(bots)
-    active_bots = sum(1 for b in bots if b.is_active)
-    running_bots = sum(1 for b in bots if b.is_running)
+    # Estatísticas básicas (calculadas com TODOS os bots)
+    total_bots = len(all_bots)
+    active_bots = sum(1 for b in all_bots if b.is_active)
+    running_bots = sum(1 for b in all_bots if b.is_running)
     
     # Total de usuários (leads) across all bots
     total_users = BotUser.query.filter(
@@ -193,9 +196,9 @@ def dashboard():
     else:
         recent_payments = []
     
-    # Mapear bots para dict serializável - V2: Stats On-Demand via SQL
+    # Mapear bots ATIVOS para dict serializável - V2: Stats On-Demand via SQL
     bots_list = []
-    for b in bots:
+    for b in active_bots_only:
         # ============================================================================
         # ✅ ARQUITETURA LEGADA RESTAURADA: Stats On-Demand por Bot via SQL
         # As colunas total_sales/total_revenue NUNCA existiram no schema Bot.
