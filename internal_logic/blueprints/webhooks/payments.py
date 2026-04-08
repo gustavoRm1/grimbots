@@ -60,8 +60,9 @@ def payment_webhook(gateway_type):
         if webhook_queue:
             webhook_queue.enqueue(
                 process_webhook_async,
-                gateway_type=gateway_type,
-                data=data
+                0,  # user_id 0 = Worker fará auto-resolve via transaction_id
+                gateway_type,
+                data
             )
             return jsonify({'status': 'queued'}), 200
     except Exception as e:
@@ -69,7 +70,9 @@ def payment_webhook(gateway_type):
     
     # ✅ FALLBACK: Processar síncrono se RQ não disponível
     try:
-        return _process_payment_webhook_sync(gateway_type, data)
+        from tasks_async import process_webhook_async
+        process_webhook_async(0, gateway_type, data)
+        return jsonify({'status': 'processed_sync'}), 200
     except Exception as e:
         logger.error(f"❌ Erro ao processar webhook: {e}")
         return jsonify({'error': 'Internal error'}), 500
