@@ -1058,6 +1058,7 @@ class Payment(db.Model):
     customer_document = db.Column(db.String(50), nullable=True)  # CPF/CNPJ
     
     # Produto
+    product_id = db.Column(db.String(100), index=True)  # ✅ CRÍTICO para queries de top products
     product_name = db.Column(db.String(100))
     product_description = db.Column(db.Text)
     
@@ -1153,20 +1154,25 @@ class BotUser(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
+    telegram_user_id = db.Column(db.BigInteger, nullable=False, index=True)
     
-    # Dados do usuário do Telegram
-    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
-    first_name = db.Column(db.String(255))
-    username = db.Column(db.String(255))
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
+    username = db.Column(db.String(100))
+    phone_number = db.Column(db.String(20))
     
-    # Arquivamento (quando bot troca de token)
-    archived = db.Column(db.Boolean, default=False, index=True)  # Usuario de token antigo
-    archived_reason = db.Column(db.String(100))  # Ex: "token_changed"
-    archived_at = db.Column(db.DateTime)  # Quando foi arquivado
+    # Timestamps - ✅ CRÍTICO: created_at adicionado para queries de "novos usuários"
+    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)  # ✅ NOVO
+    first_interaction = db.Column(db.DateTime, default=get_brazil_time)
+    last_interaction = db.Column(db.DateTime, default=get_brazil_time)
+    last_seen = db.Column(db.DateTime, default=get_brazil_time)
     
-    # ✅ WELCOME MESSAGE TRACKING (recuperação automática de crashes)
-    welcome_sent = db.Column(db.Boolean, default=False, index=True)  # Se já recebeu boas-vindas
-    welcome_sent_at = db.Column(db.DateTime, nullable=True)  # Quando recebeu
+    # Status
+    is_active = db.Column(db.Boolean, default=True)
+    archived = db.Column(db.Boolean, default=False)
+    
+    # Campos customizados
+    metadata = db.Column(db.JSON, default=dict)  # Quando recebeu
     
     # ✅ META PIXEL INTEGRATION
     meta_pageview_sent = db.Column(db.Boolean, default=False)
@@ -1434,19 +1440,18 @@ class RemarketingCampaign(db.Model):
         }
 
 class RemarketingBlacklist(db.Model):
-    """Usuários que não querem receber remarketing"""
+    """Blacklist de usuários no remarketing"""
     __tablename__ = 'remarketing_blacklist'
     
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
-    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
-    reason = db.Column(db.String(50))  # user_request, bot_blocked, spam_report
+    telegram_user_id = db.Column(db.BigInteger, nullable=False, index=True)  # ✅ CRÍTICO: BigInteger para consistência
+    
+    reason = db.Column(db.String(50), default='unsubscribed')  # unsubscribed, bounced, complaint
     created_at = db.Column(db.DateTime, default=get_brazil_time)
     
-    # Índice único
-    __table_args__ = (
-        db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_blacklist'),
-    )
+    # Relacionamento único por bot + usuário
+    __table_args__ = (db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_blacklist'),)
 
 class Subscription(db.Model):
     """Assinatura de acesso a grupo VIP"""
