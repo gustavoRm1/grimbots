@@ -518,14 +518,34 @@ def bot_stats_page(bot_id):
         error_out=False
     )
     
-    campaigns = campaigns_pagination.items
+    # Converter objetos SQLAlchemy para dicionários (JSON serializável)
+    campaigns = []
+    for campaign in campaigns_pagination.items:
+        campaigns.append({
+            'id': campaign.id,
+            'name': campaign.name,
+            'message': campaign.message,
+            'is_active': campaign.is_active,
+            'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+            'executed_at': campaign.executed_at.isoformat() if campaign.executed_at else None,
+            'executed_count': campaign.executed_count,
+            'clicks_count': campaign.clicks_count,
+            'sales_count': campaign.sales_count,
+            'revenue': float(campaign.revenue) if campaign.revenue else 0.0,
+            'photo_url': campaign.photo_url,
+            'video_url': campaign.video_url,
+            'audio_url': campaign.audio_url,
+            'buttons': campaign.buttons
+        })
+    
     pagination = {
         'page': campaigns_pagination.page,
         'pages': campaigns_pagination.pages,
         'has_prev': campaigns_pagination.has_prev,
         'has_next': campaigns_pagination.has_next,
         'prev_num': campaigns_pagination.prev_num,
-        'next_num': campaigns_pagination.next_num
+        'next_num': campaigns_pagination.next_num,
+        'total': campaigns_pagination.total
     }
     
     # ============================================================================
