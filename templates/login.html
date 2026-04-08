@@ -91,7 +91,7 @@
             {% endwith %}
             
             <!-- Form -->
-            <form class="px-8 pb-8 pt-6 space-y-6" method="POST" action="{{ url_for('login') }}" x-data="{ showPassword: false }">
+            <form class="px-8 pb-8 pt-6 space-y-6" method="POST" action="{{ url_for('auth.login') }}" x-data="{ showPassword: false }">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 
                 <!-- Email Field -->
@@ -165,7 +165,7 @@
                     </label>
 
                     <div class="text-sm">
-                        <a href="{{ url_for('forgot_password') }}" class="font-semibold hover:scale-105 transition-transform inline-block" 
+                        <a href="{{ url_for('auth.forgot_password') }}" class="font-semibold hover:scale-105 transition-transform inline-block"
                            style="color: var(--brand-gold-200);">
                             Esqueceu a senha?
                         </a>
@@ -200,8 +200,8 @@
 
             <!-- Secondary CTA -->
             <div class="px-8 pb-8">
-                <a 
-                    href="{{ url_for('register') }}" 
+                <a
+                    href="{{ url_for('auth.register') }}"
                     class="group w-full flex justify-center items-center py-3.5 px-6 border-2 border-accent500 border-opacity-30 rounded-xl text-sm font-semibold text-accent500 bg-transparent hover:bg-accent500 hover:bg-opacity-12 hover:border-opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface800 focus:ring-accent500 transition-all">
                     <i class="fas fa-user-plus mr-2 group-hover:scale-110 transition-transform"></i>
                     Criar conta grátis
