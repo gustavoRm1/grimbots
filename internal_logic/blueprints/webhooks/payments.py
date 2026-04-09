@@ -23,7 +23,6 @@ webhooks_bp = Blueprint('webhooks', __name__)
 def payment_webhook(gateway_type):
     """
     Webhook para confirmação de pagamento - QI 200 FAST MODE
-    ✅ Retorna 200 IMEDIATAMENTE e processa em background
     """
     raw_body = request.get_data(cache=True, as_text=True)
     data = request.get_json(silent=True)
@@ -52,7 +51,13 @@ def payment_webhook(gateway_type):
     data.setdefault('_content_type', request.content_type)
     data.setdefault('_payload_source', payload_source)
     
-    logger.info(f"🔔 Webhook {gateway_type} recebido | content-type={request.content_type}")
+    # DEBUG: Log completo do payload recebido
+    logger.debug(f"WEBHOOK DEBUG: {gateway_type} payload recebido:")
+    logger.debug(f"   Raw Body: {raw_body[:500]}...")  # Primeiros 500 chars
+    logger.debug(f"   Parsed Data: {data}")
+    logger.debug(f"   Content-Type: {request.content_type}")
+    
+    logger.info(f" Webhook {gateway_type} recebido | content-type={request.content_type}")
     
     # ✅ QI 200: Enfileirar processamento na fila WEBHOOK
     try:
@@ -120,7 +125,13 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict):
     if result:
         gateway_transaction_id = result.get('gateway_transaction_id')
         
-        # Buscar pagamento
+        # DEBUG: Log do resultado processado
+        logger.debug(f"WEBHOOK DEBUG: Resultado processado:")
+        logger.debug(f"   Gateway Transaction ID: {gateway_transaction_id}")
+        logger.debug(f"   Status: {result.get('status')}")
+        logger.debug(f"   Gateway Hash: {result.get('gateway_hash')}")
+        
+        # Buscar pagamento - MELHORADO
         payment_query = Payment.query
         if gateway:
             payment_query = payment_query.filter_by(gateway_type=gateway_type)
@@ -129,21 +140,48 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict):
                 payment_query = payment_query.filter(Payment.bot_id.in_(user_bot_ids))
         
         payment = None
-        if gateway_transaction_id:
-            payment = payment_query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
         
+        # Tentativa 1: gateway_transaction_id (PARADISE USA ESTE)
+        if gateway_transaction_id:
+            logger.debug(f"WEBHOOK DEBUG: Buscando por gateway_transaction_id={gateway_transaction_id}")
+            payment = payment_query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
+            if payment:
+                logger.debug(f"WEBHOOK DEBUG: Pagamento encontrado via gateway_transaction_id! ID={payment.id}")
+        
+        # Tentativa 2: payment_id (fallback)
+        if not payment and 'payment_id' in data:
+            payment_id = data.get('payment_id')
+            logger.debug(f"WEBHOOK DEBUG: Buscando por payment_id={payment_id}")
+            payment = payment_query.filter_by(payment_id=str(payment_id)).first()
+            if payment:
+                logger.debug(f"WEBHOOK DEBUG: Pagamento encontrado via payment_id! ID={payment.id}")
+        
+        # Tentativa 3: gateway_hash (fallback)
         if not payment:
             gateway_hash = result.get('gateway_hash') or data.get('hash')
             if gateway_hash:
+                logger.debug(f"WEBHOOK DEBUG: Buscando por gateway_hash={gateway_hash}")
                 payment = payment_query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
+                if payment:
+                    logger.debug(f"WEBHOOK DEBUG: Pagamento encontrado via gateway_hash! ID={payment.id}")
         
-        if payment and result.get('status') == 'paid' and payment.status != 'paid':
-            payment.status = 'paid'
-            from internal_logic.core.extensions import db
-            db.session.commit()
-            
-            # Processar entrega
-            from internal_logic.services.payment_processor import process_payment_confirmation
-            process_payment_confirmation(payment, gateway_type)
+        # Se encontrou pagamento e status é 'paid'
+        if payment:
+            logger.debug(f"WEBHOOK DEBUG: Pagamento localizado - Status atual: {payment.status}")
+            if result.get('status') == 'paid' and payment.status != 'paid':
+                logger.info(f"WEBHOOK DEBUG: ATUALIZANDO pagamento {payment.id} para PAID!")
+                payment.status = 'paid'
+                payment.paid_at = datetime.utcnow()  # <--- CRÍTICO: Preencher paid_at
+                from internal_logic.core.extensions import db
+                db.session.commit()
+                
+                # Processar entrega
+                from internal_logic.services.payment_processor import process_payment_confirmation
+                process_payment_confirmation(payment, gateway_type)
+                logger.info(f"WEBHOOK DEBUG: Pagamento {payment.id} confirmado e entrega processada!")
+            else:
+                logger.debug(f"WEBHOOK DEBUG: Pagamento já está paid ou status não é paid")
+        else:
+            logger.warning(f"WEBHOOK DEBUG: NENHUM pagamento encontrado para o webhook!")
     
     return jsonify({'status': 'processed'}), 200
