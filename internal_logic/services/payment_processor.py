@@ -1532,49 +1532,78 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
             local_bot_manager = bot_manager
         
         # Preparar dados do cliente
-        customer_id = payment.payer_id or payment.customer_id or payment.external_id
+        customer_id = payment.customer_user_id
+        if not customer_id:
+            logger.error(f" Erro na entrega: Pix {payment.id} não possui customer_user_id vinculado.")
+            return False
         customer_email = payment.payer_email or payment.customer_email or ''
         customer_name = payment.payer_name or payment.customer_name or 'Cliente'
         
-        # Conteúdo do entregável
-        product_name = payment.product_name or 'Produto'
-        access_link = payment.bot.config.delivery_link if payment.bot.config else None
+        # GERAÇÃO DO DELIVERY_TOKEN (se não existir)
+        import hashlib
+        if not payment.delivery_token:
+            payment.delivery_token = hashlib.sha256(f"{payment.id}_{datetime.now().timestamp()}".encode()).hexdigest()[:32]
+            db.session.add(payment)
+            db.session.commit()
+            logger.info(f" Delivery token gerado: {payment.delivery_token}")
         
-        if not access_link:
-            logger.error(f"❌ Bot {payment.bot.id} não tem delivery_link configurado")
+        # DECISÃO DE LINK (Meta Pixel)
+        link_to_send = None
+        
+        # Verificar se Meta Pixel está ativo no pool do bot
+        pixel_active = False
+        pixel_id = None
+        if hasattr(payment.bot, 'meta_pixel') and payment.bot.meta_pixel:
+            pixel_active = payment.bot.meta_pixel.get('active', False)
+            pixel_id = payment.bot.meta_pixel.get('pixel_id')
+        
+        if pixel_active and pixel_id:
+            link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}?px={pixel_id}"
+            logger.info(f" Usando link com Meta Pixel: {link_to_send}")
+        else:
+            # Fallback para access_link original
+            link_to_send = payment.bot.config.access_link if payment.bot.config else None
+            logger.info(f" Usando access_link original: {link_to_send}")
+        
+        if not link_to_send:
+            logger.error(f" Bot {payment.bot.id} não tem link de entrega configurado")
             return {'success': False, 'message': 'Link de entrega não configurado', 'delivery_method': 'none'}
         
-        # Tentar enviar via Telegram primeiro (se tiver chat_id)
+        # FORMATAÇÃO DA MENSAGEM HTML (IGUAL AO MAPA)
+        product_name = payment.product_name or 'Produto'
+        customer_name = payment.payer_name or payment.customer_name or 'Cliente'
+        
+        message = f"""
+<b> Pagamento Confirmado!</b>
+
+Seu acesso está disponível agora.
+
+<b>Produto:</b> {product_name}
+<b>Cliente:</b> {customer_name}
+
+<b>Link de Acesso:</b>
+{link_to_send}
+
+<b>Importante:</b>
+ Guarde este link com segurança
+ Não compartilhe com terceiros
+ Dúvidas? Responda esta mensagem
+
+<b>Data:</b> {payment.paid_at.strftime('%d/%m/%Y %H:%M') if payment.paid_at else datetime.now().strftime('%d/%m/%Y %H:%M')}
+        """.strip()
+        
+        # DISPARO VIA local_bot_manager
         telegram_sent = False
-        if customer_id and str(customer_id).isdigit():
-            try:
-                # Enviar mensagem via Telegram
-                message = f"""
-🎉 <b>Parabéns! Seu acesso foi liberado!</b>
-
-📦 <b>Produto:</b> {product_name}
-👤 <b>Cliente:</b> {customer_name}
-
-🔗 <b>Link de Acesso:</b>
-{access_link}
-
-⚠️ <b>Importante:</b>
-• Guarde este link com segurança
-• Não compartilhe com terceiros
-• Dúvidas? Responda esta mensagem
-
-✅ Pagamento confirmado em: {payment.paid_at or datetime.now()}
-                """.strip()
-                
-                local_bot_manager.send_telegram_message(
-                    token=payment.bot.token,
-                    chat_id=str(customer_id),
-                    message=message
-                )
-                telegram_sent = True
-                logger.info(f"✅ Entregável enviado via Telegram para {customer_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ Falha ao enviar via Telegram: {e}")
+        try:
+            local_bot_manager.send_telegram_message(
+                chat_id=int(payment.customer_user_id),
+                text=message,
+                parse_mode='HTML'
+            )
+            telegram_sent = True
+            logger.info(f" Entregável enviado via Telegram para {payment.customer_user_id}")
+        except Exception as e:
+            logger.warning(f" Falha ao enviar via Telegram: {e}")
         
         # Se não conseguiu via Telegram, tentar email (se disponível)
         email_sent = False
