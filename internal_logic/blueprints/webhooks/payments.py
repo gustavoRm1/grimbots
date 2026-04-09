@@ -200,18 +200,18 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
                         db.session.commit()
                         print(f"[SUCCESS] Pagamento {payment.id} atualizado para PAID via status: {status_recebido}")
                         print(f"[AUDIT] Step 6: Commit OK! Payment {payment.id} atualizado para PAID")
-                    
-                    # Processar entrega
-                    from internal_logic.services.payment_processor import process_payment_confirmation
-                    process_payment_confirmation(payment, gateway_type)
-                    print(f"[AUDIT] Step 6: Entrega processada para Payment {payment.id}")
-                    
-                    return True  # SUCESSO
-                    
-                except Exception as commit_error:
-                    print(f"[AUDIT] Step 6: Commit FALHOU: {commit_error}")
-                    db.session.rollback()
-                    return False
+                        
+                        # Processar entrega
+                        from internal_logic.services.payment_processor import process_payment_confirmation
+                        process_payment_confirmation(payment, gateway_type)
+                        print(f"[AUDIT] Step 6: Entrega processada para Payment {payment.id}")
+                        
+                        return True  # SUCESSO
+                        
+                    except Exception as commit_error:
+                        print(f"[AUDIT] Step 6: Commit FALHOU: {commit_error}")
+                        db.session.rollback()
+                        return False
             else:
                 print(f"[AUDIT] Step 5: Status não é 'paid', não atualizando")
                 return False
