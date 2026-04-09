@@ -267,105 +267,116 @@ def dashboard():
 @dashboard_bp.route('/api/dashboard/stats')
 @login_required
 def api_dashboard_stats():
-    """API para estatísticas do dashboard (usado pelo JavaScript) - ARQUITETURA LEGADA RESTAURADA"""
-    from sqlalchemy import func
+    """API para estatísticas do dashboard (usado pelo JavaScript) - OTIMIZADA V2"""
+    from sqlalchemy import func, text
     from internal_logic.core.models import BotUser
     import pytz
     from datetime import datetime, timedelta
     
     try:
         # ============================================================================
-        # CAMADA 2: MATEMÁTICA DO "HOJE" COM TIMEZONE CORRETO
-        # Converte 00:00 de Brasília para UTC (naive) para comparar com o banco
+        # TIMEZONE: Hoje em Brasília convertido para UTC (naive)
         # ============================================================================
         brasilia_tz = pytz.timezone('America/Sao_Paulo')
-        utc_tz = pytz.UTC
-        
-        # Pega agora em Brasília e zera para meia-noite
         now_br = datetime.now(brasilia_tz)
         today_start_br = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Converte para UTC e remove timezone (naive) para consultar o banco
-        today_start_utc = today_start_br.astimezone(utc_tz).replace(tzinfo=None)
+        today_start_utc = today_start_br.astimezone(pytz.UTC).replace(tzinfo=None)
+        today_start_str = today_start_utc.strftime('%Y-%m-%d %H:%M:%S')
         
         # ============================================================================
-        # CAMADA 1: QUERIES VIA JOIN(Bot) - ARQUITETURA LEGADA
+        # OTIMIZAÇÃO: Query unificada via SQL direto (muito mais rápido que múltiplos JOINs)
         # ============================================================================
         
-        # RECEITA DE HOJE: JOIN Payment -> Bot para filtrar por user_id
-        today_revenue_result = db.session.query(
-            func.coalesce(func.sum(Payment.amount), 0).label('revenue'),
-            func.count(Payment.id).label('sales')
-        ).join(Bot, Payment.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            Payment.status == 'paid',
-            Payment.created_at >= today_start_utc
+        # Query única para métricas de hoje (payments)
+        today_metrics_query = text("""
+            SELECT 
+                COALESCE(SUM(p.amount), 0) as revenue,
+                COUNT(p.id) as sales
+            FROM payments p
+            INNER JOIN bots b ON p.bot_id = b.id
+            WHERE b.user_id = :user_id 
+              AND p.status = 'paid'
+              AND p.created_at >= :today_start
+        """)
+        
+        today_result = db.session.execute(
+            today_metrics_query, 
+            {"user_id": current_user.id, "today_start": today_start_str}
         ).first()
         
-        today_revenue = float(today_revenue_result.revenue or 0.0)
-        today_sales = today_revenue_result.sales or 0
+        today_revenue = float(today_result.revenue or 0.0)
+        today_sales = today_result.sales or 0
         
-        # USUÁRIOS NOVOS HOJE: JOIN BotUser -> Bot
-        today_users = db.session.query(
-            func.count(db.distinct(BotUser.telegram_user_id))
-        ).join(Bot, BotUser.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            BotUser.archived == False,
-            BotUser.first_interaction >= today_start_utc
+        # Query para usuários novos hoje
+        today_users_query = text("""
+            SELECT COUNT(DISTINCT bu.telegram_user_id) as new_users
+            FROM bot_users bu
+            INNER JOIN bots b ON bu.bot_id = b.id
+            WHERE b.user_id = :user_id 
+              AND bu.archived = 0
+              AND bu.first_interaction >= :today_start
+        """)
+        
+        today_users_result = db.session.execute(
+            today_users_query,
+            {"user_id": current_user.id, "today_start": today_start_str}
         ).scalar() or 0
         
-        # RECEITA TOTAL (todo período)
-        total_revenue = db.session.query(
-            func.coalesce(func.sum(Payment.amount), 0)
-        ).join(Bot, Payment.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            Payment.status == 'paid'
-        ).scalar() or 0.0
+        # Query única para métricas totais (tudo em uma query só!)
+        totals_query = text("""
+            SELECT 
+                (SELECT COALESCE(SUM(p.amount), 0)
+                 FROM payments p
+                 INNER JOIN bots b ON p.bot_id = b.id
+                 WHERE b.user_id = :user_id AND p.status = 'paid') as total_revenue,
+                
+                (SELECT COUNT(p.id)
+                 FROM payments p
+                 INNER JOIN bots b ON p.bot_id = b.id
+                 WHERE b.user_id = :user_id AND p.status = 'paid') as total_sales,
+                
+                (SELECT COUNT(DISTINCT bu.telegram_user_id)
+                 FROM bot_users bu
+                 INNER JOIN bots b ON bu.bot_id = b.id
+                 WHERE b.user_id = :user_id AND bu.archived = 0) as total_leads,
+                
+                (SELECT COUNT(*) FROM bots WHERE user_id = :user_id AND is_active = 1) as active_bots,
+                
+                (SELECT COUNT(*) FROM bots WHERE user_id = :user_id) as total_bots
+        """)
         
-        # CONTAGEM DE BOTS
-        active_bots = Bot.query.filter_by(
-            user_id=current_user.id,
-            is_active=True
-        ).count()
+        totals_result = db.session.execute(
+            totals_query,
+            {"user_id": current_user.id}
+        ).first()
         
-        total_bots = Bot.query.filter_by(
-            user_id=current_user.id
-        ).count()
+        total_revenue = float(totals_result.total_revenue or 0.0)
+        total_sales = totals_result.total_sales or 0
+        total_leads = totals_result.total_leads or 0
+        active_bots = totals_result.active_bots or 0
+        total_bots = totals_result.total_bots or 0
         
-        # TAXA DE CONVERSÃO (vendas / leads)
-        total_leads = db.session.query(
-            func.count(db.distinct(BotUser.telegram_user_id))
-        ).join(Bot, BotUser.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            BotUser.archived == False
-        ).scalar() or 0
-        
-        total_sales_all_time = db.session.query(
-            func.count(Payment.id)
-        ).join(Bot, Payment.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            Payment.status == 'paid'
-        ).scalar() or 0
-        
-        conversion_rate = (total_sales_all_time / total_leads * 100) if total_leads > 0 else 0.0
+        conversion_rate = (total_sales / total_leads * 100) if total_leads > 0 else 0.0
         
         # ============================================================================
-        # RETORNO COMPLETO DO JSON (Contrato Legado)
+        # RETORNO OTIMIZADO (Contrato Legado mantido)
         # ============================================================================
         return jsonify({
             'today_sales': today_sales,
             'today_revenue': today_revenue,
-            'today_users': today_users,
-            'total_revenue': float(total_revenue),
+            'today_users': today_users_result,
+            'total_revenue': total_revenue,
             'conversion_rate': round(conversion_rate, 2),
             'active_bots': active_bots,
             'total_bots': total_bots
         })
         
     except Exception as e:
-        logger.error(f"Erro nas estatísticas do dashboard: {e}")
+        logger.error(f"[DASHBOARD API] Erro: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        
+        # Retornar zeros ao invés de 500 para não quebrar o frontend
         return jsonify({
             'today_sales': 0,
             'today_revenue': 0.0,
@@ -374,7 +385,7 @@ def api_dashboard_stats():
             'conversion_rate': 0.0,
             'active_bots': 0,
             'total_bots': 0
-        }), 500
+        }), 200  # Retorna 200 para o JS processar os zeros
 
 
 @dashboard_bp.route('/api/dashboard/sales-chart')
