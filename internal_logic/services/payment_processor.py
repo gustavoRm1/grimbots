@@ -1596,9 +1596,9 @@ Seu acesso está disponível agora.
         telegram_sent = False
         try:
             local_bot_manager.send_telegram_message(
-                chat_id=int(payment.customer_user_id),
-                text=message,
-                parse_mode='HTML'
+                token=payment.bot.token,
+                chat_id=str(payment.customer_user_id),
+                message=message
             )
             telegram_sent = True
             logger.info(f" Entregável enviado via Telegram para {payment.customer_user_id}")
