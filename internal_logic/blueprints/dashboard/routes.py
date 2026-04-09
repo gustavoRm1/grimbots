@@ -137,11 +137,42 @@ def dashboard():
             Payment.created_at >= month_start
         ).scalar() or 0
         
-        # Novos Leads Hoje - JOIN EXPLÍCITO CORRIGIDO
+        # Novos Leads Hoje - VERIFICAÇÃO DIRETA COM LOGS
+        import pytz
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
+        utc_tz = pytz.UTC
+        agora_br = datetime.now(brasilia_tz)
+        inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
+        
+        # DEBUG: Log dos valores exatos
+        print(f"DEBUG LEADS: current_user.id={current_user.id}")
+        print(f"DEBUG LEADS: agora_br={agora_br}")
+        print(f"DEBUG LEADS: inicio_hoje_utc={inicio_hoje_utc}")
+        
+        # DEBUG: Query SQL bruta para verificação
+        from sqlalchemy import text
+        debug_query = text("""
+            SELECT COUNT(*) as total_leads
+            FROM bot_users bu
+            INNER JOIN bots b ON bu.bot_id = b.id
+            WHERE b.user_id = :user_id 
+              AND bu.first_interaction >= :inicio_hoje_utc
+        """)
+        
+        debug_result = db.session.execute(debug_query, {
+            "user_id": current_user.id,
+            "inicio_hoje_utc": inicio_hoje_utc
+        }).scalar()
+        
+        print(f"DEBUG LEADS: Resultado SQL bruto={debug_result}")
+        
+        # Query ORM (original)
         usuarios_hoje = db.session.query(BotUser).join(Bot, BotUser.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id,
-            BotUser.first_interaction >= today_start
+            BotUser.first_interaction >= inicio_hoje_utc
         ).count()
+        
+        print(f"DEBUG LEADS: Resultado ORM={usuarios_hoje}")
         today_users = usuarios_hoje
         
         month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
