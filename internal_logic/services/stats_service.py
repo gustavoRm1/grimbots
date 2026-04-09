@@ -44,10 +44,7 @@ class StatsService:
         date_filter = StatsService.get_period_filter(period_days)
         date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S') if period_days != 'all' else None
         
-        # Usar SQL direto para evitar problemas de schema
-        engine = db.engine
-        connection = engine.connect()
-        
+        # Usar SQL direto via session (compatível SQLAlchemy 2.0)
         # Total de vendas pagas
         if date_filter_str:
             sales_query = text("""
@@ -55,10 +52,10 @@ class StatsService:
                 FROM payments 
                 WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
             """)
-            total_sales = connection.execute(sales_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+            total_sales = db.session.execute(sales_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
         else:
             sales_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
-            total_sales = connection.execute(sales_query, {"bot_id": bot_id}).scalar()
+            total_sales = db.session.execute(sales_query, {"bot_id": bot_id}).scalar()
         
         # Receita total
         if date_filter_str:
@@ -67,10 +64,10 @@ class StatsService:
                 FROM payments 
                 WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
             """)
-            total_revenue = connection.execute(revenue_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+            total_revenue = db.session.execute(revenue_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
         else:
             revenue_query = text("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE bot_id = :bot_id AND status = 'paid'")
-            total_revenue = connection.execute(revenue_query, {"bot_id": bot_id}).scalar()
+            total_revenue = db.session.execute(revenue_query, {"bot_id": bot_id}).scalar()
         
         # Total de checkouts iniciados (todos os status)
         if date_filter_str:
@@ -79,10 +76,10 @@ class StatsService:
                 FROM payments 
                 WHERE bot_id = :bot_id AND created_at >= :date_filter
             """)
-            total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
+            total_checkouts = db.session.execute(checkout_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
         else:
             checkout_query = text("SELECT COUNT(*) FROM payments WHERE bot_id = :bot_id")
-            total_checkouts = connection.execute(checkout_query, {"bot_id": bot_id}).scalar()
+            total_checkouts = db.session.execute(checkout_query, {"bot_id": bot_id}).scalar()
         
         # Taxa de conversão
         conversion_rate = (total_sales / total_checkouts * 100) if total_checkouts > 0 else 0.0
@@ -95,14 +92,14 @@ class StatsService:
         today_start_str = today_start.strftime('%Y-%m-%d %H:%M:%S')
         today_end_str = (today_start + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
         
-        today_sales = connection.execute(
+        today_sales = db.session.execute(
             text("""SELECT COUNT(*) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
                AND created_at >= :start_date AND created_at < :end_date"""),
             {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
         ).scalar()
         
-        today_revenue = connection.execute(
+        today_revenue = db.session.execute(
             text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
                AND created_at >= :start_date AND created_at < :end_date"""),
@@ -112,14 +109,14 @@ class StatsService:
         # Métricas de ontem
         yesterday_start_str = (today_start - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
         
-        yesterday_sales = connection.execute(
+        yesterday_sales = db.session.execute(
             text("""SELECT COUNT(*) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
                AND created_at >= :start_date AND created_at < :end_date"""),
             {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
         ).scalar()
         
-        yesterday_revenue = connection.execute(
+        yesterday_revenue = db.session.execute(
             text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
                AND created_at >= :start_date AND created_at < :end_date"""),
@@ -131,32 +128,30 @@ class StatsService:
         sales_change = StatsService._calculate_percentage_change(today_sales, yesterday_sales)
         
         # Métricas de usuários
-        total_users = connection.execute(
+        total_users = db.session.execute(
             text("SELECT COUNT(*) FROM bot_users WHERE bot_id = :bot_id"), 
             {"bot_id": bot_id}
         ).scalar()
         
         # Usuários ativos (com interação no período)
         if date_filter_str:
-            active_users = connection.execute(
+            active_users = db.session.execute(
                 text("""SELECT COUNT(*) FROM bot_users 
                    WHERE bot_id = :bot_id AND last_interaction >= :date_filter"""),
                 {"bot_id": bot_id, "date_filter": date_filter_str}
             ).scalar()
         else:
-            active_users = total_users
+            active_users = 0
         
         # Novos usuários no período
         if date_filter_str:
-            new_users = connection.execute(
+            new_users = db.session.execute(
                 text("""SELECT COUNT(*) FROM bot_users 
                    WHERE bot_id = :bot_id AND first_interaction >= :date_filter"""),
                 {"bot_id": bot_id, "date_filter": date_filter_str}
             ).scalar()
         else:
             new_users = 0
-        
-        connection.close()
         
         return {
             'total_sales': total_sales or 0,
@@ -249,28 +244,25 @@ class StatsService:
             dict: Métricas de remarketing
         """
         try:
-            # Usar SQL direto para evitar problemas de schema
-            engine = db.get_engine()
-            connection = engine.connect()
-            
+            # Usar SQL direto via session (compatível SQLAlchemy 2.0)
             # Campanhas do bot
-            total_campaigns = connection.execute(
+            total_campaigns = db.session.execute(
                 text("SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = :bot_id"), 
                 {"bot_id": bot_id}
             ).scalar()
             
-            active_campaigns = connection.execute(
+            active_campaigns = db.session.execute(
                 text("SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = :bot_id AND status = 'active'"), 
                 {"bot_id": bot_id}
             ).scalar()
             
-            completed_campaigns = connection.execute(
+            completed_campaigns = db.session.execute(
                 text("SELECT COUNT(*) FROM remarketing_campaigns WHERE bot_id = :bot_id AND status = 'completed'"), 
                 {"bot_id": bot_id}
             ).scalar()
             
             # Totais de campanhas
-            campaign_totals = connection.execute(
+            campaign_totals = db.session.execute(
                 text("""SELECT 
                     COALESCE(SUM(total_sent), 0) as total_sent,
                     COALESCE(SUM(total_clicks), 0) as total_clicks,
@@ -290,8 +282,6 @@ class StatsService:
             click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0.0
             conversion_rate = (campaign_sales / total_sent * 100) if total_sent > 0 else 0.0
             avg_ticket = (campaign_revenue / campaign_sales) if campaign_sales > 0 else 0.0
-            
-            connection.close()
             
             return {
                 'total_campaigns': total_campaigns,

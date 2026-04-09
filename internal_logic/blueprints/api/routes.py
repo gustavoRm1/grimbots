@@ -275,6 +275,38 @@ def bot_stats_api(bot_id):
         conversion_rate_remarketing = (final_remarketing_sales / total_sent * 100) if total_sent > 0 else 0.0
         avg_ticket_remarketing = (final_remarketing_revenue / final_remarketing_sales) if final_remarketing_sales > 0 else 0.0
 
+        # Buscar lista de campanhs individuais (limite 50 para performance)
+        campaigns_list = []
+        try:
+            recent_campaigns = RemarketingCampaign.query.filter_by(
+                bot_id=bot_id
+            ).order_by(
+                RemarketingCampaign.created_at.desc()
+            ).limit(50).all()
+            
+            for campaign in recent_campaigns:
+                campaigns_list.append({
+                    'id': campaign.id,
+                    'name': campaign.name,
+                    'message': campaign.message,
+                    'status': campaign.status,
+                    'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
+                    'started_at': campaign.started_at.isoformat() if campaign.started_at else None,
+                    'completed_at': campaign.completed_at.isoformat() if campaign.completed_at else None,
+                    'total_targets': campaign.total_targets,
+                    'total_sent': campaign.total_sent,
+                    'total_clicks': campaign.total_clicks,
+                    'total_sales': campaign.total_sales,
+                    'revenue_generated': float(campaign.revenue_generated) if campaign.revenue_generated else 0.0,
+                    'media_url': campaign.media_url,
+                    'media_type': campaign.media_type,
+                    'audio_url': campaign.audio_url,
+                    'buttons': campaign.buttons,
+                    'target_audience': campaign.target_audience
+                })
+        except Exception as campaign_error:
+            logger.warning(f"[API STATS] Erro ao buscar campanhs individuais: {campaign_error}")
+
         remarketing = {
             'total_campaigns': int(total_campaigns),
             'active_campaigns': int(active_campaigns),
@@ -285,7 +317,8 @@ def bot_stats_api(bot_id):
             'revenue': float(final_remarketing_revenue),
             'conversion_rate': round(conversion_rate_remarketing, 2),
             'click_rate': round(click_rate, 2),
-            'avg_ticket': round(avg_ticket_remarketing, 2)
+            'avg_ticket': round(avg_ticket_remarketing, 2),
+            'campaigns': campaigns_list  # ✅ Lista de campanhs para o frontend
         }
     except Exception as e:
         logger.error(f"[API STATS] Erro no bloco REMARKETING para bot {bot_id}: {e}", exc_info=True)
