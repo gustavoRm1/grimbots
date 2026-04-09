@@ -141,34 +141,36 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
         logger.debug(f"   Status: {result.get('status')}")
         logger.debug(f"   Gateway Hash: {result.get('gateway_hash')}")
         
-        # MAPEAMENTO DE STATUS
+        # MAPEAMENTO DE STATUS - DOCUMENTAÇÃO PARADISE
         webhook_status = result.get('status', '').lower()
-        print(f"[AUDIT] Step 3: Status mapeado: '{webhook_status}' (original: '{result.get('status')}')")
+        original_status = result.get('status')
+        print(f"[AUDIT] Step 3: Status Paradise recebido: '{original_status}' | Mapeando para: '{webhook_status}' se for 'approved'")
 
-        # BUSCA ROBUSTA COM FALLBACK GLOBAL - UUID é único globalmente
-        reference = result.get('payment_id') or result.get('reference') or data.get('reference')
+        # BUSCA ROBUSTA COM FALLBACK GLOBAL - DOCUMENTAÇÃO OFICIAL
+        # Paradise envia: external_id = nosso UUID
+        external_id = result.get('payment_id') or data.get('external_id')
         payment = None
         
-        print(f"[AUDIT] Step 3: Buscando no DB por ID: {reference}")
+        print(f"[AUDIT] Step 3: Buscando no DB por external_id: {external_id}")
         
         # Tentativa 1: Busca filtrada (se tiver gateway com user_id)
-        if gateway and reference:
+        if gateway and external_id:
             # Busca com filtros de usuário/bot (otimizada)
             user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
             if user_bot_ids:
                 payment = Payment.query.filter(
                     Payment.bot_id.in_(user_bot_ids),
-                    Payment.payment_id == str(reference)
+                    Payment.payment_id == str(external_id)
                 ).first()
                 if payment:
                     print(f"[AUDIT] Step 4: Resultado busca filtrada: <Payment ID={payment.id} | Status={payment.status}>")
         
-        # Tentativa 2: Busca global por UUID (FAIL-OVER - se a filtrada falhar)
-        if not payment and reference:
-            payment = Payment.query.filter_by(payment_id=str(reference)).first()
+        # Tentativa 2: Busca global por external_id (FAIL-OVER - se a filtrada falhar)
+        if not payment and external_id:
+            payment = Payment.query.filter_by(payment_id=str(external_id)).first()
             if payment:
                 print(f"[AUDIT] Step 4: Resultado busca global: <Payment ID={payment.id} | Status={payment.status}>")
-                print(f"[AUDIT] AVISO: Busca filtrada falhou, mas encontrou via global (UUID único)")
+                print(f"[AUDIT] AVISO: Busca filtrada falhou, mas encontrou via global (external_id único)")
             else:
                 print(f"[AUDIT] Step 4: Resultado busca global: <None>")
 

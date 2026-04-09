@@ -817,12 +817,13 @@ class ParadisePaymentGateway(PaymentGateway):
     
     def process_webhook(self, data: Dict) -> Optional[Dict]:
         """
-        Processa webhook do Paradise
+        Processa webhook do Paradise - DOCUMENTAÇÃO OFICIAL
         
         Paradise envia:
         {
-            "id": "transaction_id",
-            "payment_status": "paid" | "pending" | "refunded",
+            "transaction_id": "ID Paradise",
+            "external_id": "Nosso UUID",
+            "status": "approved" | "pending" | "refunded",
             "amount": 1990  # centavos
         }
         
@@ -830,42 +831,47 @@ class ParadisePaymentGateway(PaymentGateway):
             Dict com payment_id, status, amount, gateway_transaction_id
         """
         try:
-            logger.info(f"📩 Paradise Webhook/Status recebido")
-            logger.info(f"📩 Data completa: {data}")
+            logger.info(f" Paradise Webhook/Status recebido")
+            logger.info(f" Data completa: {data}")
             
-            # Extrai transaction_id (pode vir como 'transaction_id', 'id' ou 'hash')
-            transaction_id = data.get('transaction_id') or data.get('id') or data.get('hash')
-            logger.info(f"🔍 Transaction ID extraído: {transaction_id}")
+            # Extrai transaction_id (ID da Paradise)
+            transaction_id = data.get('transaction_id')
+            logger.info(f" Transaction ID extraído: {transaction_id}")
             
             if not transaction_id:
-                logger.error(f"❌ Paradise: 'id'/'hash' ausente | Data recebida: {data}")
+                logger.error(f" Paradise: 'transaction_id' ausente | Data recebida: {data}")
                 return None
             
-            # Extrai status
-            # Paradise pode enviar: 'status' (approved|pending|refunded) ou 'payment_status'
-            status = (data.get('status') or data.get('payment_status') or '').lower()
-            logger.info(f"🔍 Status bruto: {status}")
+            # Extrai external_id (Nosso UUID/Reference)
+            external_id = data.get('external_id')
+            logger.info(f" External ID (nosso UUID): {external_id}")
+            
+            # Extrai status - DOCUMENTAÇÃO OFICIAL: 'approved' = pago
+            status = data.get('status', '').lower()
+            logger.info(f" Status Paradise recebido: {status}")
             
             # Extrai valor
-            amount_cents = data.get('amount_paid') or data.get('amount')
-            logger.info(f"🔍 Amount (centavos): {amount_cents}")
+            amount_cents = data.get('amount')
+            logger.info(f" Amount (centavos): {amount_cents}")
             
             # Converte centavos para reais
             amount = amount_cents / 100 if amount_cents else 0
             
-            # Mapeia status Paradise → Sistema
-            # Paradise pode enviar: approved, paid, pending, refunded
+            # MAPEAMENTO OFICIAL: 'approved' -> 'paid'
             mapped_status = 'pending'
-            # ✅ CORREÇÃO CRÍTICA: Aceitar tanto "approved" quanto "paid" como pago
-            if status in ('approved', 'paid'):
+            if status == 'approved':
                 mapped_status = 'paid'
+                logger.info(f" Mapeando para: 'paid' (approved = pago)")
             elif status == 'refunded':
                 mapped_status = 'failed'
+            elif status == 'pending':
+                mapped_status = 'pending'
             
-            logger.info(f"✅ Paradise processado | ID: {transaction_id} | Status: '{status}' → '{mapped_status}' | Amount: R$ {amount:.2f}")
+            logger.info(f" Paradise processado | ID: {transaction_id} | External: {external_id} | Status: '{status}' '{mapped_status}' | Amount: R$ {amount:.2f}")
             
             return {
                 'gateway_transaction_id': transaction_id,
+                'payment_id': external_id,  # Nosso UUID
                 'status': mapped_status,
                 'amount': amount
             }
