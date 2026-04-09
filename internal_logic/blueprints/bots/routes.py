@@ -525,17 +525,20 @@ def bot_stats_page(bot_id):
             'id': campaign.id,
             'name': campaign.name,
             'message': campaign.message,
-            'is_active': campaign.is_active,
+            'status': campaign.status,
             'scheduled_at': campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
-            'executed_at': campaign.executed_at.isoformat() if campaign.executed_at else None,
-            'executed_count': campaign.executed_count,
-            'clicks_count': campaign.clicks_count,
-            'sales_count': campaign.sales_count,
-            'revenue': float(campaign.revenue) if campaign.revenue else 0.0,
-            'photo_url': campaign.photo_url,
-            'video_url': campaign.video_url,
+            'started_at': campaign.started_at.isoformat() if campaign.started_at else None,
+            'completed_at': campaign.completed_at.isoformat() if campaign.completed_at else None,
+            'total_targets': campaign.total_targets,
+            'total_sent': campaign.total_sent,
+            'total_clicks': campaign.total_clicks,
+            'total_sales': campaign.total_sales,
+            'revenue_generated': float(campaign.revenue_generated) if campaign.revenue_generated else 0.0,
+            'media_url': campaign.media_url,
+            'media_type': campaign.media_type,
             'audio_url': campaign.audio_url,
-            'buttons': campaign.buttons
+            'buttons': campaign.buttons,
+            'target_audience': campaign.target_audience
         })
     
     pagination = {

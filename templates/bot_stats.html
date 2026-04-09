@@ -1433,7 +1433,7 @@ if (typeof window.botStatsApp === 'undefined') {
             <div>
                 <h2 class="config-section-title flex items-center gap-2">
                     📢 Campanhas de Remarketing
-                    <span class="badge bg-primary" x-text="stats.campaigns.length">0</span>
+                    <span class="badge bg-primary" x-text="campaigns.length">{{ pagination.total }}</span>
                 </h2>
                 <p class="config-section-description mt-1">
                     Clique em qualquer campanha para ver detalhes completos (mensagem, botões, mídia, métricas)
@@ -1443,12 +1443,12 @@ if (typeof window.botStatsApp === 'undefined') {
 
         <!-- Lista de Campanhas em Cards -->
         <div class="grid gap-3" style="margin-top: 1rem;">
-            <template x-for="(campaign, index) in stats.campaigns.slice(0, showAllCampaigns ? stats.campaigns.length : 5)" :key="campaign.id">
+            <template x-for="(campaign, index) in campaigns" :key="campaign.id">
                 <div 
                     @click="showCampaignPreview(campaign)"
                     class="group cursor-pointer rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] border"
                     style="background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid rgba(255,255,255,0.08);"
-                    :style="campaign.is_active && !campaign.executed_at ? 'border-left: 3px solid #10B981;' : (campaign.scheduled_at && !campaign.executed_at ? 'border-left: 3px solid #F59E0B;' : (campaign.executed_at ? 'border-left: 3px solid #3B82F6;' : 'border-left: 3px solid #6B7280;'))"
+                    :style="(campaign.status === 'sending' && !campaign.completed_at) ? 'border-left: 3px solid #10B981;' : (campaign.scheduled_at && !campaign.completed_at ? 'border-left: 3px solid #F59E0B;' : (campaign.completed_at ? 'border-left: 3px solid #3B82F6;' : 'border-left: 3px solid #6B7280;'))"
                 >
                     <div class="flex items-start justify-between gap-4">
                         <!-- Info Principal -->
@@ -1458,19 +1458,19 @@ if (typeof window.botStatsApp === 'undefined') {
                                 <span 
                                     class="px-2 py-0.5 text-xs font-semibold rounded-full"
                                     :class="{
-                                        'bg-emerald-500/20 text-emerald-400': campaign.is_active && !campaign.executed_at,
-                                        'bg-amber-500/20 text-amber-400': campaign.scheduled_at && !campaign.executed_at,
-                                        'bg-blue-500/20 text-blue-400': campaign.executed_at,
-                                        'bg-gray-500/20 text-gray-400': !campaign.is_active && !campaign.scheduled_at && !campaign.executed_at
+                                        'bg-emerald-500/20 text-emerald-400': campaign.status === 'sending' && !campaign.completed_at,
+                                        'bg-amber-500/20 text-amber-400': campaign.scheduled_at && !campaign.completed_at,
+                                        'bg-blue-500/20 text-blue-400': campaign.completed_at,
+                                        'bg-gray-500/20 text-gray-400': campaign.status === 'draft'
                                     }"
                                 >
-                                    <span x-text="campaign.is_active && !campaign.executed_at ? '● Ativa' : (campaign.scheduled_at && !campaign.executed_at ? '● Agendada' : (campaign.executed_at ? '● Concluída' : '● Rascunho'))"></span>
+                                    <span x-text="(campaign.status === 'sending' && !campaign.completed_at) ? '● Ativa' : (campaign.scheduled_at && !campaign.completed_at ? '● Agendada' : (campaign.completed_at ? '● Concluída' : '● Rascunho'))"></span>
                                 </span>
                                 
                                 <!-- Data -->
                                 <span class="text-xs text-gray-500">
                                     <i class="far fa-clock mr-1"></i>
-                                    <span x-text="campaign.executed_at ? new Date(campaign.executed_at).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : (campaign.scheduled_at ? 'Agendada: ' + new Date(campaign.scheduled_at).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : 'Sem data')"></span>
+                                    <span x-text="campaign.completed_at ? new Date(campaign.completed_at).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : (campaign.scheduled_at ? 'Agendada: ' + new Date(campaign.scheduled_at).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'}) : 'Sem data')"></span>
                                 </span>
                             </div>
                             
@@ -1484,20 +1484,20 @@ if (typeof window.botStatsApp === 'undefined') {
                         <!-- Métricas (mini dashboard) -->
                         <div class="flex flex-col items-end gap-1 min-w-[100px]">
                             <div class="text-right">
-                                <div class="text-emerald-400 font-bold text-lg" x-text="'R$ ' + (campaign.revenue || 0).toFixed(2)"></div>
+                                <div class="text-emerald-400 font-bold text-lg" x-text="'R$ ' + (campaign.revenue_generated || 0).toFixed(2)"></div>
                                 <div class="text-gray-500 text-xs">receita</div>
                             </div>
                             <div class="flex items-center gap-3 text-xs mt-2">
                                 <div class="text-center">
-                                    <div class="text-white font-semibold" x-text="campaign.executed_count || 0"></div>
+                                    <div class="text-white font-semibold" x-text="campaign.total_sent || 0"></div>
                                     <div class="text-gray-500">envios</div>
                                 </div>
-                                <div class="text-center" x-show="campaign.clicks_count > 0">
-                                    <div class="text-blue-400 font-semibold" x-text="campaign.clicks_count || 0"></div>
+                                <div class="text-center" x-show="campaign.total_clicks > 0">
+                                    <div class="text-blue-400 font-semibold" x-text="campaign.total_clicks || 0"></div>
                                     <div class="text-gray-500">cliques</div>
                                 </div>
-                                <div class="text-center" x-show="campaign.sales_count > 0">
-                                    <div class="text-emerald-400 font-semibold" x-text="campaign.sales_count || 0"></div>
+                                <div class="text-center" x-show="campaign.total_sales > 0">
+                                    <div class="text-emerald-400 font-semibold" x-text="campaign.total_sales || 0"></div>
                                     <div class="text-gray-500">vendas</div>
                                 </div>
                             </div>
@@ -1508,10 +1508,10 @@ if (typeof window.botStatsApp === 'undefined') {
                     <div class="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <!-- Indicadores de mídia -->
-                            <span x-show="campaign.photo_url" class="text-xs text-gray-400 flex items-center gap-1">
+                            <span x-show="campaign.media_url && campaign.media_type === 'photo'" class="text-xs text-gray-400 flex items-center gap-1">
                                 <i class="fas fa-image"></i> Foto
                             </span>
-                            <span x-show="campaign.video_url" class="text-xs text-gray-400 flex items-center gap-1">
+                            <span x-show="campaign.media_url && campaign.media_type === 'video'" class="text-xs text-gray-400 flex items-center gap-1">
                                 <i class="fas fa-video"></i> Vídeo
                             </span>
                             <span x-show="campaign.audio_url" class="text-xs text-gray-400 flex items-center gap-1">
@@ -1530,7 +1530,7 @@ if (typeof window.botStatsApp === 'undefined') {
         </div>
 
         <!-- Botão Ver Mais/Menos -->
-        <div class="mt-4 text-center" x-show="stats.campaigns.length > 5">
+        <div class="mt-4 text-center" x-show="campaigns.length > 5">
             <button 
                 @click="showAllCampaigns = !showAllCampaigns"
                 class="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/10"
@@ -1546,7 +1546,7 @@ if (typeof window.botStatsApp === 'undefined') {
         </div>
 
         <!-- Zero State -->
-        <div class="text-center py-12" x-show="!stats.campaigns || stats.campaigns.length === 0">
+        <div class="text-center py-12" x-show="!campaigns || campaigns.length === 0">
             <div class="text-6xl mb-4">📭</div>
             <h4 class="text-gray-400 font-medium text-lg mb-2">Nenhuma campanha encontrada</h4>
             <p class="text-gray-500 text-sm mb-4">Crie sua primeira campanha de remarketing</p>
@@ -1863,7 +1863,7 @@ window.botStatsApp = function botStatsApp() {
             
             // ✅ Campanhas paginadas do backend
             campaigns: {{ campaigns | tojson | safe if campaigns else '[]' }},
-            campaignsPagination: {{ pagination | tojson | safe if pagination else '{"page": 1, "pages": 1, "has_prev": false, "has_next": false, "prev_num": null, "next_num": null}' }},
+            campaignsPagination: {{ pagination | tojson | safe if pagination else '{"page": 1, "pages": 1, "has_prev": false, "has_next": false, "prev_num": null, "next_num": null, "total": 0}' }},
             comparison: {
                 downsells_auto: {
                     sales: 0,
