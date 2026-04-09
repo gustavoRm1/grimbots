@@ -1548,10 +1548,10 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
             logger.info(f" Delivery token gerado: {payment.delivery_token}")
         
         # BUSCA INTELIGENTE DO PIXEL (4 PRIORIDADES)
-        pixel_config = self._get_pixel_config(payment)
+        pixel_config = _get_pixel_config(payment)
         
         # DECISÃO CRÍTICA: Qual link enviar?
-        link_to_send = self._decide_delivery_link(payment, pixel_config)
+        link_to_send = _decide_delivery_link(payment, pixel_config)
         
         if not link_to_send:
             logger.error(f" Bot {payment.bot.id} não tem link de entrega configurado")
@@ -1643,7 +1643,7 @@ Seu acesso está disponível agora.
         logger.error(f"❌ Erro crítico em send_payment_delivery: {e}", exc_info=True)
         return {'success': False, 'message': f'Erro: {str(e)}', 'delivery_method': 'none'}
 
-    def _get_pixel_config(self, payment) -> Dict[str, Any]:
+def _get_pixel_config(payment) -> Dict[str, Any]:
         """
         BUSCA INTELIGENTE DO PIXEL (4 PRIORIDADES)
         MESMA LÓGICA DA PÁGINA DE DELIVERY!
@@ -1665,7 +1665,7 @@ Seu acesso está disponível agora.
             return config
         
         # PRIORIDADE 2: tracking_data do Redis
-        tracking_data = self._recover_tracking_data(payment)
+        tracking_data = _recover_tracking_data(payment)
         if tracking_data and tracking_data.get('pixel_id'):
             config.update({
                 'has_pixel': True,
@@ -1675,7 +1675,7 @@ Seu acesso está disponível agora.
             return config
         
         # PRIORIDADE 3: Pool do bot
-        pool = self._get_bot_pool(payment)
+        pool = _get_bot_pool(payment)
         if pool and hasattr(pool, 'meta_tracking_enabled') and pool.meta_tracking_enabled and hasattr(pool, 'meta_pixel_id') and pool.meta_pixel_id:
             config.update({
                 'has_pixel': True,
@@ -1686,7 +1686,7 @@ Seu acesso está disponível agora.
         
         return config
     
-    def _recover_tracking_data(self, payment) -> Optional[Dict[str, Any]]:
+def _recover_tracking_data(payment) -> Optional[Dict[str, Any]]:
         """Recupera tracking_data do Redis"""
         try:
             # PRIORIDADE 1: bot_user.tracking_session_id
@@ -1715,7 +1715,7 @@ Seu acesso está disponível agora.
         
         return None
     
-    def _get_bot_pool(self, payment) -> Optional[Any]:
+def _get_bot_pool(payment) -> Optional[Any]:
         """Busca pool associado ao bot"""
         try:
             from internal_logic.core.models import PoolBot
@@ -1724,7 +1724,7 @@ Seu acesso está disponível agora.
         except Exception:
             return None
     
-    def _decide_delivery_link(self, payment, pixel_config: Dict[str, Any]) -> Optional[str]:
+def _decide_delivery_link(payment, pixel_config: Dict[str, Any]) -> Optional[str]:
         """
         DECISÃO CRÍTICA: Onde enviar o cliente?
         
