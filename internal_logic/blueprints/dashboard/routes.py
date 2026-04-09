@@ -2790,13 +2790,13 @@ def check_dashboard_updates():
         
         # Se não tem timestamp, retorna só o status
         if not last_check_timestamp:
-            # Query de hoje via JOIN
+            # Query de hoje via JOIN - INCLUINDO PENDENTES
             today_stats = db.session.query(
                 func.count(Payment.id).label('sales'),
                 func.coalesce(func.sum(Payment.amount), 0).label('revenue')
             ).join(Bot, Payment.bot_id == Bot.id).filter(
                 Bot.user_id == current_user.id,
-                Payment.status == 'paid',
+                Payment.status.in_(['paid', 'pending', 'waiting_payment', 'processing']),
                 Payment.created_at >= today_start_utc
             ).first()
             
