@@ -394,7 +394,6 @@ class PaymentService:
             
             payment = Payment(
                 bot_id=bot_id,
-                gateway_id=gateway_id,
                 amount=amount,
                 status=status,
                 external_id=transaction_id

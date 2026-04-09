@@ -867,19 +867,21 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
                 
                 if from_user:
                     telegram_id = from_user.get('id')
+                    # ?? CORREÇÃO CRÍTICA: Cast para string para compatibilidade com VARCHAR(255)
+                    telegram_id_str = str(telegram_id)
                     first_name = from_user.get('first_name', '')
                     username = from_user.get('username', '')
                     
-                    logger.critical(f"🔍 [WORKER] Processando usuário {telegram_id} para bot {bot_id}")
+                    logger.critical(f"?? [WORKER] Processando usuário {telegram_id_str} para bot {bot_id}")
                     
                     # 2. Busca ou Criação do BotUser
-                    user = BotUser.query.filter_by(bot_id=bot_id, telegram_user_id=telegram_id).first()
+                    user = BotUser.query.filter_by(bot_id=bot_id, telegram_user_id=telegram_id_str).first()
                     
                     if not user:
                         # É UM LEAD NOVO (Vai contar no Dashboard de Hoje!)
                         user = BotUser(
                             bot_id=bot_id,
-                            telegram_user_id=telegram_id,
+                            telegram_user_id=telegram_id_str,
                             first_name=first_name,
                             username=username,
                             first_interaction=utc_now,
