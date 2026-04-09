@@ -1547,23 +1547,11 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
             db.session.commit()
             logger.info(f" Delivery token gerado: {payment.delivery_token}")
         
-        # DECISÃO DE LINK (Meta Pixel)
-        link_to_send = None
+        # BUSCA INTELIGENTE DO PIXEL (4 PRIORIDADES)
+        pixel_config = self._get_pixel_config(payment)
         
-        # Verificar se Meta Pixel está ativo no pool do bot
-        pixel_active = False
-        pixel_id = None
-        if hasattr(payment.bot, 'meta_pixel') and payment.bot.meta_pixel:
-            pixel_active = payment.bot.meta_pixel.get('active', False)
-            pixel_id = payment.bot.meta_pixel.get('pixel_id')
-        
-        if pixel_active and pixel_id:
-            link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}?px={pixel_id}"
-            logger.info(f" Usando link com Meta Pixel: {link_to_send}")
-        else:
-            # Fallback para access_link original
-            link_to_send = payment.bot.config.access_link if payment.bot.config else None
-            logger.info(f" Usando access_link original: {link_to_send}")
+        # DECISÃO CRÍTICA: Qual link enviar?
+        link_to_send = self._decide_delivery_link(payment, pixel_config)
         
         if not link_to_send:
             logger.error(f" Bot {payment.bot.id} não tem link de entrega configurado")
@@ -1654,6 +1642,133 @@ Seu acesso está disponível agora.
     except Exception as e:
         logger.error(f"❌ Erro crítico em send_payment_delivery: {e}", exc_info=True)
         return {'success': False, 'message': f'Erro: {str(e)}', 'delivery_method': 'none'}
+
+    def _get_pixel_config(self, payment) -> Dict[str, Any]:
+        """
+        BUSCA INTELIGENTE DO PIXEL (4 PRIORIDADES)
+        MESMA LÓGICA DA PÁGINA DE DELIVERY!
+        """
+        config = {
+            'has_pixel': False,
+            'pixel_id': None,
+            'pool': None,
+            'pixel_source': None
+        }
+        
+        # PRIORIDADE 1: pixel_id do payment (persistido no PageView)
+        if hasattr(payment, 'meta_pixel_id') and payment.meta_pixel_id:
+            config.update({
+                'has_pixel': True,
+                'pixel_id': payment.meta_pixel_id,
+                'pixel_source': 'payment'
+            })
+            return config
+        
+        # PRIORIDADE 2: tracking_data do Redis
+        tracking_data = self._recover_tracking_data(payment)
+        if tracking_data and tracking_data.get('pixel_id'):
+            config.update({
+                'has_pixel': True,
+                'pixel_id': tracking_data['pixel_id'],
+                'pixel_source': 'redis'
+            })
+            return config
+        
+        # PRIORIDADE 3: Pool do bot
+        pool = self._get_bot_pool(payment)
+        if pool and hasattr(pool, 'meta_tracking_enabled') and pool.meta_tracking_enabled and hasattr(pool, 'meta_pixel_id') and pool.meta_pixel_id:
+            config.update({
+                'has_pixel': True,
+                'pixel_id': pool.meta_pixel_id,
+                'pool': pool,
+                'pixel_source': 'pool'
+            })
+        
+        return config
+    
+    def _recover_tracking_data(self, payment) -> Optional[Dict[str, Any]]:
+        """Recupera tracking_data do Redis"""
+        try:
+            # PRIORIDADE 1: bot_user.tracking_session_id
+            if payment.customer_user_id:
+                from internal_logic.core.models import BotUser
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    telegram_user_id=str(payment.customer_user_id)
+                ).first()
+                
+                if bot_user and hasattr(bot_user, 'tracking_session_id') and bot_user.tracking_session_id:
+                    # TODO: Implementar recuperação do Redis quando disponível
+                    # data = tracking_service.recover_tracking_data(bot_user.tracking_session_id)
+                    # if data: return data
+                    pass
+            
+            # PRIORIDADE 2: payment.tracking_token
+            if hasattr(payment, 'tracking_token') and payment.tracking_token:
+                # TODO: Implementar recuperação do Redis quando disponível
+                # data = tracking_service.recover_tracking_data(payment.tracking_token)
+                # if data: return data
+                pass
+                
+        except Exception as e:
+            logger.warning(f"Erro ao recuperar tracking_data: {e}")
+        
+        return None
+    
+    def _get_bot_pool(self, payment) -> Optional[Any]:
+        """Busca pool associado ao bot"""
+        try:
+            from internal_logic.core.models import PoolBot
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+            return pool_bot.pool if pool_bot else None
+        except Exception:
+            return None
+    
+    def _decide_delivery_link(self, payment, pixel_config: Dict[str, Any]) -> Optional[str]:
+        """
+        DECISÃO CRÍTICA: Onde enviar o cliente?
+        
+        SE Meta Pixel ATIVO:
+        - Gerar URL: /delivery/{delivery_token}?px={pixel_id}
+        - Isso garante que o Purchase seja rastreado
+        
+        SE Meta Pixel INATIVO:
+        - Usar access_link direto (se existir)
+        - Mais rápido, sem tracking
+        
+        SE ambos ausentes:
+        - Sem link (mensagem genérica)
+        """
+        
+        # Verificar se tem access_link configurado
+        has_access_link = (
+            payment.bot.config and 
+            hasattr(payment.bot.config, 'access_link') and 
+            payment.bot.config.access_link
+        )
+        
+        if pixel_config['has_pixel']:
+            # Meta Pixel ATIVO -> usar /delivery para tracking
+            base_url = "https://app.grimbots.online"
+            delivery_url = f"{base_url}/delivery/{payment.delivery_token}"
+            
+            # Adicionar pixel_id como query param
+            if pixel_config['pixel_id']:
+                delivery_url += f"?px={pixel_config['pixel_id']}"
+            
+            logger.info(f"Meta Pixel ativo -> usando /delivery: {delivery_url[:50]}...")
+            return delivery_url
+        
+        elif has_access_link:
+            # Meta Pixel INATIVO -> usar access_link direto
+            access_link = payment.bot.config.access_link
+            logger.info(f"Meta Pixel inativo -> usando access_link: {access_link[:50]}...")
+            return access_link
+        
+        else:
+            # Sem pixel e sem access_link -> sem link
+            logger.warning(f"Sem pixel e sem access_link -> mensagem genérica")
+            return None
 
 
 def process_payment_confirmation(payment: Payment, gateway_type: str) -> bool:
