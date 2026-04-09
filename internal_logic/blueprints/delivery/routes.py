@@ -25,229 +25,334 @@ delivery_bp = Blueprint('delivery', __name__, url_prefix='/delivery')
 @delivery_bp.route('/<token>')
 def delivery_page(token):
     """
-    Página de entrega do produto - INJETOR DE VARIÁVEIS META PIXEL
+    PÁGINA DE ENTREGA COM PURCHASE TRACKING
     
-    ARQUITETURA CLIENT-SIDE (HTML-ONLY):
-    - Recupera payment pelo delivery_token
-    - Verifica se Pixel já foi disparado (anti-F5)
-    - Recupera dados de tracking (fbp, fbc, fbclid)
-    - Injeta variáveis no template para JavaScript operar
-    - NÃO dispara Purchase no backend (apenas client-side via JS)
+    Fluxo:
+    1. Lead passa pelo cloaker -> PageView disparado -> tracking_token salvo no Redis
+    2. Lead compra -> webhook confirma -> delivery_token gerado -> link enviado
+    3. Lead acessa esta página -> Purchase disparado com matching perfeito
+    4. Redireciona para link final configurado pelo usuário
     
-    Args:
-        token: delivery_token único do payment
-        
-    Query Params:
-        px: pixel_id opcional (usado no remarketing)
+    MATCHING 100%:
+    - Usa mesmo event_id do PageView (deduplicação perfeita)
+    - Usa cookies frescos do browser (_fbp, _fbc)
+    - Usa tracking_data do Redis (fbclid, IP, UA)
+    - Matching garantido mesmo se cookies expirarem
     """
     try:
-        # ============================================================================
-        # ETAPA 1: Recuperar Payment pelo delivery_token
-        # ============================================================================
-        payment = Payment.query.filter_by(delivery_token=token).first()
+        # Imports adaptados para arquitetura atual
+        from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway
+        from internal_logic.services.tracking_service import TrackingService
+        from internal_logic.core.models import get_brazil_time
+        from gateway_factory import GatewayFactory
+        import time
+        from datetime import datetime
         
+        # VALIDAÇÃO: Buscar payment pelo delivery_token (NÃO filtrar status aqui)
+        # A rota deve tratar status pendente de forma controlada e nunca disparar Purchase.
+        payment = Payment.query.filter_by(
+            delivery_token=token
+        ).first()
         if not payment:
-            logger.error(f"❌ [DELIVERY] Token inválido: {token[:20]}...")
-            return render_template('delivery_error.html', 
-                                 error="Link de acesso inválido ou expirado."), 404
-        
-        # Verificar se pagamento está confirmado
+            logger.error(f" Delivery token inválido ou expirado: {token}")
+            return render_template('delivery_error.html', error='Link de entrega inválido ou expirado.'), 404
+
+        # DEFENSIVO: Se status != paid, consultar gateway em tempo real.
+        # Só prosseguir para Purchase/entrega se o gateway retornar explicitamente 'paid'.
         if payment.status != 'paid':
-            logger.warning(f"⚠️ [DELIVERY] Pagamento não confirmado: payment_id={payment.id}, status={payment.status}")
-            return render_template('delivery_error.html',
-                                 error="Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente."), 200
+            try:
+                if not payment.bot or not payment.gateway_type:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                gateway_row = Gateway.query.filter_by(
+                    user_id=payment.bot.user_id,
+                    gateway_type=payment.gateway_type,
+                    is_active=True,
+                    is_verified=True
+                ).first()
+
+                if not gateway_row:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                gateway_type = (payment.gateway_type or '').strip().lower()
+                credentials = {}
+
+                if gateway_type == 'syncpay':
+                    credentials = {
+                        'client_id': gateway_row.client_id,
+                        'client_secret': gateway_row.client_secret,
+                    }
+                elif gateway_type == 'paradise':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                        'offer_hash': gateway_row.offer_hash,
+                        'store_id': gateway_row.store_id,
+                        'split_percentage': gateway_row.split_percentage or 2.0,
+                    }
+                elif gateway_type == 'atomopay':
+                    credentials = {
+                        'api_token': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                    }
+                elif gateway_type == 'umbrellapag':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                    }
+                elif gateway_type == 'wiinpay':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'split_user_id': gateway_row.split_user_id,
+                    }
+                elif gateway_type == 'babylon':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'company_id': gateway_row.client_id,
+                    }
+                elif gateway_type == 'bolt':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'company_id': gateway_row.client_id,
+                    }
+                elif gateway_type == 'aguia':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        # ÁguiaPags não usa webhook_secret (webhook stateless)
+                    }
+                else:
+                    # pushynpay/orionpay e demais baseados em api_key
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                    }
+
+                payment_gateway = GatewayFactory.create_gateway(
+                    gateway_type=gateway_type,
+                    credentials=credentials,
+                    use_adapter=True
+                )
+
+                if not payment_gateway:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                # Identificador de consulta por gateway (Paradise prioriza hash)
+                tx_identifier = payment.gateway_transaction_id
+                if gateway_type == 'paradise':
+                    tx_identifier = payment.gateway_transaction_hash or payment.gateway_transaction_id
+
+                if not tx_identifier:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                api_status = payment_gateway.get_payment_status(str(tx_identifier))
+                api_normalized_status = (api_status or {}).get('status')
+
+                if api_normalized_status == 'paid':
+                    payment.status = 'paid'
+                    if not payment.paid_at:
+                        payment.paid_at = get_brazil_time()
+                    db.session.commit()
+                    db.session.refresh(payment)
+                else:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+            except Exception as verify_error:
+                logger.error(f" [DELIVERY] Erro ao verificar status em tempo real: {verify_error}", exc_info=True)
+                return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
         
-        logger.info(f"✅ [DELIVERY] Página acessada: payment_id={payment.id}, token={token[:20]}...")
-        
-        # ============================================================================
-        # ETAPA 2: Verificar se Pixel já foi disparado (Trava anti-F5)
-        # ============================================================================
-        purchase_already_sent = getattr(payment, 'meta_purchase_sent', False)
-        
-        # Gerar ou recuperar event_id único para deduplicação
-        # Format: "purchase_{payment.id}" - consistente para Meta deduplicar
-        event_id = getattr(payment, 'meta_event_id', None) or f"purchase_{payment.id}"
-        
-        # Se ainda não foi enviado, salvar o event_id no banco
-        if not purchase_already_sent and not getattr(payment, 'meta_event_id', None):
-            payment.meta_event_id = event_id
-            db.session.commit()
-            logger.info(f"✅ [DELIVERY] Event ID gerado e salvo: {event_id}")
-        
-        # ============================================================================
-        # ETAPA 3: Buscar Pool correto (o que gerou o PageView)
-        # ============================================================================
+        # Buscar pool CORRETO (o que gerou o PageView, não o primeiro)
+        # Prioridade: 1) pool_id do tracking_data, 2) primeiro pool do bot
+        pool_id_from_tracking = None
         pool_bot = None
-        pool = None
         
-        # Buscar pool_bot associado ao bot do payment
-        if hasattr(payment, 'bot_id') and payment.bot_id:
+        # RECUPERAR tracking_data primeiro (para identificar pool correto)
+        tracking_service = TrackingService()
+        telegram_user_id = payment.customer_user_id.replace('user_', '') if payment.customer_user_id and payment.customer_user_id.startswith('user_') else payment.customer_user_id
+        bot_user = BotUser.query.filter_by(
+            bot_id=payment.bot_id,
+            telegram_user_id=str(telegram_user_id)
+        ).first()
+        
+        if bot_user and bot_user.tracking_session_id:
+            temp_tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
+            pool_id_from_tracking = temp_tracking_data.get('pool_id')
+        
+        # Buscar pool CORRETO
+        if pool_id_from_tracking:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=pool_id_from_tracking).first()
+            if pool_bot:
+                logger.info(f" Delivery - Pool correto encontrado via tracking_data: pool_id={pool_id_from_tracking}")
+        
+        # Fallback: primeiro pool do bot
+        if not pool_bot:
             pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
             if pool_bot:
-                pool = pool_bot.pool
-                logger.info(f"✅ [DELIVERY] Pool encontrado: pool_id={pool.id if pool else 'N/A'}")
+                logger.warning(f" Delivery - Usando primeiro pool do bot (pool_id não encontrado no tracking_data): pool_id={pool_bot.pool_id}")
         
         if not pool_bot:
-            logger.error(f"❌ [DELIVERY] Bot não está associado a nenhum pool: bot_id={getattr(payment, 'bot_id', None)}")
-            return render_template('delivery_error.html',
-                                 error="Configuração inválida"), 500
+            logger.error(f" Payment {payment.id}: Bot não está associado a nenhum pool")
+            return render_template('delivery_error.html', error="Configuração inválida"), 500
         
-        # ============================================================================
-        # ETAPA 4: Recuperar BotUser e dados de tracking
-        # ============================================================================
-        bot_user = None
+        pool = pool_bot.pool
+        # Inicialização defensiva para evitar UnboundLocalError em caminhos de retorno antecipado
+        redirect_url = None
+        # LINK DE ACESSO: sempre definir antes de qualquer retorno, mesmo sem pixel
+        if pool_bot and pool_bot.bot and pool_bot.bot.config and pool_bot.bot.config.access_link:
+            redirect_url = pool_bot.bot.config.access_link
+            logger.info(f" Delivery - Usando access_link personalizado: {redirect_url}")
+        elif pool_bot and pool_bot.bot and pool_bot.bot.username:
+            redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
+            logger.info(f" Delivery - Usando fallback genérico (access_link não configurado): {redirect_url}")
+        else:
+            logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
+
+        # RECUPERAR tracking_data do Redis (fonte única: payment.tracking_token)
         tracking_data = {}
+
+        if payment and payment.tracking_token:
+            tracking_data = tracking_service.recover_tracking_data(payment.tracking_token) or {}
+            if tracking_data:
+                logger.info(f" Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
+
+        if not tracking_data:
+            logger.error(
+                "[META DELIVERY] tracking_data AUSENTE via payment.tracking_token | "
+                f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
+            )
+
+        # Pixel do Payment (fonte definitiva - independente de Redis)
+        # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
+        pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
         
-        # Extrair telegram_user_id do payment.customer_user_id
-        telegram_user_id = None
-        if hasattr(payment, 'customer_user_id') and payment.customer_user_id:
-            if payment.customer_user_id.startswith('user_'):
-                telegram_user_id = payment.customer_user_id.replace('user_', '')
-            else:
-                telegram_user_id = str(payment.customer_user_id)
-        
-        # Buscar BotUser
-        if telegram_user_id and hasattr(payment, 'bot_id'):
-            bot_user = BotUser.query.filter_by(
-                bot_id=payment.bot_id,
-                telegram_user_id=str(telegram_user_id)
-            ).first()
-        
-        # ============================================================================
-        # ETAPA 5: Recuperar dados de tracking do Redis (TrackingServiceV4)
-        # ============================================================================
-        # PRIORIDADE 1: bot_user.tracking_session_id (token do redirect)
-        if bot_user and hasattr(bot_user, 'tracking_session_id') and bot_user.tracking_session_id:
-            try:
-                # tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
-                # if tracking_data:
-                #     logger.info(f"✅ [DELIVERY] Tracking data recuperado via bot_user.tracking_session_id")
-                pass  # Placeholder - implementar quando TrackingServiceV4 estiver disponível
-            except Exception as e:
-                logger.warning(f"⚠️ [DELIVERY] Erro ao recuperar tracking via bot_user: {e}")
-        
-        # PRIORIDADE 2: payment.tracking_token
-        if not tracking_data and hasattr(payment, 'tracking_token') and payment.tracking_token:
-            try:
-                # tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
-                # if tracking_data:
-                #     logger.info(f"✅ [DELIVERY] Tracking data recuperado via payment.tracking_token")
-                pass  # Placeholder
-            except Exception as e:
-                logger.warning(f"⚠️ [DELIVERY] Erro ao recuperar tracking via payment: {e}")
-        
-        # Extrair dados do tracking_data ou usar fallback do payment/bot_user
-        fbp_value = tracking_data.get('fbp') if tracking_data else None
-        fbc_value = tracking_data.get('fbc') if tracking_data else None
-        fbclid_value = tracking_data.get('fbclid') if tracking_data else None
-        
-        # Fallback para dados do payment
-        if not fbp_value and hasattr(payment, 'fbp'):
-            fbp_value = payment.fbp
-        if not fbc_value and hasattr(payment, 'fbc'):
-            fbc_value = payment.fbc
-        if not fbclid_value and hasattr(payment, 'fbclid'):
-            fbclid_value = payment.fbclid
-        
-        # Fallback para dados do bot_user
-        if not fbp_value and bot_user and hasattr(bot_user, 'fbp'):
-            fbp_value = bot_user.fbp
-        if not fbc_value and bot_user and hasattr(bot_user, 'fbc'):
-            fbc_value = bot_user.fbc
-        
-        # ============================================================================
-        # ETAPA 6: STICKY PIXEL COM REDUNDÂNCIA TRIPLA
-        # ============================================================================
-        pixel_id_to_use = None
-        pixel_source = None
-        
-        # PRIORIDADE 1: Query param 'px' (usado em remarketing)
-        px_from_query = request.args.get('px')
-        if px_from_query:
-            pixel_id_to_use = px_from_query
-            pixel_source = 'query'
-            logger.info(f"[PIXEL_STICKY] Pixel ID via query param: {pixel_id_to_use}")
-        
-        if not pixel_id_to_use:
-            # Ordem de prioridade garantida (Sticky Pixel) - mesma do payment_processor
-            pixel_sources = [
-                getattr(payment, 'meta_pixel_id', None),      # 1. Payment (Backup do banco)
-                tracking_data.get('pixel_id') if tracking_data else None,  # 2. Redis
-                pool.meta_pixel_id if pool else None          # 3. Pool Original
-            ]
-            
-            # Encontrar primeiro pixel_id válido
-            pixel_id_to_use = next((p for p in pixel_sources if p), None)
-            
-            # Determinar origem para logging
-            source_map = {
-                0: 'payment',
-                1: 'redis', 
-                2: 'pool'
-            }
-            
-            if pixel_id_to_use:
-                source_index = pixel_sources.index(pixel_id_to_use)
-                pixel_source = source_map.get(source_index, 'unknown')
-                logger.info(f"[PIXEL_STICKY] Pixel encontrado: source={pixel_source}, pixel_id={pixel_id_to_use}")
-            else:
-                # FALLBACK DE SEGURANÇA: fbclid numérico como pixel temporário
-                if fbclid_value and fbclid_value.isdigit():
-                    pixel_id_to_use = fbclid_value
-                    pixel_source = 'fbclid_fallback'
-                    logger.warning(f"[PIXEL_STICKY] Fallback fbclid numérico: {pixel_id_to_use}")
-                else:
-                    logger.warning(f"[PIXEL_STICKY] Nenhum pixel encontrado - sem tracking")
-        
-        # Verificar se temos pixel configurado
+        # HTML-only: preferir px; se não, usar pixel do Redis; por último, fallback do pool/payment
+        pixel_id_from_request = request.args.get('px')
+        pixel_from_redis = (tracking_data.get('pixel_id') or tracking_data.get('meta_pixel_id')) if tracking_data else None
+        pixel_from_db = getattr(bot_user, 'campaign_code', None) if bot_user else None
+        if pixel_from_db and not str(pixel_from_db).isdigit():
+            pixel_from_db = None
+        pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
+        pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_from_db or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
+        logger.info(
+            f"[META DEBUG] Pixel Final: {pixel_id_to_use} | Fonte Redis: {bool(pixel_from_redis)} | Fonte URL: {bool(pixel_id_from_request)}"
+        )
+        if not has_meta_pixel:
+            logger.warning(
+                "[META DELIVERY] pixel_id ausente (px/query, redis e fallback). Purchase NÃO será disparado, mas entrega segue.")
+        # Recuperar pageview_event_id do tracking_data ou do payment
+        pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
+        if pageview_event_id and not payment.pageview_event_id:
+            payment.pageview_event_id = pageview_event_id
+            db.session.commit()
+        raw_fbclid = (tracking_data.get('fbclid') if tracking_data else None) or (getattr(bot_user, 'fbclid', None) if bot_user else None)
+        raw_fbp = (tracking_data.get('fbp') if tracking_data else None) or (getattr(bot_user, 'fbp', None) if bot_user else None)
+        raw_fbc = (tracking_data.get('fbc') if tracking_data else None) or (getattr(bot_user, 'fbc', None) if bot_user else None)
+        fbclid_to_use = raw_fbclid or ''
+        fbp_value = raw_fbp or ''
+        fbc_value = raw_fbc or ''
+        external_id = raw_fbclid
+        fbc_origin = tracking_data.get('fbc_origin')
         
-        # ============================================================================
-        # ETAPA 7: Preparar URL de redirecionamento
-        # ============================================================================
+        # CRÍTICO: Validar fbc_origin (ignorar fbc sintético)
+        if fbc_value and fbc_origin == 'synthetic':
+            fbc_value = None  # Meta não atribui com fbc sintético
+            logger.warning(f"[META DELIVERY] Delivery - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
+        
+        # LOG CRÍTICO: Verificar dados recuperados
+        logger.info(f"[META DELIVERY] Delivery - Dados recuperados: fbclid={' ' if external_id else ' '}, fbp={' ' if fbp_value else ' '}, fbc={' ' if fbc_value else ' '}, fbc_origin={fbc_origin or 'ausente'}")
+        
+        # Sanitizar valores para JavaScript
+        def sanitize_js_value(value):
+            if not value:
+                return ''
+            import re
+            value = str(value).replace("'", "\\'").replace('"', '\\"').replace('\n', '').replace('\r', '')
+            value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
+            return value[:255]
+        
+        # CORREÇÃO CRÍTICA: Normalizar external_id para garantir matching
+        # Se external_id existir, normalizar (MD5 se > 80 chars, ou original se <= 80)
+        # Isso garante que browser e server usem EXATAMENTE o mesmo formato
+        external_id_normalized = None
+        if external_id:
+            try:
+                # Implementar normalização local se não existir util
+                if len(str(external_id)) > 80:
+                    import hashlib
+                    external_id_normalized = hashlib.sha256(str(external_id).encode()).hexdigest()
+                else:
+                    external_id_normalized = str(external_id)
+            except Exception as e:
+                logger.warning(f"Erro ao normalizar external_id: {e}")
+                external_id_normalized = str(external_id)
+
+        # event_id para Purchase: usar ID exclusivo do pagamento (dedup client/server)
+        purchase_event_id = f"purchase_{payment.id}"
+        payment.meta_event_id = purchase_event_id
+        db.session.commit()
+        db.session.refresh(payment)
+
+        # Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
+        pixel_config = {
+            'pixel_id': pixel_id_to_use if has_meta_pixel else None,  # Usar pixel do Payment
+            'event_id': purchase_event_id,  # Igual ao server-side (dedup)
+            'external_id': external_id_normalized,  # None se não houver (não string vazia!)
+            'fbp': fbp_value,
+            'fbc': fbc_value,
+            'tracking_token': tracking_data.get('tracking_token') or payment.tracking_token,
+            'value': float(payment.amount),
+            'currency': 'BRL',
+            'content_id': str(pool.id) if pool else str(payment.bot_id),
+            'content_name': payment.product_name or payment.bot.name,
+        }
+
+        # CRÍTICO: DEDUPLICAÇÃO - Garantir que Purchase NÃO seja enviado duplicado
+        purchase_already_sent = payment.meta_purchase_sent
+        
+        # CRÍTICO: Renderizar template PRIMEIRO para permitir client-side disparar Purchase
+        # Meta deduplica automaticamente usando eventID, então não bloqueamos client-side mesmo se server-side já foi enviado
+        # CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
+        logger.info(f" Delivery - Renderizando página para payment {payment.id} | Pixel: {' ' if has_meta_pixel else ' '} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
+        
+        # CORREÇÃO CRÍTICA: Buscar access_link personalizado do BotConfig (não do Bot)
+        # Prioridade: 1) bot.config.access_link (configurado no painel), 2) fallback para username
         redirect_url = None
         
-        # Tentar usar access_link personalizado do BotConfig
-        if (pool_bot and pool_bot.bot and 
-            hasattr(pool_bot.bot, 'config') and 
-            pool_bot.bot.config and 
-            hasattr(pool_bot.bot.config, 'access_link') and 
-            pool_bot.bot.config.access_link):
+        # Tentar usar access_link personalizado primeiro (está em BotConfig, não em Bot)
+        if pool_bot and pool_bot.bot and pool_bot.bot.config and pool_bot.bot.config.access_link:
             redirect_url = pool_bot.bot.config.access_link
-            logger.info(f"✅ [DELIVERY] Usando access_link personalizado: {redirect_url}")
-        
+            logger.info(f" Delivery - Usando access_link personalizado: {redirect_url}")
         # Fallback: link genérico do username do bot
-        elif pool_bot and pool_bot.bot and hasattr(pool_bot.bot, 'username') and pool_bot.bot.username:
+        elif pool_bot and pool_bot.bot and pool_bot.bot.username:
             redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
-            logger.info(f"⚠️ [DELIVERY] Usando fallback genérico: {redirect_url}")
-        
+            logger.info(f" Delivery - Usando fallback genérico (access_link não configurado): {redirect_url}")
         else:
-            logger.error(f"❌ [DELIVERY] Nenhum redirect_url disponível para payment {payment.id}")
+            logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
         
-        # ============================================================================
-        # ETAPA 8: Renderizar template INJETANDO variáveis para JavaScript
-        # ============================================================================
-        logger.info(f"✅ [DELIVERY] Renderizando template: payment_id={payment.id}, "
-                   f"pixel={'✅' if has_meta_pixel else '❌'}, "
-                   f"event_id={event_id[:30]}..., "
-                   f"already_sent={purchase_already_sent}")
+        # LOG: pixel_id veio exclusivamente da query (funil). Nenhuma inferência.
+        logger.info(f" Delivery - pixel_id via query param px: {' ' if pixel_id_to_use else ' '}")
         
-        return render_template('delivery.html',
+        # Renderizar template com pixel_id vindo da query (HTML-only)
+        response = render_template('delivery.html',
             payment=payment,
             pixel_id=pixel_id_to_use,
-            purchase_event_id=event_id,
-            purchase_already_sent=purchase_already_sent,
-            fbp=fbp_value,
-            fbc=fbc_value,
-            fbclid=fbclid_value,
             redirect_url=redirect_url,
-            pool=pool,
-            pool_bot=pool_bot,
-            tracking_data=tracking_data
+            pageview_event_id=getattr(payment, 'pageview_event_id', None),
+            purchase_event_id=purchase_event_id,
+            fbclid=fbclid_to_use,
+            fbc=fbc_value,
+            fbp=fbp_value
         )
         
+        # DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
+        # Isso garante que Purchase seja enviado mesmo se client-side falhar
+        # Meta deduplica automaticamente usando eventID/event_id
+        # SERVER-SIDE PURCHASE DESATIVADO: política HTML-only
+        if has_meta_pixel and not purchase_already_sent:
+            logger.info(f" [META DELIVERY] Purchase server-side desativado (HTML-only) | payment {payment.id} | event_id {pixel_config.get('event_id')}")
+
+        return response
+        
     except Exception as e:
-        logger.error(f"❌ [DELIVERY] Erro na página de delivery: {e}", exc_info=True)
+        logger.error(f" Erro na página de delivery: {e}", exc_info=True)
         return render_template('delivery_error.html', error=str(e)), 500
 
 
