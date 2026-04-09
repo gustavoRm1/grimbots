@@ -85,6 +85,7 @@ def payment_webhook(gateway_type):
 
 def _process_payment_webhook_sync(gateway_type: str, data: dict):
     """Processamento síncrono de fallback quando RQ não está disponível."""
+    # 1. Instanciar o Factory com credenciais dummy
     dummy_credentials = {}
     if gateway_type == 'syncpay':
         dummy_credentials = {'client_id': 'dummy', 'client_secret': 'dummy'}
@@ -105,12 +106,15 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict):
     elif gateway_type == 'bolt':
         dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
     
+    # 2. Criar gateway via Factory com adapter
+    from gateway_factory import GatewayFactory
     gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
     
     gateway = None
     result = None
     
     if gateway_instance:
+        # 3. Extrair producer_hash se disponível
         producer_hash = None
         if hasattr(gateway_instance, 'extract_producer_hash'):
             producer_hash = gateway_instance.extract_producer_hash(data)
@@ -120,6 +124,7 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict):
                     producer_hash=producer_hash
                 ).first()
         
+        # 4. Processar webhook via ADAPTER (ARQUITETURA LEGADA RESTAURADA)
         result = gateway_instance.process_webhook(data)
     
     if result:
