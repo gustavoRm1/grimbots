@@ -25,6 +25,10 @@ from sqlalchemy.exc import IntegrityError
 from redis_manager import get_redis_connection
 from internal_logic.core.extensions import db
 
+# 🚨 CRÍTICO: Importar app REAL do Flask (não o proxy current_app)
+# Workers RQ precisam da instância real para criar app_context
+from app import app
+
 logger = logging.getLogger(__name__)
 
 # Conectar ao Redis
@@ -832,7 +836,6 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
         token: Token do bot Telegram
         config: Configuração do bot (dicionário)
     """
-    from flask import current_app
     from datetime import datetime
     from internal_logic.core.extensions import db
     from internal_logic.core.models import BotUser, Bot
@@ -840,10 +843,10 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
     from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
     
     job_id = f"{bot_id}_{datetime.utcnow().timestamp()}"
-    logger.critical(f"🚀 [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
+    logger.critical(f"?? [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
     
     try:
-        with current_app.app_context():
+        with app.app_context():
             # ============================================================================
             # BLOCO CRÍTICO: CRIAÇÃO/ATUALIZAÇÃO DO BOTUSER (RESTAURAÇÃO LEGADA)
             # ============================================================================
@@ -961,7 +964,6 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
     logger.critical(f"🚀 [WEBHOOK WORKER ENTRY] process_webhook_async iniciado | Job: {job_id} | Gateway: {gateway_type} | User: {user_id}")
     
     try:
-        from flask import current_app
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
@@ -970,7 +972,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
         # Não usar bot_manager global - criar instância com user_id
         
-        with current_app.app_context():
+        with app.app_context():
             logger.critical(f"🔍 [WEBHOOK WORKER] App context criado | Job: {job_id}")
             
             # ✅ ISOLAMENTO: Se user_id for 0, resolver pelo transaction_id
@@ -1578,14 +1580,13 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     Retorna quantidade processada com sucesso.
     """
-    from flask import current_app
     from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     processed = 0
 
     _ensure_aux_tables()
 
-    with current_app.app_context():
+    with app.app_context():
         pendings = (
             WebhookPendingMatch.query
             .order_by(WebhookPendingMatch.last_attempt_at.asc().nullsfirst())
