@@ -357,17 +357,18 @@ def process_start_async(
                     if len(parts) >= 4:
                         external_id_from_start = '_'.join(parts[2:])
             
-            # Buscar ou criar BotUser
+            # HOTFIX: Cast obrigatório para string pois o schema exige VARCHAR
+            telegram_user_id_str = str(telegram_user_id)
             bot_user = BotUser.query.filter_by(
                 bot_id=bot_id,
-                telegram_user_id=telegram_user_id,
+                telegram_user_id=telegram_user_id_str,
                 archived=False
             ).first()
             
             if not bot_user:
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
-                    telegram_user_id=telegram_user_id
+                    telegram_user_id=telegram_user_id_str
                 ).first()
                 
                 if bot_user and bot_user.archived:
@@ -386,7 +387,7 @@ def process_start_async(
                 
                 bot_user = BotUser(
                     bot_id=bot_id,
-                    telegram_user_id=telegram_user_id,
+                    telegram_user_id=telegram_user_id_str,
                     first_name=first_name,
                     username=username,
                     welcome_sent=False,
@@ -659,7 +660,7 @@ def process_start_async(
                     db.session.rollback()
                     bot_user = BotUser.query.filter_by(
                         bot_id=bot_id,
-                        telegram_user_id=telegram_user_id,
+                        telegram_user_id=telegram_user_id_str,
                         archived=False
                     ).first()
                     if not bot_user:
