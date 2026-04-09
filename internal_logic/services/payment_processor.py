@@ -1645,8 +1645,8 @@ Seu acesso está disponível agora.
 
 def _get_pixel_config(payment) -> Dict[str, Any]:
         """
-        BUSCA INTELIGENTE DO PIXEL (4 PRIORIDADES)
-        MESMA LÓGICA DA PÁGINA DE DELIVERY!
+        STICKY PIXEL COM REDUNDÂNCIA TRIPLA
+        Busca inteligente com ordem de prioridade garantida
         """
         config = {
             'has_pixel': False,
@@ -1655,34 +1655,39 @@ def _get_pixel_config(payment) -> Dict[str, Any]:
             'pixel_source': None
         }
         
-        # PRIORIDADE 1: pixel_id do payment (persistido no PageView)
-        if hasattr(payment, 'meta_pixel_id') and payment.meta_pixel_id:
-            config.update({
-                'has_pixel': True,
-                'pixel_id': payment.meta_pixel_id,
-                'pixel_source': 'payment'
-            })
-            return config
-        
-        # PRIORIDADE 2: tracking_data do Redis
+        # Recuperar dados de tracking
         tracking_data = _recover_tracking_data(payment)
-        if tracking_data and tracking_data.get('pixel_id'):
-            config.update({
-                'has_pixel': True,
-                'pixel_id': tracking_data['pixel_id'],
-                'pixel_source': 'redis'
-            })
-            return config
-        
-        # PRIORIDADE 3: Pool do bot
         pool = _get_bot_pool(payment)
-        if pool and hasattr(pool, 'meta_tracking_enabled') and pool.meta_tracking_enabled and hasattr(pool, 'meta_pixel_id') and pool.meta_pixel_id:
+        
+        # Ordem de prioridade garantida (Sticky Pixel):
+        pixel_sources = [
+            getattr(payment, 'meta_pixel_id', None),      # 1. Payment (Backup do banco)
+            tracking_data.get('pixel_id') if tracking_data else None,  # 2. Redis
+            pool.meta_pixel_id if pool else None          # 3. Pool Original
+        ]
+        
+        # Encontrar primeiro pixel_id válido
+        pixel_id = next((p for p in pixel_sources if p), None)
+        
+        # Determinar origem para logging
+        source_map = {
+            0: 'payment',
+            1: 'redis', 
+            2: 'pool'
+        }
+        
+        if pixel_id:
+            source_index = pixel_sources.index(pixel_id)
             config.update({
                 'has_pixel': True,
-                'pixel_id': pool.meta_pixel_id,
+                'pixel_id': pixel_id,
                 'pool': pool,
-                'pixel_source': 'pool'
+                'pixel_source': source_map.get(source_index, 'unknown')
             })
+            
+            logger.info(f"[PIXEL_STICKY] Pixel encontrado: source={config['pixel_source']}, pixel_id={pixel_id}")
+        else:
+            logger.warning(f"[PIXEL_STICKY] Nenhum pixel encontrado - fallback para access_link")
         
         return config
     
@@ -1756,18 +1761,20 @@ def _decide_delivery_link(payment, pixel_config: Dict[str, Any]) -> Optional[str
             if pixel_config['pixel_id']:
                 delivery_url += f"?px={pixel_config['pixel_id']}"
             
-            logger.info(f"Meta Pixel ativo -> usando /delivery: {delivery_url[:50]}...")
+            logger.info(f"[PIXEL_STICKY] Decisão: source={pixel_config['pixel_source']}, link=delivery")
+            logger.info(f"[PIXEL_STICKY] URL gerada: {delivery_url[:50]}...")
             return delivery_url
         
         elif has_access_link:
             # Meta Pixel INATIVO -> usar access_link direto
             access_link = payment.bot.config.access_link
-            logger.info(f"Meta Pixel inativo -> usando access_link: {access_link[:50]}...")
+            logger.info(f"[PIXEL_STICKY] Decisão: source=none, link=access_link")
+            logger.info(f"[PIXEL_STICKY] Access link: {access_link[:50]}...")
             return access_link
         
         else:
             # Sem pixel e sem access_link -> sem link
-            logger.warning(f"Sem pixel e sem access_link -> mensagem genérica")
+            logger.warning(f"[PIXEL_STICKY] Decisão: source=none, link=none (sem configuração)")
             return None
 
 

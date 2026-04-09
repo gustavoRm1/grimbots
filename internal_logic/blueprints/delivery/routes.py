@@ -156,30 +156,48 @@ def delivery_page(token):
             fbc_value = bot_user.fbc
         
         # ============================================================================
-        # ETAPA 6: Determinar pixel_id a ser usado
+        # ETAPA 6: STICKY PIXEL COM REDUNDÂNCIA TRIPLA
         # ============================================================================
         pixel_id_to_use = None
+        pixel_source = None
         
         # PRIORIDADE 1: Query param 'px' (usado em remarketing)
         px_from_query = request.args.get('px')
         if px_from_query:
             pixel_id_to_use = px_from_query
-            logger.info(f"✅ [DELIVERY] Pixel ID via query param: {pixel_id_to_use}")
+            pixel_source = 'query'
+            logger.info(f"[PIXEL_STICKY] Pixel ID via query param: {pixel_id_to_use}")
         
-        # PRIORIDADE 2: pixel_id do payment (persistido no momento do PageView)
-        if not pixel_id_to_use and hasattr(payment, 'meta_pixel_id') and payment.meta_pixel_id:
-            pixel_id_to_use = payment.meta_pixel_id
-            logger.info(f"✅ [DELIVERY] Pixel ID via payment.meta_pixel_id: {pixel_id_to_use}")
-        
-        # PRIORIDADE 3: tracking_data do Redis
-        if not pixel_id_to_use and tracking_data and tracking_data.get('pixel_id'):
-            pixel_id_to_use = tracking_data.get('pixel_id')
-            logger.info(f"✅ [DELIVERY] Pixel ID via tracking_data: {pixel_id_to_use}")
-        
-        # PRIORIDADE 4: Pool atual
-        if not pixel_id_to_use and pool and hasattr(pool, 'meta_pixel_id') and pool.meta_pixel_id:
-            pixel_id_to_use = pool.meta_pixel_id
-            logger.info(f"✅ [DELIVERY] Pixel ID via pool: {pixel_id_to_use}")
+        if not pixel_id_to_use:
+            # Ordem de prioridade garantida (Sticky Pixel) - mesma do payment_processor
+            pixel_sources = [
+                getattr(payment, 'meta_pixel_id', None),      # 1. Payment (Backup do banco)
+                tracking_data.get('pixel_id') if tracking_data else None,  # 2. Redis
+                pool.meta_pixel_id if pool else None          # 3. Pool Original
+            ]
+            
+            # Encontrar primeiro pixel_id válido
+            pixel_id_to_use = next((p for p in pixel_sources if p), None)
+            
+            # Determinar origem para logging
+            source_map = {
+                0: 'payment',
+                1: 'redis', 
+                2: 'pool'
+            }
+            
+            if pixel_id_to_use:
+                source_index = pixel_sources.index(pixel_id_to_use)
+                pixel_source = source_map.get(source_index, 'unknown')
+                logger.info(f"[PIXEL_STICKY] Pixel encontrado: source={pixel_source}, pixel_id={pixel_id_to_use}")
+            else:
+                # FALLBACK DE SEGURANÇA: fbclid numérico como pixel temporário
+                if fbclid_value and fbclid_value.isdigit():
+                    pixel_id_to_use = fbclid_value
+                    pixel_source = 'fbclid_fallback'
+                    logger.warning(f"[PIXEL_STICKY] Fallback fbclid numérico: {pixel_id_to_use}")
+                else:
+                    logger.warning(f"[PIXEL_STICKY] Nenhum pixel encontrado - sem tracking")
         
         # Verificar se temos pixel configurado
         has_meta_pixel = bool(pixel_id_to_use)
