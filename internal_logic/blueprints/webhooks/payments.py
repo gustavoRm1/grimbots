@@ -7,6 +7,7 @@ Responde 200 imediatamente e delega processamento para fila RQ ou service.
 
 import json
 import logging
+from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 from internal_logic.core.extensions import limiter, csrf
 from internal_logic.core.models import Payment, Gateway, Bot
@@ -186,16 +187,19 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
             print(f"[AUDIT] Step 5: Tentando Commit...")
             print(f"[AUDIT] Step 5: Status atual: '{payment.status}' | Status webhook: '{webhook_status}'")
             
-            # FORÇAR ATUALIZAÇÃO (sem travas de status)
-            if webhook_status == 'paid':
-                payment.status = 'paid'
-                payment.paid_at = datetime.utcnow()
-                from internal_logic.core.extensions import db
-                
-                try:
-                    db.session.add(payment)
-                    db.session.commit()
-                    print(f"[AUDIT] Step 6: Commit OK! Payment {payment.id} atualizado para PAID")
+            # ACEITA MÚLTIPLOS STATUS - Paradise envia 'approved', outros gateways enviam 'paid'
+            status_recebido = str(result.get('status', '')).lower()
+            if status_recebido in ['paid', 'approved', 'confirmed', 'completed']:
+                if payment.status != 'paid':
+                    payment.status = 'paid'
+                    payment.paid_at = datetime.utcnow()
+                    from internal_logic.core.extensions import db
+                    
+                    try:
+                        db.session.add(payment)
+                        db.session.commit()
+                        print(f"[SUCCESS] Pagamento {payment.id} atualizado para PAID via status: {status_recebido}")
+                        print(f"[AUDIT] Step 6: Commit OK! Payment {payment.id} atualizado para PAID")
                     
                     # Processar entrega
                     from internal_logic.services.payment_processor import process_payment_confirmation
