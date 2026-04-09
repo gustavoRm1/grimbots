@@ -363,7 +363,8 @@ class PaymentService:
                     gateway_id=gateway_id,
                     transaction_id=response.transaction_id,
                     amount=amount,
-                    status=response.status
+                    status=response.status,
+                    customer_user_id=customer_user_id  # <--- PASSAR O ID DO TELEGRAM
                 )
             
             return response
@@ -387,7 +388,8 @@ class PaymentService:
         gateway_id: int,
         transaction_id: Optional[str],
         amount: float,
-        status: str
+        status: str,
+        customer_user_id: Optional[str] = None
     ):
         """Registra transação no banco de dados"""
         try:
@@ -403,7 +405,8 @@ class PaymentService:
                 gateway_type=safe_gateway_type,  # RESOLVE O GATEWAY TYPE NULO
                 amount=amount,
                 status=status,
-                gateway_transaction_id=str(transaction_id) if transaction_id else safe_payment_id
+                gateway_transaction_id=str(transaction_id) if transaction_id else safe_payment_id,
+                customer_user_id=str(customer_user_id) if customer_user_id else None  # <--- CRÍTICO PARA DOWNSSELL
             )
             self.db.add(payment)
             self.db.commit()
