@@ -396,7 +396,7 @@ class PaymentService:
                 bot_id=bot_id,
                 amount=amount,
                 status=status,
-                external_id=transaction_id
+                gateway_transaction_id=transaction_id
             )
             self.db.add(payment)
             self.db.commit()

@@ -260,7 +260,7 @@ def process_start_async(
         import redis
         from utils.tracking_service import TrackingServiceV4
 
-        with current_app.app_context():
+        with app.app_context():
             # Recarregar config do banco
             bot = db.session.get(Bot, bot_id)
             if bot and bot.config:
