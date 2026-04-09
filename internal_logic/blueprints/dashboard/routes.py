@@ -137,43 +137,49 @@ def dashboard():
             Payment.created_at >= month_start
         ).scalar() or 0
         
-        # Novos Leads Hoje - VERIFICAÇÃO DIRETA COM LOGS
-        import pytz
+        # Novos Leads Hoje - ARQUITETURA BLINDADA (SEM DEBUG)
+        # 1. TIMEZONE BLINDADO (BR -> UTC)
         brasilia_tz = pytz.timezone('America/Sao_Paulo')
         utc_tz = pytz.UTC
         agora_br = datetime.now(brasilia_tz)
         inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
         
-        # DEBUG: Log dos valores exatos
-        print(f"DEBUG LEADS: current_user.id={current_user.id}")
-        print(f"DEBUG LEADS: agora_br={agora_br}")
-        print(f"DEBUG LEADS: inicio_hoje_utc={inicio_hoje_utc}")
-        
-        # DEBUG: Query SQL bruta para verificação
-        from sqlalchemy import text
-        debug_query = text("""
-            SELECT COUNT(*) as total_leads
-            FROM bot_users bu
-            INNER JOIN bots b ON bu.bot_id = b.id
-            WHERE b.user_id = :user_id 
-              AND bu.first_interaction >= :inicio_hoje_utc
-        """)
-        
-        debug_result = db.session.execute(debug_query, {
-            "user_id": current_user.id,
-            "inicio_hoje_utc": inicio_hoje_utc
-        }).scalar()
-        
-        print(f"DEBUG LEADS: Resultado SQL bruto={debug_result}")
-        
-        # Query ORM (original)
-        usuarios_hoje = db.session.query(BotUser).join(Bot, BotUser.bot_id == Bot.id).filter(
-            Bot.user_id == current_user.id,
-            BotUser.first_interaction >= inicio_hoje_utc
-        ).count()
-        
-        print(f"DEBUG LEADS: Resultado ORM={usuarios_hoje}")
-        today_users = usuarios_hoje
+        # 2. EXTRAÇÃO DE BOT_IDS (À prova de falha de JOIN)
+        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
+        bot_ids = [bot.id for bot in user_bots]
+
+        # 3. CÁLCULO BLINDADO DE HOJE
+        today_users = today_sales = today_pending_sales = 0
+        today_revenue = 0.0
+
+        if bot_ids:
+            # Leads Hoje (DISTINCT + IN_)
+            today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+                BotUser.bot_id.in_(bot_ids),
+                BotUser.archived == False,
+                BotUser.first_interaction >= inicio_hoje_utc
+            ).scalar() or 0
+
+            # Vendas Pendentes Hoje
+            today_pending_sales = db.session.query(func.count(Payment.id)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status.in_(['pending', 'waiting_payment', 'processing'])
+            ).scalar() or 0
+
+            # Vendas Pagas Hoje
+            today_sales = db.session.query(func.count(Payment.id)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status == 'paid'
+            ).scalar() or 0
+
+            # Receita Hoje
+            today_revenue = db.session.query(func.sum(Payment.amount)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status == 'paid'
+            ).scalar() or 0.0
         
         month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
             BotUser.bot_id.in_(bot_ids),
