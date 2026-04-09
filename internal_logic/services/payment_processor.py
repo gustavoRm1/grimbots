@@ -1536,8 +1536,8 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
         if not customer_id:
             logger.error(f" Erro na entrega: Pix {payment.id} não possui customer_user_id vinculado.")
             return False
-        customer_email = payment.payer_email or payment.customer_email or ''
-        customer_name = payment.payer_name or payment.customer_name or 'Cliente'
+        customer_email = payment.customer_email or ''
+        customer_name = payment.customer_name or 'Cliente'
         
         # GERAÇÃO DO DELIVERY_TOKEN (se não existir)
         import hashlib
@@ -1571,7 +1571,7 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
         
         # FORMATAÇÃO DA MENSAGEM HTML (IGUAL AO MAPA)
         product_name = payment.product_name or 'Produto'
-        customer_name = payment.payer_name or payment.customer_name or 'Cliente'
+        customer_name = payment.customer_name or 'Cliente'
         
         message = f"""
 <b> Pagamento Confirmado!</b>
