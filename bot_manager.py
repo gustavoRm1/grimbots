@@ -4546,13 +4546,13 @@ class BotManager:
                 
                 # ✅ ISOLAMENTO: Enfileirar processamento com user_id no payload
                 try:
-                    from internal_logic.workers import enqueue_with_user
                     from tasks_async import task_queue, process_start_async
                     if task_queue and self.user_id:
-                        enqueue_with_user(
-                            queue=task_queue,
-                            user_id=self.user_id,  # ✅ user_id do BotManager
-                            func=process_start_async,
+                        # ✅ CORREÇÃO: Enfileirar diretamente sem wrapper (evita pickle error)
+                        # Passar user_id como primeiro argumento explicitamente
+                        task_queue.enqueue(
+                            process_start_async,
+                            self.user_id,  # user_id como primeiro arg
                             bot_id=bot_id,
                             token=token,
                             config=config,
@@ -4564,6 +4564,7 @@ class BotManager:
                         # Fallback sem user_id (legacy)
                         task_queue.enqueue(
                             process_start_async,
+                            0,  # user_id=0 para compatibilidade
                             bot_id=bot_id,
                             token=token,
                             config=config,
@@ -10146,21 +10147,20 @@ Seu pagamento ainda não foi confirmado.
                 
                 try:
                     # ✅ ISOLAMENTO: Agendar downsell com user_id no payload
-                    from internal_logic.workers import enqueue_with_user_and_bot
-                    from tasks_async import marathon_queue
+                    from tasks_async import marathon_queue, send_downsell_async
                     
                     if marathon_queue and self.user_id:
-                        job = enqueue_with_user_and_bot(
-                            queue=marathon_queue,
-                            user_id=self.user_id,  # ✅ Namespace isolado
-                            bot_id=bot_id,
-                            func=send_downsell_job,
-                            payment_id=payment_id,
-                            chat_id=chat_id,
-                            downsell=downsell,
-                            index=i,
-                            original_price=original_price,
-                            original_button_index=original_button_index,
+                        # ✅ CORREÇÃO: Enfileirar diretamente sem wrapper (evita pickle error)
+                        job = marathon_queue.enqueue(
+                            send_downsell_async,
+                            self.user_id,  # user_id como primeiro arg
+                            bot_id,
+                            payment_id,
+                            chat_id,
+                            downsell,
+                            i,
+                            original_price,
+                            original_button_index,
                             job_id=f"downsell_{bot_id}_{payment_id}_{i}",
                             job_timeout=300
                         )
