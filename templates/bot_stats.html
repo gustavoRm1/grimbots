@@ -1428,7 +1428,7 @@ if (typeof window.botStatsApp === 'undefined') {
     <!-- ============================================================
          HISTÓRICO DE CAMPANHAS - DESIGN MODERNO
          ============================================================ -->
-    <div class="config-section" style="margin-top: 2rem;" x-data="{ showAllCampaigns: false }">
+    <div class="config-section" style="margin-top: 2rem;">
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h2 class="config-section-title flex items-center gap-2">
@@ -1443,7 +1443,7 @@ if (typeof window.botStatsApp === 'undefined') {
 
         <!-- Lista de Campanhas em Cards -->
         <div class="grid gap-3" style="margin-top: 1rem;">
-            <template x-for="(campaign, index) in campaigns" :key="campaign.id">
+            <template x-for="(campaign, index) in (showAllCampaigns ? campaigns : campaigns.slice(0, 5))" :key="campaign.id">
                 <div 
                     @click="showCampaignPreview(campaign)"
                     class="group cursor-pointer rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] border"
@@ -1888,6 +1888,7 @@ window.botStatsApp = function botStatsApp() {
         salesPerPage: 10,
         currentCampaignPage: 1,
         campaignsPerPage: 5,
+        showAllCampaigns: false,
         salesChart: null,
         deviceChart: null,
         
