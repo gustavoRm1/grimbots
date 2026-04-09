@@ -8,6 +8,7 @@ de pagamento (WiinPay, AguiaPags, SyncPay, Paradise, HooPay, etc).
 """
 
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
@@ -392,11 +393,17 @@ class PaymentService:
         try:
             from internal_logic.core.models import Payment
             
+            # Garantir valores para as Constraints do banco
+            safe_payment_id = str(uuid.uuid4())  # Fallback obrigatório
+            safe_gateway_type = "paradise"  # Fallback obrigatório
+            
             payment = Payment(
                 bot_id=bot_id,
+                payment_id=safe_payment_id,  # RESOLVE A NOT NULL CONSTRAINT
+                gateway_type=safe_gateway_type,  # RESOLVE O GATEWAY TYPE NULO
                 amount=amount,
                 status=status,
-                gateway_transaction_id=transaction_id
+                gateway_transaction_id=str(transaction_id) if transaction_id else safe_payment_id
             )
             self.db.add(payment)
             self.db.commit()
