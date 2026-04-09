@@ -66,7 +66,21 @@ def telegram_webhook(bot_id):
         try:
             from tasks_async import task_queue, process_telegram_message_async
             
+            # 🚨 DIAGNÓSTICO: Verificar se workers estão processando
+            use_sync_fallback = False
+            queue_length = 0
+            
             if task_queue:
+                try:
+                    # Verificar tamanho da fila - se > 10, workers provavelmente estão parados
+                    queue_length = task_queue.count
+                    if queue_length > 10:
+                        logger.critical(f"🚨 FILA BACKLOGADA! {queue_length} jobs pendentes. Workers provavelmente PARADOS!")
+                        use_sync_fallback = True
+                except Exception as qe:
+                    logger.warning(f"⚠️ Não foi possível verificar tamanho da fila: {qe}")
+            
+            if task_queue and not use_sync_fallback:
                 task_queue.enqueue(
                     process_telegram_message_async,
                     bot_id,
@@ -74,17 +88,30 @@ def telegram_webhook(bot_id):
                     bot.token,
                     config_dict
                 )
+                logger.info(f"✅ Mensagem enfileirada | Bot: {bot_id} | Queue size: {queue_length}")
                 return jsonify({'status': 'queued'}), 200
             else:
-                # Fila não disponível - processar síncrono com garantia de BotUser
-                logger.warning(f"⚠️ Fila RQ não disponível, processando síncrono | Bot: {bot_id}")
+                # 🚨 WORKERS PARADOS - Processar síncrono para não perder mensagens!
+                if use_sync_fallback:
+                    logger.critical(f"🚨 WORKERS PARADOS! Processando síncrono para não perder mensagem | Bot: {bot_id}")
+                else:
+                    logger.warning(f"⚠️ Fila RQ não disponível, processando síncrono | Bot: {bot_id}")
+                
                 from tasks_async import process_telegram_message_async
                 process_telegram_message_async(bot_id, update, bot.token, config_dict)
                 return jsonify({'status': 'processed_sync'}), 200
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao enfileirar processamento: {e}")
-            return jsonify({'error': 'Processing failed'}), 500
+            logger.error(f"❌ Erro ao enfileirar processamento: {e}", exc_info=True)
+            # 🚨 ÚLTIMO RECURSO: Tentar processar síncrono mesmo com erro
+            try:
+                logger.critical(f"🚨 ERRO NA FILA - Tentando processar síncrono como último recurso | Bot: {bot_id}")
+                from tasks_async import process_telegram_message_async
+                process_telegram_message_async(bot_id, update, bot.token, {})
+                return jsonify({'status': 'processed_sync_fallback'}), 200
+            except Exception as sync_error:
+                logger.critical(f"💀 FALHA TOTAL: Nem síncrono funcionou: {sync_error}", exc_info=True)
+                return jsonify({'error': 'Processing failed'}), 500
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no webhook Telegram: {e}")
