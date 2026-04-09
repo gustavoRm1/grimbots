@@ -137,8 +137,8 @@ def dashboard():
             Payment.created_at >= month_start
         ).scalar() or 0
         
-        # Novos Leads Hoje - QUERY CORRIGIDA COM JOIN(BOT)
-        usuarios_hoje = db.session.query(BotUser).join(Bot).filter(
+        # Novos Leads Hoje - JOIN EXPLÍCITO CORRIGIDO
+        usuarios_hoje = db.session.query(BotUser).join(Bot, BotUser.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id,
             BotUser.first_interaction >= today_start
         ).count()
@@ -692,7 +692,7 @@ def ranking():
     if my_position_number is None:
         my_monthly_revenue = db.session.query(
             func.coalesce(func.sum(Payment.amount), 0)
-        ).join(Bot).filter(
+        ).join(Bot, Payment.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id,
             Payment.status == 'paid',
             Payment.created_at >= first_day_of_month
@@ -2800,7 +2800,7 @@ def check_dashboard_updates():
                 Payment.created_at >= today_start_utc
             ).first()
             
-            latest_payment = Payment.query.join(Bot).filter(
+            latest_payment = Payment.query.join(Bot, Payment.bot_id == Bot.id).filter(
                 Bot.user_id == current_user.id
             ).order_by(Payment.id.desc()).first()
             
@@ -2815,7 +2815,7 @@ def check_dashboard_updates():
         # Verificar novos pagamentos desde o último check
         last_check_dt = datetime.fromtimestamp(last_check_timestamp)
         
-        new_payments_query = Payment.query.join(Bot).filter(
+        new_payments_query = Payment.query.join(Bot, Payment.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id,
             Payment.created_at > last_check_dt
         )
@@ -2833,7 +2833,7 @@ def check_dashboard_updates():
             Payment.created_at >= today_start_utc
         ).first()
         
-        latest_payment = Payment.query.join(Bot).filter(
+        latest_payment = Payment.query.join(Bot, Payment.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id
         ).order_by(Payment.id.desc()).first()
         
