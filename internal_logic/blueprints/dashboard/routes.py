@@ -47,9 +47,13 @@ def dashboard():
     # Buscar APENAS bots ativos (para exibição na interface)
     active_bots_only = Bot.query.filter_by(user_id=current_user.id, is_active=True).all()
     
-    # Períodos de tempo
-    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
-    month_start = get_brazil_time().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Períodos de tempo - TIMEZONE CORRIGIDO
+    import pytz
+    brasilia_tz = pytz.timezone('America/Sao_Paulo')
+    utc_tz = pytz.UTC
+    agora_br = datetime.now(brasilia_tz)
+    today_start = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
+    month_start = agora_br.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
     
     # Estatísticas básicas (calculadas com TODOS os bots)
     total_bots = len(all_bots)
@@ -120,10 +124,10 @@ def dashboard():
             Payment.created_at >= month_start
         ).scalar() or 0.0
         
-        # Vendas pendentes (HOJE e MÊS)
+        # Vendas pendentes (HOJE e MÊS) - FILTRO CORRIGIDO
         today_pending_sales = db.session.query(func.count(Payment.id)).filter(
             Payment.bot_id.in_(bot_ids),
-            Payment.status == 'pending',
+            Payment.status.in_(['pending', 'waiting_payment', 'processing']),
             Payment.created_at >= today_start
         ).scalar() or 0
         
@@ -482,12 +486,18 @@ def api_dashboard_analytics():
     ).scalar() or 0.0
     avg_ticket = (total_revenue / total_purchases) if total_purchases > 0 else 0
     
-    # 2.1. VENDAS HOJE
-    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
+    # 2.1. VENDAS HOJE - TIMEZONE CORRIGIDO
+    import pytz
+    brasilia_tz = pytz.timezone('America/Sao_Paulo')
+    utc_tz = pytz.UTC
+    agora_br = datetime.now(brasilia_tz)
+    inicio_hoje_br = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
+    inicio_hoje_utc = inicio_hoje_br.astimezone(utc_tz).replace(tzinfo=None)
+    
     today_sales = Payment.query.filter(
         Payment.bot_id.in_(user_bot_ids),
         Payment.status == 'paid',
-        Payment.created_at >= today_start
+        Payment.created_at >= inicio_hoje_utc
     ).count()
     
     # 3. PERFORMANCE DE ORDER BUMPS
