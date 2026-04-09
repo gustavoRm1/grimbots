@@ -549,6 +549,43 @@ class TrackingService:
     # Meta CAPI Endpoint
     META_CAPI_URL = "https://graph.facebook.com/v18.0/{pixel_id}/events"
     
+    def __init__(self):
+        """Inicializa conexão com Redis"""
+        try:
+            import redis
+            from internal_logic.core.extensions import limiter
+            # Usar mesma conexão Redis do limiter
+            redis_url = limiter.storage_uri if hasattr(limiter, 'storage_uri') else 'redis://localhost:6379/0'
+            self.redis = redis.from_url(redis_url, decode_responses=True)
+            logger.info(" TrackingService - Conectado ao Redis")
+        except Exception as e:
+            logger.error(f" TrackingService - Erro ao conectar Redis: {e}")
+            self.redis = None
+    
+    def recover_tracking_data(self, tracking_token: str):
+        """Recupera dados completos de tracking do Redis"""
+        try:
+            if not tracking_token:
+                return None
+                
+            if not self.redis:
+                logger.error(" TrackingService - Redis não disponível")
+                return None
+            
+            key = f"tracking:{tracking_token}"
+            data = self.redis.get(key)
+            
+            if data:
+                tracking_data = json.loads(data)
+                logger.info(f"[TRACKING_SERVICE] Dados recuperados para token {tracking_token[:8]}...")
+                return tracking_data
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"[TRACKING_SERVICE] Erro ao recuperar dados de tracking: {e}")
+            return None
+    
     @classmethod
     def fire_pageview(cls, pool, request, async_mode: bool = True) -> Optional[str]:
         """
