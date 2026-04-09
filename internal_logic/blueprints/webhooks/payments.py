@@ -145,25 +145,39 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
         webhook_status = result.get('status', '').lower()
         print(f"[AUDIT] Step 3: Status mapeado: '{webhook_status}' (original: '{result.get('status')}')")
 
-        # BUSCA ROBUSTA (FAIL-OVER) - UUID é único globalmente
+        # BUSCA ROBUSTA COM FALLBACK GLOBAL - UUID é único globalmente
         reference = result.get('payment_id') or result.get('reference') or data.get('reference')
         payment = None
         
         print(f"[AUDIT] Step 3: Buscando no DB por ID: {reference}")
         
-        # Tentativa 1: Busca global por UUID (FAIL-OVER)
-        if reference:
+        # Tentativa 1: Busca filtrada (se tiver gateway com user_id)
+        if gateway and reference:
+            # Busca com filtros de usuário/bot (otimizada)
+            user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
+            if user_bot_ids:
+                payment = Payment.query.filter(
+                    Payment.bot_id.in_(user_bot_ids),
+                    Payment.payment_id == str(reference)
+                ).first()
+                if payment:
+                    print(f"[AUDIT] Step 4: Resultado busca filtrada: <Payment ID={payment.id} | Status={payment.status}>")
+        
+        # Tentativa 2: Busca global por UUID (FAIL-OVER - se a filtrada falhar)
+        if not payment and reference:
             payment = Payment.query.filter_by(payment_id=str(reference)).first()
             if payment:
-                print(f"[AUDIT] Step 4: Resultado busca: <Payment ID={payment.id} | Status={payment.status}>")
+                print(f"[AUDIT] Step 4: Resultado busca global: <Payment ID={payment.id} | Status={payment.status}>")
+                print(f"[AUDIT] AVISO: Busca filtrada falhou, mas encontrou via global (UUID único)")
             else:
-                print(f"[AUDIT] Step 4: Resultado busca: <None>")
+                print(f"[AUDIT] Step 4: Resultado busca global: <None>")
 
-        # Tentativa 2: gateway_transaction_id (fallback)
+        # Tentativa 3: gateway_transaction_id (último fallback)
         if not payment and gateway_transaction_id:
             payment = Payment.query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
             if payment:
-                print(f"[AUDIT] Step 4: Resultado busca fallback: <Payment ID={payment.id} | Status={payment.status}>")
+                print(f"[AUDIT] Step 4: Resultado busca final: <Payment ID={payment.id} | Status={payment.status}>")
+                print(f"[AUDIT] AVISO: Encontrado apenas via gateway_transaction_id")
 
         # STEP 5: TENTANDO ATUALIZAÇÃO
         if payment:
