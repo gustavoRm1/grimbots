@@ -829,6 +829,10 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
     from internal_logic.core.extensions import db
     from internal_logic.core.models import BotUser, Bot
     from bot_manager import BotManager
+    from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
+    
+    job_id = f"{bot_id}_{datetime.utcnow().timestamp()}"
+    logger.critical(f"🚀 [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
     
     try:
         with current_app.app_context():
@@ -854,6 +858,8 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
                     first_name = from_user.get('first_name', '')
                     username = from_user.get('username', '')
                     
+                    logger.critical(f"🔍 [WORKER] Processando usuário {telegram_id} para bot {bot_id}")
+                    
                     # 2. Busca ou Criação do BotUser
                     user = BotUser.query.filter_by(bot_id=bot_id, telegram_user_id=telegram_id).first()
                     
@@ -869,21 +875,43 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
                             archived=False
                         )
                         db.session.add(user)
-                        logger.info(f"✅ [LEAD NOVO] BotUser criado: {telegram_id} | Bot: {bot_id}")
+                        logger.critical(f"✅ [LEAD NOVO] BotUser criado: {telegram_id} | Bot: {bot_id}")
                     else:
                         # LEAD ANTIGO VOLTANDO (Atualiza apenas o last_interaction)
                         user.first_name = first_name
                         user.username = username
                         user.last_interaction = utc_now
                         user.archived = False  # Desarquiva se ele estava inativo
-                        logger.info(f"✅ [LEAD EXISTENTE] BotUser atualizado: {telegram_id} | Bot: {bot_id}")
+                        logger.critical(f"✅ [LEAD EXISTENTE] BotUser atualizado: {telegram_id} | Bot: {bot_id}")
                     
                     # 3. Força o commit imediato ANTES de processar o funil
-                    db.session.commit()
+                    try:
+                        db.session.commit()
+                        logger.critical(f"💾 [COMMIT SUCCESS] BotUser persistido | Telegram: {telegram_id} | Bot: {bot_id}")
+                    except OperationalError as oe:
+                        db.session.rollback()
+                        logger.critical(f"🚨 [OPERATIONAL ERROR] Falha de conexão DB: {oe}", exc_info=True)
+                        # Tentar reconectar e salvar novamente
+                        try:
+                            db.session.remove()
+                            db.session.add(user)
+                            db.session.commit()
+                            logger.critical(f"💾 [RETRY SUCCESS] BotUser persistido após reconexão")
+                        except Exception as retry_error:
+                            logger.critical(f"💀 [RETRY FAILED] Não foi possível salvar após reconexão: {retry_error}", exc_info=True)
+                    except IntegrityError as ie:
+                        db.session.rollback()
+                        logger.critical(f"🚨 [INTEGRITY ERROR] Violação de constraint: {ie}", exc_info=True)
+                    except SQLAlchemyError as se:
+                        db.session.rollback()
+                        logger.critical(f"🚨 [SQLAlchemy ERROR] Erro no banco: {se}", exc_info=True)
+                    except Exception as commit_error:
+                        db.session.rollback()
+                        logger.critical(f"💀 [COMMIT FAILED] Erro desconhecido: {commit_error}", exc_info=True)
                     
             except Exception as e:
                 db.session.rollback()
-                logger.error(f"❌ [CRÍTICO] Falha ao salvar BotUser no banco: {e}", exc_info=True)
+                logger.critical(f"❌ [CRÍTICO] Falha ao salvar BotUser no banco: {e}", exc_info=True)
                 # Continua processando mesmo assim para não perder a mensagem
             
             # ============================================================================
@@ -892,12 +920,14 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
             try:
                 bot_manager = BotManager(socketio=None, scheduler=None)
                 bot_manager._process_telegram_update(bot_id, None, update_data)
-                logger.info(f"✅ Mensagem processada via Worker RQ | Bot: {bot_id}")
+                logger.critical(f"✅ [MESSAGE PROCESSED] Job: {job_id} | Bot: {bot_id}")
             except Exception as e:
-                logger.error(f"❌ Erro ao processar mensagem no Worker: {e}", exc_info=True)
+                logger.critical(f"❌ [MESSAGE FAILED] Erro no processamento: {e}", exc_info=True)
                 
     except Exception as e:
-        logger.error(f"❌ Erro crítico no Worker Telegram: {e}", exc_info=True)
+        logger.critical(f"💀 [FATAL] Erro crítico no Worker Telegram: {e}", exc_info=True)
+    finally:
+        logger.critical(f"🏁 [WORKER EXIT] Job: {job_id} finalizado")
 
 
 def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any]):
@@ -919,20 +949,21 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
         gateway_type: Tipo do gateway (bolt, paradise, etc)
         data: Dados do webhook
     """
+    job_id = f"webhook_{gateway_type}_{datetime.utcnow().timestamp()}"
+    logger.critical(f"🚀 [WEBHOOK WORKER ENTRY] process_webhook_async iniciado | Job: {job_id} | Gateway: {gateway_type} | User: {user_id}")
+    
     try:
-        # CRÍTICO: Logging no início para verificar se função está sendo chamada
-        logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}, user_id={user_id}")
-        
         from flask import current_app
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
+        from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
         # Não usar bot_manager global - criar instância com user_id
         
         with current_app.app_context():
-            logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - App context criado para gateway_type={gateway_type}, user_id={user_id}")
+            logger.critical(f"🔍 [WEBHOOK WORKER] App context criado | Job: {job_id}")
             
             # ✅ ISOLAMENTO: Se user_id for 0, resolver pelo transaction_id
             if user_id == 0:
@@ -1496,14 +1527,25 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                     logger.warning(f"🔍 [DIAGNÓSTICO] process_webhook_async - Payment NÃO encontrado: gateway_transaction_id={gateway_transaction_id}")
                     return {'status': 'payment_not_found'}
             else:
-                logger.warning(f"⚠️ Webhook não processado: result=None")
+                logger.critical(f"⚠️ [WEBHOOK WORKER] Webhook não processado: result=None | Job: {job_id}")
                 return {'status': 'not_processed'}
                 
+    except OperationalError as oe:
+        logger.critical(f"🚨 [WEBHOOK WORKER] OperationalError - Falha de conexão DB: {oe}", exc_info=True)
+        return {'status': 'error', 'error': f'Database connection error: {str(oe)}'}
+    except IntegrityError as ie:
+        logger.critical(f"🚨 [WEBHOOK WORKER] IntegrityError - Violação de constraint: {ie}", exc_info=True)
+        return {'status': 'error', 'error': f'Integrity error: {str(ie)}'}
+    except SQLAlchemyError as se:
+        logger.critical(f"🚨 [WEBHOOK WORKER] SQLAlchemyError: {se}", exc_info=True)
+        return {'status': 'error', 'error': f'Database error: {str(se)}'}
     except Exception as e:
-        logger.error(f"❌ [DIAGNÓSTICO] ERRO CRÍTICO em process_webhook_async para gateway_type={gateway_type}: {e}", exc_info=True)
-        logger.error(f"❌ [DIAGNÓSTICO] Exception type: {type(e).__name__}")
-        logger.error(f"❌ [DIAGNÓSTICO] Exception message: {str(e)}")
+        logger.critical(f"💀 [WEBHOOK WORKER] ERRO CRÍTICO: {e}", exc_info=True)
+        logger.critical(f"💀 [WEBHOOK WORKER] Exception type: {type(e).__name__}")
+        logger.critical(f"💀 [WEBHOOK WORKER] Exception message: {str(e)}")
         return {'status': 'error', 'error': str(e)}
+    finally:
+        logger.critical(f"🏁 [WEBHOOK WORKER EXIT] Job: {job_id} finalizado")
 
 
 def reconcile_paradise_payments_async():
