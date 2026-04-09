@@ -5,7 +5,7 @@ Rotas públicas para redirecionamento de tráfego (/go/<slug>) com Cloaker e Loa
 import logging
 import time
 from datetime import datetime
-from flask import Blueprint, request, redirect, jsonify, render_template
+from flask import Blueprint, request, redirect, jsonify, render_template, make_response
 from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
 from internal_logic.core.metrics import MetricsService
@@ -62,14 +62,28 @@ def public_redirect(slug):
         pass
     
     # ═══════════════════════════════════════════════════════════
-    # 3. RASTREIO (Meta CAPI) - NÃO BLOQUEANTE
-    # ═══════════════════════════════════════════════════════════
+    # 3. RASTREIO (Meta CAPI) - PREPARAR VARIÁVEIS
+    # =================================================================
+    tracking_token = None
+    pixel_id_to_use = None
+    fbclid = request.args.get('fbclid', '')
+    
     try:
         if getattr(pool, 'meta_tracking_enabled', False):
+            # Gerar tracking token
+            import uuid
+            tracking_token = uuid.uuid4().hex
+            
+            # Obter pixel_id do pool
+            pixel_id_to_use = getattr(pool, 'meta_pixel_id', None)
+            
+            # Disparar PageView (async)
             TrackingService.fire_pageview(pool, request, async_mode=True)
+            
+            logger.info(f"[PIXEL_STICKY] /go/{slug}: pixel_id={pixel_id_to_use}, tracking_token={tracking_token}")
     except Exception as e:
         # Tracking nunca bloqueia o redirect
-        logger.debug(f"📊 Tracking não disparado: {e}")
+        logger.debug(f" Tracking não disparado: {e}")
         pass
     
     # ═══════════════════════════════════════════════════════════
@@ -111,12 +125,33 @@ def public_redirect(slug):
         pass
     
     # ═══════════════════════════════════════════════════════════
-    # 6. REDIRECT
-    # ═══════════════════════════════════════════════════════════
+    # 6. RENDER TEMPLATE (SEM REDIRECT 302)
+    # =================================================================
     pipeline_duration = (time.time() - pipeline_start) * 1000
-    logger.info(f"🔄 Redirect: pool={pool.slug} → bot={selected_bot.bot_id} ({pipeline_duration:.1f}ms)")
+    logger.info(f"[PIXEL_STICKY] Render: pool={pool.slug} -> bot={selected_bot.bot_id} ({pipeline_duration:.1f}ms)")
     
-    return redirect(bot_url, code=302)
+    # Extrair bot_username da URL do Telegram
+    bot_username = selected_bot.bot.username if hasattr(selected_bot.bot, 'username') else 'bot'
+    bot_username_safe = bot_username.replace('@', '')
+    
+    response = make_response(render_template('telegram_redirect.html',
+        bot_username=bot_username_safe,
+        tracking_token=tracking_token,
+        pixel_id=pixel_id_to_use,
+        fbclid=fbclid if fbclid else '',
+        utm_source=request.args.get('utm_source', ''),
+        utm_campaign=request.args.get('utm_campaign', ''),
+        utm_medium=request.args.get('utm_medium', ''),
+        utm_content=request.args.get('utm_content', ''),
+        utm_term=request.args.get('utm_term', ''),
+        grim=request.args.get('grim', ''),
+        redirect_url=bot_url  # URL final para redirecionamento JS
+    ))
+    
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @public_bp.route('/health')
