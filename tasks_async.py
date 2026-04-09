@@ -9,6 +9,14 @@ Tasks Assíncronas QI 200 - Redis Queue (RQ)
 import os
 import logging
 import re
+
+# 🚨 CRÍTICO: Carregar .env ANTES de qualquer import local do projeto
+# Workers RQ precisam de ENCRYPTION_KEY e outras variáveis de ambiente
+from dotenv import load_dotenv
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path)
+
+# Agora sim, imports locais (com acesso ao .env já carregado)
 from rq import Queue
 from redis import Redis
 from typing import Dict, Any, Optional
