@@ -185,10 +185,7 @@ class StatsService:
             date_filter = StatsService.get_period_filter(chart_days)
             date_filter_str = date_filter.strftime('%Y-%m-%d %H:%M:%S')
             
-            # Query SQL para vendas por dia
-            engine = db.get_engine()
-            connection = engine.connect()
-            
+            # Query SQL para vendas por dia (via session - compatível SQLAlchemy 2.0)
             chart_query = text("""
                 SELECT 
                     DATE(created_at) as date,
@@ -202,7 +199,7 @@ class StatsService:
                 ORDER BY date
             """)
             
-            daily_data = connection.execute(chart_query, {"bot_id": bot_id, "date_filter": date_filter_str}).fetchall()
+            daily_data = db.session.execute(chart_query, {"bot_id": bot_id, "date_filter": date_filter_str}).fetchall()
             
             # Converter para dicionário para lookup rápido
             data_by_date = {str(row.date): {'sales': row.sales, 'revenue': float(row.revenue)} 
@@ -225,7 +222,6 @@ class StatsService:
                     'revenue': day_data['revenue']
                 })
             
-            connection.close()
             return chart_data
             
         except Exception as e:

@@ -285,6 +285,19 @@ def bot_stats_api(bot_id):
             ).limit(50).all()
             
             for campaign in recent_campaigns:
+                # ✅ FIX: Garantir que buttons seja sempre uma lista
+                buttons_data = campaign.buttons
+                if isinstance(buttons_data, str):
+                    try:
+                        import json
+                        buttons_data = json.loads(buttons_data) if buttons_data else []
+                    except:
+                        buttons_data = []
+                elif buttons_data is None:
+                    buttons_data = []
+                elif not isinstance(buttons_data, list):
+                    buttons_data = []
+                
                 campaigns_list.append({
                     'id': campaign.id,
                     'name': campaign.name,
@@ -301,7 +314,7 @@ def bot_stats_api(bot_id):
                     'media_url': campaign.media_url,
                     'media_type': campaign.media_type,
                     'audio_url': campaign.audio_url,
-                    'buttons': campaign.buttons,
+                    'buttons': buttons_data,  # ✅ Sempre uma lista
                     'target_audience': campaign.target_audience
                 })
         except Exception as campaign_error:
