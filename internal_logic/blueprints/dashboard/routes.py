@@ -302,60 +302,54 @@ def dashboard():
 @dashboard_bp.route('/api/dashboard/stats')
 @login_required
 def api_dashboard_stats():
-    """API para estatísticas do dashboard (usado pelo JavaScript) - OTIMIZADA V2"""
-    from sqlalchemy import func, text
-    from internal_logic.core.models import BotUser
+    """API para estatísticas do dashboard (usado pelo JavaScript) - ARQUITETURA LEGADA BLINDADA"""
+    from sqlalchemy import func
+    from internal_logic.core.models import BotUser, Bot, Payment
     import pytz
-    from datetime import datetime, timedelta
+    from datetime import datetime
     
     try:
-        # ============================================================================
-        # TIMEZONE: Hoje em Brasília convertido para UTC (naive)
-        # ============================================================================
+        # 1. TIMEZONE BLINDADO (BR -> UTC)
         brasilia_tz = pytz.timezone('America/Sao_Paulo')
-        now_br = datetime.now(brasilia_tz)
-        today_start_br = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_start_utc = today_start_br.astimezone(pytz.UTC).replace(tzinfo=None)
-        today_start_str = today_start_utc.strftime('%Y-%m-%d %H:%M:%S')
+        utc_tz = pytz.UTC
+        agora_br = datetime.now(brasilia_tz)
+        inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
         
-        # ============================================================================
-        # OTIMIZAÇÃO: Query unificada via SQL direto (muito mais rápido que múltiplos JOINs)
-        # ============================================================================
-        
-        # Query única para métricas de hoje (payments)
-        today_metrics_query = text("""
-            SELECT 
-                COALESCE(SUM(p.amount), 0) as revenue,
-                COUNT(p.id) as sales
-            FROM payments p
-            INNER JOIN bots b ON p.bot_id = b.id
-            WHERE b.user_id = :user_id 
-              AND p.status = 'paid'
-              AND p.created_at >= :today_start
-        """)
-        
-        today_result = db.session.execute(
-            today_metrics_query, 
-            {"user_id": current_user.id, "today_start": today_start_str}
-        ).first()
-        
-        today_revenue = float(today_result.revenue or 0.0)
-        today_sales = today_result.sales or 0
-        
-        # Query para usuários novos hoje
-        today_users_query = text("""
-            SELECT COUNT(DISTINCT bu.telegram_user_id) as new_users
-            FROM bot_users bu
-            INNER JOIN bots b ON bu.bot_id = b.id
-            WHERE b.user_id = :user_id 
-              AND bu.archived = 0
-              AND bu.first_interaction >= :today_start
-        """)
-        
-        today_users_result = db.session.execute(
-            today_users_query,
-            {"user_id": current_user.id, "today_start": today_start_str}
-        ).scalar() or 0
+        # 2. EXTRAÇÃO DE BOT_IDS (À prova de falha de JOIN)
+        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
+        bot_ids = [bot.id for bot in user_bots]
+
+        if not bot_ids:
+            today_users = today_sales = today_pending_sales = 0
+            today_revenue = 0.0
+        else:
+            # 3. LEADS HOJE (DISTINCT + IN_)
+            today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+                BotUser.bot_id.in_(bot_ids),
+                BotUser.archived == False,
+                BotUser.first_interaction >= inicio_hoje_utc
+            ).scalar() or 0
+
+            # 4. VENDAS PENDENTES HOJE
+            today_pending_sales = db.session.query(func.count(Payment.id)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status.in_(['pending', 'waiting_payment', 'processing'])
+            ).scalar() or 0
+
+            # 5. VENDAS PAGAS HOJE
+            today_sales = db.session.query(func.count(Payment.id)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status == 'paid'
+            ).scalar() or 0
+
+            # 6. RECEITA HOJE
+            today_revenue = db.session.query(func.sum(Payment.amount)).filter(
+                Payment.bot_id.in_(bot_ids),
+                Payment.created_at >= inicio_hoje_utc,
+                Payment.status == 'paid'
+            ).scalar() or 0.0
         
         # Query única para métricas totais (tudo em uma query só!)
         totals_query = text("""
@@ -399,7 +393,7 @@ def api_dashboard_stats():
         return jsonify({
             'today_sales': today_sales,
             'today_revenue': today_revenue,
-            'today_users': today_users_result,
+            'today_users': today_users,  # <--- CORREÇÃO: Variável correta
             'total_revenue': total_revenue,
             'conversion_rate': round(conversion_rate, 2),
             'active_bots': active_bots,
