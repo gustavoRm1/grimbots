@@ -1862,7 +1862,7 @@ window.botStatsApp = function botStatsApp() {
             },
             
             // ✅ Campanhas paginadas do backend
-            campaigns: {{ campaigns | tojson | safe if campaigns else '[]' }},
+            campaigns: {{ campaigns | tojson | safe }},
             campaignsPagination: {{ pagination | tojson | safe if pagination else '{"page": 1, "pages": 1, "has_prev": false, "has_next": false, "prev_num": null, "next_num": null, "total": 0}' }},
             comparison: {
                 downsells_auto: {
