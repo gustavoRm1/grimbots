@@ -137,12 +137,12 @@ def dashboard():
             Payment.created_at >= month_start
         ).scalar() or 0
         
-        # Novos usuários (HOJE e MÊS) - TIMEZONE CORRIGIDO
-        today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
-            BotUser.bot_id.in_(bot_ids),
-            BotUser.archived == False,
-            BotUser.first_interaction >= today_start  # today_start já está em UTC correto
-        ).scalar() or 0
+        # Novos Leads Hoje - QUERY CORRIGIDA COM JOIN(BOT)
+        usuarios_hoje = db.session.query(BotUser).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            BotUser.first_interaction >= today_start
+        ).count()
+        today_users = usuarios_hoje
         
         month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
             BotUser.bot_id.in_(bot_ids),
