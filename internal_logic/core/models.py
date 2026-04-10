@@ -1212,7 +1212,7 @@ class BotUser(db.Model):
     click_timestamp = db.Column(db.DateTime, nullable=True)
     
     # ✅ STICKY PIXEL V4.1 - Campos para persistência de tracking
-    pixel_id = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Pixel ID para recuperação em /delivery
+    # pixel_id = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Pixel ID para recuperação em /delivery
     campaign_code = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Código da campanha para remarketing
     
     # Demographic Data (campos confirmados)
