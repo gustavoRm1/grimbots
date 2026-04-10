@@ -706,7 +706,7 @@ function remarketingApp() {
                     delete campaignData.scheduled_time;
                 }
                 
-                const response = await fetch(`/api/bots/{{ bot.id }}/remarketing/campaigns`, {
+                const response = await fetch(`/remarketing/api/bots/{{ bot.id }}/remarketing/campaigns`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(campaignData)
@@ -746,7 +746,7 @@ function remarketingApp() {
             if (!confirm('Confirma o envio desta campanha?')) return;
             
             try {
-                const response = await fetch(`/api/bots/{{ bot.id }}/remarketing/campaigns/${campaignId}/send`, {
+                const response = await fetch(`/remarketing/api/bots/{{ bot.id }}/remarketing/campaigns/${campaignId}/send`, {
                     method: 'POST'
                 });
                 
