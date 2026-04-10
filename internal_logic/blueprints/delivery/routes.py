@@ -359,62 +359,6 @@ def delivery_page(token):
 @delivery_bp.route('/api/tracking/mark-purchase-sent', methods=['POST'])
 def mark_purchase_sent():
     """
-    API para marcar Purchase como enviado (anti-duplicação).
-    
-    Chamado pelo JavaScript do template delivery.html após disparar
-    o evento Purchase client-side com sucesso.
-    
-    Request Body:
-        {"payment_id": 123}
-    
-    Returns:
-        {"success": true} ou {"error": "mensagem"}
-    """
-    try:
-        data = request.get_json() or {}
-        payment_id = data.get('payment_id')
-        
-        if not payment_id:
-            return jsonify({'error': 'payment_id obrigatório'}), 400
-        
-        payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
-        
-        # DEFENSIVO: Verificar status do pagamento
-        if payment.status != 'paid':
-            if payment.status == 'pending':
-                # Pagamento ainda pendente - retornar 202 Accepted (aguardando confirmação)
-                logger.info(f"⏳ [MARK_PURCHASE] Pagamento pendente, aguardando confirmação: payment_id={payment.id}")
-                return jsonify({
-                    'status': 'pending',
-                    'message': 'Pagamento em processamento, aguardando confirmação do gateway'
-                }), 202
-            else:
-                # Status inválido (cancelled, refunded, etc.)
-                logger.warning(f"⚠️ [MARK_PURCHASE] Status inválido para marcar Purchase: {payment.status}")
-                return jsonify({'error': 'Pagamento não está confirmado'}), 400
-        
-        # Marcar como enviado
-        if hasattr(payment, 'purchase_sent_from_delivery'):
-            payment.purchase_sent_from_delivery = True
-        
-        if not getattr(payment, 'meta_purchase_sent', False):
-            payment.meta_purchase_sent = True
-            payment.meta_purchase_sent_at = datetime.utcnow()
-        
-        db.session.commit()
-        
-        logger.info(f"✅ [MARK_PURCHASE] Purchase marcado como enviado: payment_id={payment.id}")
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"❌ [MARK_PURCHASE] Erro ao marcar Purchase como enviado: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
-
-
-@delivery_bp.route('/api/tracking/mark-purchase-sent', methods=['POST'])
-def mark_purchase_sent():
-    """
     V4.1: API para marcar Purchase como enviado (anti-duplicação)
     
     Chamado via fetch() pelo delivery.html após disparar evento Purchase.
