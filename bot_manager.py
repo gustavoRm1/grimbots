@@ -4455,8 +4455,8 @@ class BotManager:
                                 
                                 # V4.1: Salvar pixel_id do payload
                                 if payload.get('pixel_id'):
-                                    bot_user_track.pixel_id = payload.get('pixel_id')
-                                    logger.info(f"?? V4.1 - pixel_id salvo: {payload.get('pixel_id')}")
+                                    bot_user_track.campaign_code = payload.get('pixel_id')
+                                    logger.info(f"?? V4.1 - pixel_id salvo em campaign_code: {payload.get('pixel_id')}")
                                 
                                 # Salvar dados de tracking existentes
                                 bot_user_track.fbclid = payload.get('fbclid') or bot_user_track.fbclid
@@ -8973,7 +8973,7 @@ Seu pagamento ainda não foi confirmado.
                             status=payment_status,  # ✅ 'failed' se recusado, 'pending' se não
                             # V4.1: Injetar tracking_data do BotUser (prioridade máxima)
                             tracking_token=getattr(bot_user_for_payment, 'tracking_session_id', None) if bot_user_for_payment else (tracking_token if tracking_token else None),
-                            meta_pixel_id=getattr(bot_user_for_payment, 'pixel_id', None) if bot_user_for_payment else None,
+                            meta_pixel_id=getattr(bot_user_for_payment, 'campaign_code', None) if bot_user_for_payment else None,
                             fbclid=getattr(bot_user_for_payment, 'fbclid', None) if bot_user_for_payment else None,
                             # Analytics tracking
                             order_bump_shown=order_bump_shown,
