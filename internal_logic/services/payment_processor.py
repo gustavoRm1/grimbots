@@ -124,19 +124,103 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
 
 def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
     """
-    Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado
+    V4.1: Envia mensagem com decisão inteligente do link
     
-    ✅ REFATORADO: Cria BotManager localmente com user_id do payment
-    
-    EXTRACTED FROM: app.py linhas 215-381
-    
-    Args:
-        payment: Objeto Payment com status='paid'
-        bot_manager: Instância opcional do BotManager (para compatibilidade)
-        socketio: Instância opcional do SocketIO
-    
-    Returns:
-        bool: True se enviado com sucesso, False se houve erro
+    Fluxo:
+    1. Recuperar dados de tracking do Redis
+    2. Buscar pixel_id (4 prioridades)
+    3. Decidir: /delivery vs access_link
+    4. Enviar mensagem via Telegram
+    """
+    try:
+        # 7.1 - Verificar se pagamento está confirmado
+        if payment.status != 'paid':
+            logger.warning(f"⚠️ V4.1 - Payment não está pago: {payment.status}")
+            return False
+        
+        # 7.2 - V4.1: Recuperar dados de tracking
+        tracking_data = {}
+        if payment.tracking_token:
+            from internal_logic.services.tracking_service_v4 import TrackingServiceV4
+            tracking_service_v4 = TrackingServiceV4()
+            tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
+        
+        # 7.3 - V4.1: Buscar pixel_id (4 prioridades)
+        pixel_sources = [
+            getattr(payment, 'meta_pixel_id', None),    # 1. Payment
+            tracking_data.get('pixel_id'),               # 2. Redis
+            getattr(payment.bot.config, 'pixel_id', None) if payment.bot and payment.bot.config else None, # 3. Bot config
+            None                                       # 4. Pool (fallback)
+        ]
+        
+        # Buscar pool do bot
+        from internal_logic.core.models import PoolBot
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        if pool_bot and pool_bot.pool:
+            pixel_sources.append(pool_bot.pool.meta_pixel_id)
+        
+        pixel_id = next((p for p in pixel_sources if p), None)
+        
+        # 7.4 - V4.1: Decisão INTELIGENTE do link
+        if pixel_id and tracking_data:
+            # Pixel ATIVO → usar /delivery com tracking
+            from flask import url_for
+            link_to_send = url_for(
+                'delivery.delivery_page',
+                delivery_token=payment.delivery_token,
+                px=pixel_id,  # Passar pixel_id na URL
+                _external=True
+            )
+            
+            logger.info(f"✅ V4.1 - Link DECISÃO: /delivery/{payment.delivery_token[:16]}...?px={pixel_id[:8]}...")
+            
+        else:
+            # Pixel INATIVO → usar access_link direto
+            access_link = getattr(payment.bot.config, 'access_link', None) if payment.bot and payment.bot.config else None
+            if access_link:
+                link_to_send = access_link
+                logger.info(f"✅ V4.1 - Link DECISÃO: access_link direto")
+            else:
+                # Sem pixel e sem access_link → mensagem genérica
+                link_to_send = None
+                logger.info(f"✅ V4.1 - Link DECISÃO: mensagem genérica (sem pixel e sem access_link)")
+        
+        # 7.5 - V4.1: Enviar mensagem via Telegram
+        if not bot_manager:
+            bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
+        
+        if link_to_send:
+            message = (
+                f"✅ *Pagamento Confirmado!*\n\n"
+                f"📦 *Produto:* {payment.description}\n"
+                f"💰 *Valor:* R$ {payment.amount:.2f}\n\n"
+                f"🔗 *Acessar Produto:* [Clique Aqui]({link_to_send})"
+            )
+        else:
+            message = (
+                f"✅ *Pagamento Confirmado!*\n\n"
+                f"📦 *Produto:* {payment.description}\n"
+                f"💰 *Valor:* R$ {payment.amount:.2f}\n\n"
+                f"📩 *Seu acesso será enviado em breve.*"
+            )
+        
+        # Enviar mensagem
+        success = bot_manager.send_message(
+            chat_id=payment.customer_user_id,
+            text=message,
+            parse_mode='Markdown'
+        )
+        
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ V4.1 - Erro em send_payment_delivery: {e}", exc_info=True)
+        return False
+
+
+def send_payment_delivery_legacy(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
+    """
+    Versão legada mantida para compatibilidade
     """
     try:
         if not payment or not payment.bot:

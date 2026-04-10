@@ -230,3 +230,62 @@ def health_check_all_pools():
             
     except Exception as e:
         logger.error(f"❌ Erro crítico no health_check_all_pools: {e}", exc_info=True)
+
+
+@public_bp.route('/api/tracking/cookies', methods=['POST'])
+def capture_tracking_cookies():
+    """
+    V4.1: ENDPOINT PARA CAPTURAR COOKIES _FBP E _FBC DO BROWSER
+    
+    Chamado via Beacon API pelo telegram_redirect.html após Meta Pixel carregar.
+    Atualiza tracking_data no Redis com cookies gerados pelo Meta Pixel.
+    """
+    try:
+        # V4.1: Parsear JSON (Beacon API não envia Content-Type)
+        data = None
+        
+        try:
+            data = request.get_json(force=True, silent=True)
+        except Exception:
+            pass
+        
+        if not data:
+            try:
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    import json as json_lib
+                    data = json_lib.loads(raw_data)
+            except (json_lib.JSONDecodeError, ValueError) as e:
+                logger.warning(f"❌ Erro ao parsear JSON: {e}")
+                return jsonify({'success': False}), 400
+        
+        # V4.1: Validar dados
+        tracking_token = data.get('tracking_token')
+        if not tracking_token:
+            return jsonify({'success': False, 'error': 'tracking_token required'}), 400
+        
+        # V4.1: Recuperar tracking_data existente
+        from internal_logic.services.tracking_service_v4 import TrackingServiceV4
+        tracking_service_v4 = TrackingServiceV4()
+        existing_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
+        
+        # V4.1: Atualizar com cookies do browser
+        updated_data = {
+            **existing_data,
+            'fbp': data.get('fbp') or existing_data.get('fbp'),
+            'fbc': data.get('fbc') or existing_data.get('fbc'),
+            'fbc_origin': 'cookie' if data.get('fbc') else existing_data.get('fbc_origin'),
+            'fbp_origin': 'cookie' if data.get('fbp') else existing_data.get('fbp_origin'),
+            'pageview_sent': True,  # Marcar que PageView foi enviado
+        }
+        
+        # V4.1: Salvar dados atualizados no Redis
+        tracking_service_v4.save_tracking_token(tracking_token, updated_data, ttl=3600)
+        
+        logger.info(f"✅ V4.1 - Cookies capturados: {tracking_token[:8]}... | fbp: {'✅' if data.get('fbp') else '❌'} | fbc: {'✅' if data.get('fbc') else '❌'}")
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        logger.error(f"❌ V4.1 - Erro ao capturar cookies: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

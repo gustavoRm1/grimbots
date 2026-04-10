@@ -5,97 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrega - Acesso Liberado</title>
     
-    {% if pixel_id %}
+    <!-- V4.1: META PIXEL PURCHASE -->
+    {% if pixel_id and not purchase_already_sent %}
     <script>
-        // HTML-only Purchase: usa exatamente o pixel recebido via query (px)
-        (function() {
-            var pixelId = '{{ pixel_id }}';
-            if (!pixelId) {
-                console.warn('[META] pixel_id ausente — Purchase NÃO disparado');
-                return;
-            }
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
 
-            !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-            n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-            n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-            t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-
-            fbq('init', pixelId);
-            var amountValue = parseFloat('{{ payment.amount }}');
-            if (isNaN(amountValue)) { amountValue = 0; }
-            var eventId = '{{ purchase_event_id if purchase_event_id else (pageview_event_id if pageview_event_id else "") }}';
-            if (!eventId) {
-                console.warn('[META] event_id ausente — dedup pode falhar');
-            }
-            // Conformidade Meta: incluir fbc/fbp quando disponíveis
-            function getCookie(name) {
-                var value = '; ' + document.cookie;
-                var parts = value.split('; ' + name + '=');
-                if (parts.length == 2) return parts.pop().split(';').shift();
-                return '';
-            }
-
-            // Prioridade 1: servidor (Redis/DB); Prioridade 2: cookies do navegador
-            var savedFbc = '{{ fbc if fbc else "" }}' || getCookie('_fbc') || '';
-            var savedFbp = '{{ fbp if fbp else "" }}' || getCookie('_fbp') || '';
-            // fbclid raramente em cookie, mas se existir usamos
-            var savedFbclid = '{{ fbclid if fbclid else "" }}' || getCookie('fbclid') || '';
-
-
-            var purchaseData = {
-                value: amountValue,
-                currency: 'BRL'
-            };
-
-            if (savedFbc) {
-                purchaseData.fbc = savedFbc;
-            } else if (savedFbclid) {
-                var currentTs = Date.now();
-                purchaseData.fbc = 'fb.1.' + currentTs + '.' + savedFbclid;
-            }
-
-            if (savedFbp) {
-                purchaseData.fbp = savedFbp;
-            }
-
-            fbq('track', 'Purchase', purchaseData, eventId ? { eventID: eventId } : {});
-            
-            // AVISA O BACKEND PARA TRANCAR A PORTA (ANTI-DUPLICAÇÃO/F5)
-            fetch('/delivery/api/tracking/mark-purchase-sent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    payment_id: parseInt('{{ payment.id }}')
-                })
-            })
-            .then(response => {
-                if (response.status === 202) {
-                    // Pagamento ainda pendente - aguardando confirmação
-                    return response.json().then(data => {
-                        console.log("⏳ Pagamento pendente:", data.message);
-                        // Não é erro - apenas aguardando confirmação do gateway
-                    });
-                } else {
-                    return response.json();
-                }
-            })
-            .then(data => {
-                if(data.success || data.message) {
-                    console.log("🔒 Backend bloqueado com sucesso contra duplicações (Trava Anti-F5 ativada).");
-                } else if(data.status !== 'pending') {
-                    console.warn("⚠️ Aviso do backend:", data.error);
-                }
-            })
-            .catch(error => {
-                console.error("❌ Erro fatal de conexão no callback de tracking:", error);
-            });
-        })();
-    </script>
-    {% else %}
-    <script>
-        console.warn('[META] pixel_id ausente na entrega — Purchase NÃO será disparado');
+    fbq('init', '{{ pixel_id }}');
+    
+    // V4.1: Disparar Purchase com dados completos
+    fbq('track', 'Purchase', {
+        value: {{ payment.amount }},
+        currency: 'BRL',
+        event_id: '{{ purchase_event_id }}',
+        content_ids: ['{{ payment.payment_id }}'],
+        content_type: 'product',
+        external_id: '{{ fbclid or "" }}'
+    }, {
+        fbp: '{{ fbp or "" }}',
+        fbc: '{{ fbc or "" }}'
+    });
+    
+    console.log('✅ V4.1 - Purchase disparado:', {
+        pixel_id: '{{ pixel_id }}',
+        event_id: '{{ purchase_event_id }}',
+        value: {{ payment.amount }},
+        fbp: '{{ fbp }}',
+        fbc: '{{ fbc }}',
+        fbc_origin: '{{ fbc_origin }}',
+        fbclid: '{{ fbclid }}'
+    });
+    
+    // V4.1: Marcar como enviado via API
+    fetch('/api/tracking/mark-purchase-sent', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            payment_id: {{ payment.id }},
+            event_id: '{{ purchase_event_id }}'
+        })
+    }).then(response => response.json())
+      .then(data => console.log('✅ V4.1 - Purchase marcado:', data))
+      .catch(error => console.error('❌ V4.1 - Erro ao marcar Purchase:', error));
+      
     </script>
     {% endif %}
     

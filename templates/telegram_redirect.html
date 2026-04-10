@@ -91,7 +91,40 @@
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_id }}');
-        fbq('track', 'PageView');
+        fbq('track', 'PageView', {
+            external_id: '{{ fbclid or "" }}',
+            event_id: 'pageview_{{ tracking_token }}'
+        });
+        
+        console.log('✅ V4.1 - PageView disparado:', {
+            pixel_id: '{{ pixel_id }}',
+            event_id: 'pageview_{{ tracking_token }}',
+            fbclid: '{{ fbclid }}'
+        });
+        
+        // V4.1: Capturar cookies gerados pelo Meta Pixel
+        setTimeout(function() {
+            var fbp = document.cookie.match('(^|;)\\s*_fbp\\s*=\\s*([^;]+)');
+            var fbc = document.cookie.match('(^|;)\\s*_fbc\\s*=\\s*([^;]+)');
+            
+            var data = {
+                tracking_token: '{{ tracking_token }}',
+                fbp: fbp ? fbp[2] : null,
+                fbc: fbc ? fbc[2] : null,
+                fbclid: '{{ fbclid or "" }}',
+                utm_source: '{{ utm_source or "" }}',
+                utm_campaign: '{{ utm_campaign or "" }}',
+                utm_medium: '{{ utm_medium or "" }}',
+                utm_content: '{{ utm_content or "" }}',
+                utm_term: '{{ utm_term or "" }}',
+                grim: '{{ grim or "" }}'
+            };
+            
+            console.log('🍪 V4.1 - Enviando cookies:', data);
+            
+            // Enviar via Beacon API (V4.1)
+            navigator.sendBeacon('/api/tracking/cookies', JSON.stringify(data));
+        }, 1000);
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"

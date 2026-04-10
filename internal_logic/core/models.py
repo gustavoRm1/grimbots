@@ -1104,8 +1104,18 @@ class Payment(db.Model):
     # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing / expiração do Redis)
     click_context_url = db.Column(db.Text, nullable=True)
     
-    # ✅ TRACKING V4 - Tracking Token Universal
-    tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4 - QI 500 (aumentado para 200 para garantir compatibilidade)
+    # ✅ TRACKING V4.1 - Tracking Token Universal
+    tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4.1 - Token universal para persistência
+    # ✅ META PIXEL ID - Pixel ID para Sticky Pixel
+    meta_pixel_id = db.Column(db.String(100), nullable=True, index=True)  # Pixel ID para recuperação em /delivery
+    # ✅ FBCLID - Facebook Click ID para atribuição
+    fbclid = db.Column(db.String(255), nullable=True, index=True)  # FBCLID para atribuição de conversão
+    # ✅ DELIVERY TOKEN - Token único para página de entrega
+    delivery_token = db.Column(db.String(100), nullable=True, unique=True, index=True)  # Token para /delivery/{token}
+    # ✅ META PURCHASE SENT - Flag anti-duplicação
+    meta_purchase_sent = db.Column(db.Boolean, default=False, index=True)  # Evita duplo disparo de Purchase
+    # ✅ META EVENT ID - Event ID para deduplicação
+    meta_event_id = db.Column(db.String(100), nullable=True, index=True)  # Event ID consistente PageView→Purchase
     # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
     pageview_event_id = db.Column(db.String(256), nullable=True, index=True)  # Event ID do PageView para reutilizar no Purchase
     # ✅ META PIXEL COOKIES (para fallback no Purchase se Redis expirar)
@@ -1198,8 +1208,12 @@ class BotUser(db.Model):
     # Tracking Elite (campos confirmados)
     ip_address = db.Column(db.String(255), nullable=True)
     user_agent = db.Column(db.Text, nullable=True)
-    tracking_session_id = db.Column(db.String(255), nullable=True)
+    tracking_session_id = db.Column(db.String(255), nullable=True, index=True)  # V4.1 - Token universal para persistência
     click_timestamp = db.Column(db.DateTime, nullable=True)
+    
+    # ✅ STICKY PIXEL V4.1 - Campos para persistência de tracking
+    pixel_id = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Pixel ID para recuperação em /delivery
+    campaign_code = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Código da campanha para remarketing
     
     # Demographic Data (campos confirmados)
     customer_age = db.Column(db.Integer, nullable=True)

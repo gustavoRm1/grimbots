@@ -410,3 +410,45 @@ def mark_purchase_sent():
         db.session.rollback()
         logger.error(f"❌ [MARK_PURCHASE] Erro ao marcar Purchase como enviado: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@delivery_bp.route('/api/tracking/mark-purchase-sent', methods=['POST'])
+def mark_purchase_sent():
+    """
+    V4.1: API para marcar Purchase como enviado (anti-duplicação)
+    
+    Chamado via fetch() pelo delivery.html após disparar evento Purchase.
+    Impede que o mesmo Pixel de compra dispare duas vezes se o cliente atualizar a página.
+    """
+    try:
+        data = request.get_json()
+        payment_id = data.get('payment_id')
+        event_id = data.get('event_id')
+        
+        if not payment_id:
+            return jsonify({'error': 'payment_id obrigatório'}), 400
+        
+        # Buscar payment
+        from internal_logic.core.models import Payment
+        payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
+        
+        # V4.1: Defensivo - só marcar se pagamento estiver confirmado
+        if payment.status != 'paid':
+            logger.warning(f"⚠️ V4.1 - Tentativa de marcar Purchase para pagamento não confirmado: {payment_id}")
+            return jsonify({'error': 'Pagamento não confirmado'}), 400
+        
+        # V4.1: Marcar como enviado
+        payment.meta_purchase_sent = True
+        if event_id:
+            payment.meta_event_id = event_id
+        
+        db.session.commit()
+        
+        logger.info(f"✅ V4.1 - Purchase marcado como enviado: payment_id={payment_id}, event_id={event_id}")
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ V4.1 - Erro ao marcar Purchase: {e}")
+        return jsonify({'error': str(e)}), 500
