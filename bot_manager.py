@@ -4447,6 +4447,18 @@ class BotManager:
                             raw_payload = redis_conn.get(tracking_key) if redis_conn else None
                             if raw_payload:
                                 payload = _json.loads(raw_payload)
+                                
+                                # V4.1: Salvar tracking_token se tiver 32 chars
+                                if len(start_param) == 32:
+                                    bot_user_track.tracking_session_id = start_param
+                                    logger.info(f"?? V4.1 - tracking_token salvo: {start_param[:8]}...")
+                                
+                                # V4.1: Salvar pixel_id do payload
+                                if payload.get('pixel_id'):
+                                    bot_user_track.pixel_id = payload.get('pixel_id')
+                                    logger.info(f"?? V4.1 - pixel_id salvo: {payload.get('pixel_id')}")
+                                
+                                # Salvar dados de tracking existentes
                                 bot_user_track.fbclid = payload.get('fbclid') or bot_user_track.fbclid
                                 bot_user_track.fbp = payload.get('fbp') or bot_user_track.fbp
                                 bot_user_track.fbc = payload.get('fbc') or bot_user_track.fbc
@@ -4462,7 +4474,7 @@ class BotManager:
                                 bot_user_track.utm_term = payload.get('utm_term') or bot_user_track.utm_term
                                 bot_user_track.click_timestamp = datetime.now()
                                 db.session.commit()
-                                logger.info(f"🔗 TRACKING LINKED: User {bot_user_track.id} -> FBCLID: {bot_user_track.fbclid}")
+                                logger.info(f"?? V4.1 - TRACKING LINKED: User {bot_user_track.id} -> FBCLID: {bot_user_track.fbclid} | Token: {start_param[:8]}...")
             except Exception as e:
                 logger.warning(f"⚠️ Falha na hidratação inicial de tracking via start_param={start_param}: {e}")
             
@@ -8932,6 +8944,15 @@ Seu pagamento ainda não foi confirmado.
                         is_downsell_final = is_downsell or False
                         is_upsell_final = is_upsell or False
                     
+                        # V4.1: Buscar BotUser para injetar tracking_data
+                        bot_user_for_payment = None
+                        if customer_user_id:
+                            bot_user_for_payment = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=str(customer_user_id),
+                                archived=False
+                            ).first()
+                        
                         payment = Payment(
                             bot_id=bot_id,  # ✅ OBRIGATÓRIO: ID do bot
                             payment_id=payment_id,  # ✅ OBRIGATÓRIO: ID único do pagamento
@@ -8950,8 +8971,10 @@ Seu pagamento ainda não foi confirmado.
                             product_name=description,
                             product_description=pix_result.get('pix_code'),  # Salvar código PIX para reenvio (None se recusado)
                             status=payment_status,  # ✅ 'failed' se recusado, 'pending' se não
-                            # ✅ CRÍTICO: tracking_token do redirect para matching PageView → Purchase
-                            tracking_token=tracking_token if tracking_token else None,
+                            # V4.1: Injetar tracking_data do BotUser (prioridade máxima)
+                            tracking_token=getattr(bot_user_for_payment, 'tracking_session_id', None) if bot_user_for_payment else (tracking_token if tracking_token else None),
+                            meta_pixel_id=getattr(bot_user_for_payment, 'pixel_id', None) if bot_user_for_payment else None,
+                            fbclid=getattr(bot_user_for_payment, 'fbclid', None) if bot_user_for_payment else None,
                             # Analytics tracking
                             order_bump_shown=order_bump_shown,
                             order_bump_accepted=order_bump_accepted,
