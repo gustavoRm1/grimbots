@@ -332,7 +332,7 @@ def delivery_page(token):
             logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
         
         # LOG: pixel_id veio exclusivamente da query (funil). Nenhuma inferência.
-        logger.info(f" Delivery - pixel_id via query param px: {' ' if pixel_id_to_use else ' '}")
+        logger.info(f" Delivery - pixel_id via query param px: {' ' if pixel_id else ' '}")
         
         # ✅ CLEAN ARCHITECTURE: Injetar variáveis do BotUser no template
         response = render_template('delivery.html',
