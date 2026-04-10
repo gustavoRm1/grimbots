@@ -80,21 +80,20 @@ def remarketing_history_page():
         campaign_dict['total_sent'] = campaign.total_sent or 0
         campaign_dict['success_count'] = campaign.total_sent or 0  # success_count = total_sent para compatibilidade
         campaign_dict['bot_name'] = bot.name
-        campaign_dict['bot_count'] = 1  # Por enquanto, cada campanha representa 1 bot
-        
-        # ✅ LÓGICA DE MULTI-BOT: Agrupar por group_id se existir
-        # Se for campanha multi-bot (tem group_id), agrupar pelo group_id
-        # Senão, agrupar por bot_id (campanha individual)
-        grouping_key = campaign.group_id or f"bot_{bot_id}"
         
         # Se ainda não existe entrada para este grupo, criar
         if grouping_key not in history_by_bot:
             history_by_bot[grouping_key] = campaign_dict
-            history_by_bot[grouping_key]['bot_count'] = 1
+            # Inicializar set para rastrear bots únicos neste grupo
+            history_by_bot[grouping_key]['bot_ids'] = set()
+            history_by_bot[grouping_key]['bot_ids'].add(bot_id)
+            history_by_bot[grouping_key]['bot_count'] = 1  # Inicial com 1 bot
             history_by_bot[grouping_key]['is_multi_bot'] = bool(campaign.group_id)
         else:
-            # Se já existe, incrementar contador de bots (multi-bot)
-            history_by_bot[grouping_key]['bot_count'] += 1
+            # Adicionar bot_id ao set (só incrementa se for novo bot)
+            if bot_id not in history_by_bot[grouping_key]['bot_ids']:
+                history_by_bot[grouping_key]['bot_ids'].add(bot_id)
+                history_by_bot[grouping_key]['bot_count'] += 1
             # Manter a campanha mais recente como representante (já está ordenado)
         
         # Log estratégico para debug em produção
