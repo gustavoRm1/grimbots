@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime
 from flask import Blueprint, request, redirect, jsonify, render_template, make_response, current_app
-from flask_wtf.csrf import CSRFProtect
+from internal_logic.core.extensions import csrf
 from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
 from internal_logic.core.metrics import MetricsService
@@ -234,7 +234,7 @@ def health_check_all_pools():
 
 
 @public_bp.route('/api/tracking/cookies', methods=['POST'])
-@CSRFProtect.exempt
+@csrf.exempt
 def capture_tracking_cookies():
     """
     V4.1: ENDPOINT PARA CAPTURAR COOKIES _FBP E _FBC DO BROWSER
