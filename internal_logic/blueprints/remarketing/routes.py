@@ -48,68 +48,79 @@ def bot_remarketing_page(bot_id):
 @login_required
 def remarketing_history_page():
     """Página de histórico de todas as campanhas"""
-    # ✅ LEITURA PERFEITA: Buscar TODAS as campanhas do usuário sem filtros de status
-    # Isso garante que campanhas recém-criadas (sending, queued) apareçam imediatamente
-    campaigns = db.session.query(RemarketingCampaign, Bot).join(
-        Bot, RemarketingCampaign.bot_id == Bot.id
-    ).filter(
-        Bot.user_id == current_user.id
-    ).order_by(
-        RemarketingCampaign.created_at.desc()  # ✅ NOVAS CAMPANHAS NO TOPO
-    ).all()
-    
-    # ✅ AGRUPAR POR BOT PARA EXIBIÇÃO COM LÓGICA DE MULTI-BOT
-    history_by_bot = {}
-    for campaign, bot in campaigns:
-        bot_id = bot.id
+    try:
+        # ✅ LEITURA PERFEITA: Buscar TODAS as campanhas do usuário sem filtros de status
+        # Isso garante que campanhas recém-criadas (sending, queued) apareçam imediatamente
+        campaigns = db.session.query(RemarketingCampaign, Bot).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            Bot.user_id == current_user.id
+        ).order_by(
+            RemarketingCampaign.created_at.desc()  # ✅ NOVAS CAMPANHAS NO TOPO
+        ).all()
         
-        # Adicionar group_id aos dados da campanha para o template
-        campaign_dict = campaign.to_dict()
-        
-        # ✅ PRIORIZAR GROUP_ID REAL (para campanhas multi-bot)
-        # Se existir group_id, usar; senão, usar ID da campanha como fallback
-        if campaign.group_id:
-            campaign_dict['group_id'] = campaign.group_id
-        else:
-            campaign_dict['group_id'] = str(campaign.id) if campaign.id else 'N/A'
-        
-        # Garantir chaves obrigatórias para o template
-        # RemarketingCampaign não tem updated_at, usar created_at ou completed_at
-        campaign_dict['last_activity'] = campaign.completed_at or campaign.started_at or campaign.created_at
-        campaign_dict['status'] = campaign.status or 'unknown'
-        campaign_dict['total_sent'] = campaign.total_sent or 0
-        campaign_dict['success_count'] = campaign.total_sent or 0  # success_count = total_sent para compatibilidade
-        campaign_dict['bot_name'] = bot.name
-        
-        # Se ainda não existe entrada para este grupo, criar
-        if grouping_key not in history_by_bot:
-            history_by_bot[grouping_key] = campaign_dict
-            # Inicializar set para rastrear bots únicos neste grupo
-            history_by_bot[grouping_key]['bot_ids'] = set()
-            history_by_bot[grouping_key]['bot_ids'].add(bot_id)
-            history_by_bot[grouping_key]['bot_count'] = 1  # Inicial com 1 bot
-            history_by_bot[grouping_key]['is_multi_bot'] = bool(campaign.group_id)
-        else:
-            # Adicionar bot_id ao set (só incrementa se for novo bot)
-            if bot_id not in history_by_bot[grouping_key]['bot_ids']:
+        # ✅ AGRUPAR POR BOT PARA EXIBIÇÃO COM LÓGICA DE MULTI-BOT
+        history_by_bot = {}
+        for campaign, bot in campaigns:
+            bot_id = bot.id
+            
+            # Adicionar group_id aos dados da campanha para o template
+            campaign_dict = campaign.to_dict()
+            
+            # ✅ PRIORIZAR GROUP_ID REAL (para campanhas multi-bot)
+            # Se existir group_id, usar; senão, usar ID da campanha como fallback
+            if campaign.group_id:
+                campaign_dict['group_id'] = campaign.group_id
+            else:
+                campaign_dict['group_id'] = str(campaign.id) if campaign.id else 'N/A'
+            
+            # Garantir chaves obrigatórias para o template
+            # RemarketingCampaign não tem updated_at, usar created_at ou completed_at
+            campaign_dict['last_activity'] = campaign.completed_at or campaign.started_at or campaign.created_at
+            campaign_dict['status'] = campaign.status or 'unknown'
+            campaign_dict['total_sent'] = campaign.total_sent or 0
+            campaign_dict['success_count'] = campaign.total_sent or 0  # success_count = total_sent para compatibilidade
+            campaign_dict['bot_name'] = bot.name
+            
+            # LÓGICA DE MULTI-BOT: Agrupar por group_id se existir
+            grouping_key = campaign.group_id or f"bot_{bot_id}"
+            
+            # Se ainda não existe entrada para este grupo, criar
+            if grouping_key not in history_by_bot:
+                history_by_bot[grouping_key] = campaign_dict
+                # Inicializar set para rastrear bots únicos neste grupo
+                history_by_bot[grouping_key]['bot_ids'] = set()
                 history_by_bot[grouping_key]['bot_ids'].add(bot_id)
-                history_by_bot[grouping_key]['bot_count'] += 1
-            # Manter a campanha mais recente como representante (já está ordenado)
+                history_by_bot[grouping_key]['bot_count'] = 1  # Inicial com 1 bot
+                history_by_bot[grouping_key]['is_multi_bot'] = bool(campaign.group_id)
+            else:
+                # Adicionar bot_id ao set (só incrementa se for novo bot)
+                if bot_id not in history_by_bot[grouping_key]['bot_ids']:
+                    history_by_bot[grouping_key]['bot_ids'].add(bot_id)
+                    history_by_bot[grouping_key]['bot_count'] += 1
+                # Manter a campanha mais recente como representante (já está ordenado)
+            
+            # Log estratégico para debug em produção
+            logger.info(f"[HISTORY] Campaign {campaign.id} - group_id: {campaign.group_id} - status: {campaign.status} - grouping_key: {grouping_key}")
         
-        # Log estratégico para debug em produção
-        logger.info(f"[HISTORY] Campaign {campaign.id} - group_id: {campaign.group_id} - status: {campaign.status} - grouping_key: {grouping_key}")
-    
-    # Limpeza crítica: Remover bot_ids set() antes de enviar para template
-    # Set() não é serializável pelo Jinja2/Flask e causa TypeError 500
-    for group_key, group_data in history_by_bot.items():
-        if 'bot_ids' in group_data:
-            # REMOVER O SET() - APENAS MANTER bot_count NUMÉRICO
-            del group_data['bot_ids']
-    
-    # Converter para lista para template (agora seguro)
-    history_list = list(history_by_bot.values())
-    
-    return render_template('remarketing_history.html', history=history_list)
+        # Limpeza crítica: Remover bot_ids set() antes de enviar para template
+        # Set() não é serializável pelo Jinja2/Flask e causa TypeError 500
+        for group_key, group_data in history_by_bot.items():
+            if 'bot_ids' in group_data:
+                # REMOVER O SET() - APENAS MANTER bot_count NUMÉRICO
+                del group_data['bot_ids']
+        
+        # Converter para lista para template (agora seguro)
+        history_list = list(history_by_bot.values())
+        
+        return render_template('remarketing_history.html', history=history_list)
+        
+    except Exception as e:
+        # FORÇAR EXIBIÇÃO DO ERRO - DEBUGGER RADICAL
+        print(f"DEBUG_ERROR: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return f"ERRO DETECTADO: {str(e)}", 500
 
 
 # ============================================================================
