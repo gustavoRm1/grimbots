@@ -3686,8 +3686,8 @@ function dashboardApp() {
                 
                 this.showGeneralRemarketingModal = false;
                 
-                // ✅ Mensagem de sucesso async (202) ou síncrono (200)
-                if (response.status === 202 || data.status === 'success') {
+                // ✅ Mensagem de sucesso async (202) ou síncrono (200) - BLINDADO
+                if (response.status === 202 || data.success === true || data.status === 'success') {
                     this.showGeneralRemarketingModal = false;
                     
                     if (sendMode === 'scheduled') {
@@ -3700,7 +3700,10 @@ function dashboardApp() {
                         );
                     }
                 } else {
-                    alert('⚠️ Resposta inesperada do servidor');
+                    // ✅ MELHOR DIAGNÓSTICO DE ERRO
+                    console.error('❌ Resposta inesperada do servidor:', data);
+                    const errorMsg = data.error || data.message || 'Erro desconhecido ao criar campanha';
+                    alert(`⚠️ Erro ao criar campanha: ${errorMsg}`);
                 }
                 
                 this.loading = false;

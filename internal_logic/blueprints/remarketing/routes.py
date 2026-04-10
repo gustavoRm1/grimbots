@@ -14,6 +14,7 @@ from internal_logic.core.models import (
 from internal_logic.services.remarketing_service import get_remarketing_service
 from datetime import datetime, timedelta
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +428,7 @@ def create_general_remarketing():
             'media_type': data.get('media_type'),
             'audio_enabled': data.get('audio_enabled', False),
             'audio_url': data.get('audio_url', ''),
-            'buttons': data.get('buttons', []),
+            'buttons': json.dumps(data.get('buttons', [])),  # Serializar para string JSON
             'target_audience': data.get('audience_segment', 'all_users'),
             'days_since_last_contact': data.get('days_since_last_contact', 0),
             'exclude_buyers': data.get('exclude_buyers', False),
@@ -482,6 +483,7 @@ def create_general_remarketing():
             
             return jsonify({
                 'success': True,
+                'status': 'success',  # Adicionar compatibilidade com frontend
                 'message': 'Campanhas criadas e em processamento',
                 'campaigns': created_campaigns,
                 'errors': errors
@@ -492,6 +494,7 @@ def create_general_remarketing():
             db.session.commit()
             return jsonify({
                 'success': False,
+                'status': 'partial_error',  # Adicionar compatibilidade com frontend
                 'message': 'Algumas campanhas criadas com erros',
                 'campaigns': created_campaigns,
                 'errors': errors
@@ -502,6 +505,7 @@ def create_general_remarketing():
             db.session.rollback()
             return jsonify({
                 'success': False,
+                'status': 'error',  # Adicionar compatibilidade com frontend
                 'message': 'Nenhuma campanha foi criada',
                 'campaigns': [],
                 'errors': errors
@@ -510,4 +514,8 @@ def create_general_remarketing():
     except Exception as e:
         db.session.rollback()
         logger.error(f"❌ Erro ao criar campanha geral: {e}", exc_info=True)
-        return jsonify({'error': f'Erro ao criar campanha geral: {str(e)}'}), 500
+        return jsonify({
+            'success': False,
+            'status': 'error',  # Adicionar compatibilidade com frontend
+            'error': f'Erro ao criar campanha geral: {str(e)}'
+        }), 500
