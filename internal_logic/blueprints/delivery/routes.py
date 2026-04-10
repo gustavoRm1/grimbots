@@ -374,8 +374,11 @@ def delivery_page(token):
         return response
         
     except Exception as e:
-        logger.error(f" Erro na página de delivery: {e}", exc_info=True)
-        return render_template('delivery_error.html', error=str(e)), 500
+        import traceback
+        error_trace = traceback.format_exc()
+        import logging
+        logging.getLogger(__name__).error(f"ERRO DELIVERY: {error_trace}")
+        return f"<div style='padding:20px; font-family:monospace; color:red;'><h2>🚨 ERRO FATAL DE DEBUG:</h2><pre>{error_trace}</pre></div>", 500
 
 
 @delivery_bp.route('/api/tracking/mark-purchase-sent', methods=['POST'])
