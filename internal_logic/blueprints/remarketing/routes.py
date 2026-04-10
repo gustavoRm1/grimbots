@@ -99,7 +99,16 @@ def remarketing_history_page():
         # Log estratégico para debug em produção
         logger.info(f"[HISTORY] Campaign {campaign.id} - group_id: {campaign.group_id} - status: {campaign.status} - grouping_key: {grouping_key}")
     
-    # Converter para lista para template
+    # Limpeza crítica: Remover bot_ids set() antes de enviar para template
+    # Set() não é serializável pelo Jinja2/Flask e causa TypeError 500
+    for group_key, group_data in history_by_bot.items():
+        if 'bot_ids' in group_data:
+            # Opcional: Log para debug (pode remover em produção)
+            logger.debug(f"[HISTORY] Grupo {group_key}: {len(group_data['bot_ids'])} bots únicos")
+            # REMOVER O SET() - APENAS MANTER bot_count NUMÉRICO
+            del group_data['bot_ids']
+    
+    # Converter para lista para template (agora seguro)
     history_list = list(history_by_bot.values())
     
     return render_template('remarketing_history.html', history=history_list)
