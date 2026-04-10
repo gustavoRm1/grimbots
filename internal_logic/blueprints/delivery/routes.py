@@ -204,19 +204,41 @@ def delivery_page(token):
         else:
             logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
 
-        # RECUPERAR tracking_data do Redis (fonte única: payment.tracking_token)
+        # V4.1: RECUPERAR tracking_data com 4 prioridades
         tracking_data = {}
-
-        if payment and payment.tracking_token:
+        
+        # Prioridade 1: BotUser.tracking_session_id
+        if bot_user and bot_user.tracking_session_id:
+            tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
+            if tracking_data:
+                logger.info(f" V4.1 - tracking_data recuperado via BotUser.tracking_session_id: {len(tracking_data)} campos")
+        
+        # Prioridade 2: Payment.tracking_token
+        if not tracking_data and payment and payment.tracking_token:
             tracking_data = tracking_service.recover_tracking_data(payment.tracking_token) or {}
             if tracking_data:
-                logger.info(f" Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
-
+                logger.info(f" V4.1 - tracking_data recuperado via Payment.tracking_token: {len(tracking_data)} campos")
+        
+        # Prioridade 3: Redis direto (tracking:payment:{payment.id})
+        if not tracking_data and payment:
+            try:
+                redis_key = f"tracking:payment:{payment.id}"
+                if hasattr(tracking_service, 'redis') and tracking_service.redis:
+                    raw_data = tracking_service.redis.get(redis_key)
+                    if raw_data:
+                        import json
+                        tracking_data = json.loads(raw_data)
+                        logger.info(f" V4.1 - tracking_data recuperado via Redis direto: {len(tracking_data)} campos")
+            except Exception as e:
+                logger.warning(f" V4.1 - Erro ao buscar tracking_data via Redis direto: {e}")
+        
+        # Prioridade 4: Fallback - usar pixel do bot/pool
         if not tracking_data:
-            logger.error(
-                "[META DELIVERY] tracking_data AUSENTE via payment.tracking_token | "
+            logger.warning(
+                " V4.1 - tracking_data AUSENTE em todas as fontes | "
                 f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
             )
+            tracking_data = {}  # Manter vazio para fallback seguro
 
         # Pixel do Payment (fonte definitiva - independente de Redis)
         # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
