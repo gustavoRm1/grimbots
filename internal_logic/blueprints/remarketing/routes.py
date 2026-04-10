@@ -48,23 +48,29 @@ def bot_remarketing_page(bot_id):
 @login_required
 def remarketing_history_page():
     """Página de histórico de todas as campanhas"""
-    # Buscar todas as campanhas do usuário (agrupadas por bot)
+    # ✅ LEITURA PERFEITA: Buscar TODAS as campanhas do usuário sem filtros de status
+    # Isso garante que campanhas recém-criadas (sending, queued) apareçam imediatamente
     campaigns = db.session.query(RemarketingCampaign, Bot).join(
         Bot, RemarketingCampaign.bot_id == Bot.id
     ).filter(
         Bot.user_id == current_user.id
     ).order_by(
-        RemarketingCampaign.created_at.desc()
+        RemarketingCampaign.created_at.desc()  # ✅ NOVAS CAMPANHAS NO TOPO
     ).all()
     
-    # Agrupar por bot para exibição
+    # ✅ AGRUPAR POR BOT PARA EXIBIÇÃO COM LÓGICA DE MULTI-BOT
     history_by_bot = {}
     for campaign, bot in campaigns:
         bot_id = bot.id
         
         # Adicionar group_id aos dados da campanha para o template
         campaign_dict = campaign.to_dict()
-        if 'group_id' not in campaign_dict:
+        
+        # ✅ PRIORIZAR GROUP_ID REAL (para campanhas multi-bot)
+        # Se existir group_id, usar; senão, usar ID da campanha como fallback
+        if campaign.group_id:
+            campaign_dict['group_id'] = campaign.group_id
+        else:
             campaign_dict['group_id'] = str(campaign.id) if campaign.id else 'N/A'
         
         # Garantir chaves obrigatórias para o template
@@ -76,7 +82,23 @@ def remarketing_history_page():
         campaign_dict['bot_name'] = bot.name
         campaign_dict['bot_count'] = 1  # Por enquanto, cada campanha representa 1 bot
         
-        history_by_bot[bot_id] = campaign_dict  # Usar a campanha mais recente como representante do bot
+        # ✅ LÓGICA DE MULTI-BOT: Agrupar por group_id se existir
+        # Se for campanha multi-bot (tem group_id), agrupar pelo group_id
+        # Senão, agrupar por bot_id (campanha individual)
+        grouping_key = campaign.group_id or f"bot_{bot_id}"
+        
+        # Se ainda não existe entrada para este grupo, criar
+        if grouping_key not in history_by_bot:
+            history_by_bot[grouping_key] = campaign_dict
+            history_by_bot[grouping_key]['bot_count'] = 1
+            history_by_bot[grouping_key]['is_multi_bot'] = bool(campaign.group_id)
+        else:
+            # Se já existe, incrementar contador de bots (multi-bot)
+            history_by_bot[grouping_key]['bot_count'] += 1
+            # Manter a campanha mais recente como representante (já está ordenado)
+        
+        # Log estratégico para debug em produção
+        logger.info(f"[HISTORY] Campaign {campaign.id} - group_id: {campaign.group_id} - status: {campaign.status} - grouping_key: {grouping_key}")
     
     # Converter para lista para template
     history_list = list(history_by_bot.values())
