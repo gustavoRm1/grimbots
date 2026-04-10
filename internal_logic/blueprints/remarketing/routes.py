@@ -103,8 +103,6 @@ def remarketing_history_page():
     # Set() não é serializável pelo Jinja2/Flask e causa TypeError 500
     for group_key, group_data in history_by_bot.items():
         if 'bot_ids' in group_data:
-            # Opcional: Log para debug (pode remover em produção)
-            logger.debug(f"[HISTORY] Grupo {group_key}: {len(group_data['bot_ids'])} bots únicos")
             # REMOVER O SET() - APENAS MANTER bot_count NUMÉRICO
             del group_data['bot_ids']
     
