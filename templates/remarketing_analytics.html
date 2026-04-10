@@ -443,12 +443,12 @@
                             <div>
                                 <div class="text-sm text-gray-400 mb-1">Taxa de Entrega</div>
                                 <div class="text-xl font-bold" style="color: #10B981;" 
-                                     x-text="formatPercentage(campaign.total_sent / campaign.total_targets * 100)"></div>
+                                     x-text="campaign.total_targets > 0 ? formatPercentage(campaign.total_sent / campaign.total_targets * 100) : '0.0%'"></div>
                             </div>
                             <div>
                                 <div class="text-sm text-gray-400 mb-1">Taxa de Cliques</div>
                                 <div class="text-xl font-bold" style="color: #60A5FA;" 
-                                     x-text="formatPercentage(campaign.total_clicks / campaign.total_sent * 100)"></div>
+                                     x-text="campaign.total_sent > 0 ? formatPercentage(campaign.total_clicks / campaign.total_sent * 100) : '0.0%'"></div>
                             </div>
                         </div>
                     </div>

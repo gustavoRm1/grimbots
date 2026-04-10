@@ -432,7 +432,7 @@ def create_general_remarketing():
             'days_since_last_contact': data.get('days_since_last_contact', 0),
             'exclude_buyers': data.get('exclude_buyers', False),
             'cooldown_hours': data.get('cooldown_hours', 24),
-            'status': 'draft',
+            'status': 'sending',  # Mudar para 'sending' para iniciar imediatamente
             'group_id': data.get('group_id')  # Para identificar campanhas multi-bot
         }
         
@@ -471,15 +471,14 @@ def create_general_remarketing():
         if created_campaigns and not errors:
             db.session.commit()
             
-            # Disparar campanhas criadas (se não for agendado)
-            if not campaign_data.get('scheduled_at'):
-                service = get_remarketing_service()
-                for campaign_info in created_campaigns:
-                    try:
-                        service.send_campaign_async(campaign_info['campaign_id'], current_user.id)
-                        logger.info(f"🚀 Campanha geral {campaign_info['campaign_id']} disparada para bot {campaign_info['bot_id']}")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao disparar campanha {campaign_info['campaign_id']}: {e}")
+            # Disparar campanhas criadas SEMPRE (não verificar scheduled_at)
+            service = get_remarketing_service()
+            for campaign_info in created_campaigns:
+                try:
+                    service.send_campaign_async(campaign_info['campaign_id'], current_user.id)
+                    logger.info(f" Campanha geral {campaign_info['campaign_id']} disparada para bot {campaign_info['bot_id']}")
+                except Exception as e:
+                    logger.error(f" Erro ao disparar campanha {campaign_info['campaign_id']}: {e}")
             
             return jsonify({
                 'success': True,
