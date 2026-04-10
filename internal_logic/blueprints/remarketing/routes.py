@@ -123,6 +123,70 @@ def remarketing_history_page():
         return f"ERRO DETECTADO: {str(e)}", 500
 
 
+@remarketing_bp.route('/group/<group_id>')
+@login_required
+def remarketing_group_analytics(group_id):
+    """Página de analytics detalhado de um grupo de campanhas multi-bot"""
+    try:
+        # Buscar todas as campanhas do grupo
+        campaigns = db.session.query(RemarketingCampaign, Bot).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            Bot.user_id == current_user.id,
+            RemarketingCampaign.group_id == group_id
+        ).order_by(
+            RemarketingCampaign.created_at.desc()
+        ).all()
+        
+        if not campaigns:
+            flash('Grupo de campanhas não encontrado', 'error')
+            return redirect(url_for('remarketing.remarketing_history_page'))
+        
+        # Agrupar dados do grupo
+        group_data = {
+            'group_id': group_id,
+            'campaigns': [],
+            'total_bots': set(),
+            'total_targets': 0,
+            'total_sent': 0,
+            'total_failed': 0,
+            'total_blocked': 0,
+            'total_clicks': 0,
+            'total_sales': 0,
+            'revenue_generated': 0.0,
+            'created_at': None,
+            'completed_at': None
+        }
+        
+        for campaign, bot in campaigns:
+            campaign_data = campaign.to_dict()
+            campaign_data['bot_name'] = bot.name
+            group_data['campaigns'].append(campaign_data)
+            group_data['total_bots'].add(bot.id)
+            group_data['total_targets'] += campaign.total_targets or 0
+            group_data['total_sent'] += campaign.total_sent or 0
+            group_data['total_failed'] += campaign.total_failed or 0
+            group_data['total_blocked'] += campaign.total_blocked or 0
+            group_data['total_clicks'] += campaign.total_clicks or 0
+            group_data['total_sales'] += campaign.total_sales or 0
+            group_data['revenue_generated'] += campaign.revenue_generated or 0.0
+            
+            if not group_data['created_at']:
+                group_data['created_at'] = campaign.created_at
+            if campaign.completed_at and (not group_data['completed_at'] or campaign.completed_at > group_data['completed_at']):
+                group_data['completed_at'] = campaign.completed_at
+        
+        # Converter set para count
+        group_data['total_bots'] = len(group_data['total_bots'])
+        
+        return render_template('remarketing_group_analytics.html', group=group_data)
+        
+    except Exception as e:
+        logger.error(f"Erro ao carregar analytics do grupo {group_id}: {e}", exc_info=True)
+        flash('Erro ao carregar analytics do grupo', 'error')
+        return redirect(url_for('remarketing.remarketing_history_page'))
+
+
 # ============================================================================
 # APIs DE GESTÃO DE CAMPANHAS
 # ============================================================================
