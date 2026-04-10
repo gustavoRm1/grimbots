@@ -15,6 +15,7 @@ from internal_logic.services.remarketing_service import get_remarketing_service
 from datetime import datetime, timedelta
 import logging
 import json
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -420,6 +421,10 @@ def create_general_remarketing():
         if not bot_ids:
             return jsonify({'error': 'Nenhum bot selecionado'}), 400
         
+        # ✅ GERAR GROUP_ID ÚNICO PARA AGRUPAR AS CAMPANHAS MULTI-BOT
+        # Isso é essencial para que apareçam no histórico de remarketing geral
+        group_id = str(uuid.uuid4())
+        
         # Dados da campanha (mesmos para todos os bots)
         campaign_data = {
             'name': data.get('name', 'Campanha Geral'),
@@ -434,7 +439,7 @@ def create_general_remarketing():
             'exclude_buyers': data.get('exclude_buyers', False),
             'cooldown_hours': data.get('cooldown_hours', 24),
             'status': 'sending',  # Mudar para 'sending' para iniciar imediatamente
-            'group_id': data.get('group_id')  # Para identificar campanhas multi-bot
+            'group_id': group_id  # ✅ CARIMBAR TODAS AS CAMPANHAS COM O MESMO GROUP_ID
         }
         
         created_campaigns = []
@@ -486,7 +491,8 @@ def create_general_remarketing():
                 'status': 'success',  # Adicionar compatibilidade com frontend
                 'message': 'Campanhas criadas e em processamento',
                 'campaigns': created_campaigns,
-                'errors': errors
+                'errors': errors,
+                'group_id': group_id  # ✅ Retornar group_id para frontend
             })
         
         elif created_campaigns:
