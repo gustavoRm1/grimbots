@@ -1448,6 +1448,48 @@ class RemarketingCampaign(db.Model):
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+    
+    def get_buttons(self):
+        """
+        Parse buttons de forma resiliente para worker de remarketing.
+        Retorna sempre uma lista, nunca None, para evitar crashes.
+        """
+        import json
+        import logging
+        
+        # Se não há buttons, retornar lista vazia
+        if not self.buttons:
+            return []
+        
+        # Se for string JSON, tentar parsear
+        if isinstance(self.buttons, str):
+            try:
+                parsed = json.loads(self.buttons)
+                # Garantir que retorne sempre uma lista
+                if isinstance(parsed, list):
+                    return parsed
+                elif isinstance(parsed, dict):
+                    return [parsed]
+                else:
+                    return []
+            except json.JSONDecodeError as e:
+                logging.getLogger(__name__).error(f"❌ Erro ao parsear buttons JSON da campanha {self.id}: {e}")
+                return []
+            except Exception as e:
+                logging.getLogger(__name__).error(f"❌ Erro inesperado ao parsear buttons da campanha {self.id}: {e}")
+                return []
+        
+        # Se for lista, usar direto
+        if isinstance(self.buttons, list):
+            return self.buttons
+        
+        # Se for dict, converter para lista
+        if isinstance(self.buttons, dict):
+            return [self.buttons]
+        
+        # Qualquer outro tipo, retornar lista vazia (fallback seguro)
+        logging.getLogger(__name__).warning(f"⚠️ Tipo inesperado de buttons na campanha {self.id}: {type(self.buttons)}")
+        return []
 
 class RemarketingBlacklist(db.Model):
     """Blacklist de usuários no remarketing"""
