@@ -401,3 +401,114 @@ def remove_from_blacklist(bot_id, entry_id):
         db.session.rollback()
         logger.error(f"❌ Erro ao remover da blacklist: {e}", exc_info=True)
         return jsonify({'error': f'Erro ao remover da blacklist: {str(e)}'}), 500
+
+
+# ============================================================================
+# REMARKETING MULTI-BOT (GERAL)
+# ============================================================================
+
+@remarketing_bp.route('/api/general', methods=['POST'])
+@login_required
+@csrf.exempt
+def create_general_remarketing():
+    """Cria campanhas de remarketing em massa para múltiplos bots"""
+    try:
+        data = request.get_json() or {}
+        bot_ids = data.get('bot_ids', [])
+        
+        if not bot_ids:
+            return jsonify({'error': 'Nenhum bot selecionado'}), 400
+        
+        # Dados da campanha (mesmos para todos os bots)
+        campaign_data = {
+            'name': data.get('name', 'Campanha Geral'),
+            'message': data.get('message'),
+            'media_url': data.get('media_url'),
+            'media_type': data.get('media_type'),
+            'audio_enabled': data.get('audio_enabled', False),
+            'audio_url': data.get('audio_url', ''),
+            'buttons': data.get('buttons', []),
+            'target_audience': data.get('audience_segment', 'all_users'),
+            'days_since_last_contact': data.get('days_since_last_contact', 0),
+            'exclude_buyers': data.get('exclude_buyers', False),
+            'cooldown_hours': data.get('cooldown_hours', 24),
+            'status': 'draft',
+            'group_id': data.get('group_id')  # Para identificar campanhas multi-bot
+        }
+        
+        created_campaigns = []
+        errors = []
+        
+        # Criar campanha para cada bot
+        for bot_id in bot_ids:
+            try:
+                # Validar se bot pertence ao usuário
+                bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
+                if not bot:
+                    errors.append(f"Bot {bot_id} não encontrado ou sem permissão")
+                    continue
+                
+                # Criar campanha individual
+                campaign = RemarketingCampaign(
+                    bot_id=bot_id,
+                    **campaign_data
+                )
+                
+                db.session.add(campaign)
+                created_campaigns.append({
+                    'bot_id': bot_id,
+                    'campaign_id': campaign.id,
+                    'campaign_name': campaign.name
+                })
+                
+                logger.info(f"✅ Campanha geral criada: {campaign.name} (ID: {campaign.id}) para bot {bot_id}")
+                
+            except Exception as e:
+                errors.append(f"Erro ao criar campanha para bot {bot_id}: {str(e)}")
+                logger.error(f"❌ Erro ao criar campanha geral para bot {bot_id}: {e}", exc_info=True)
+        
+        # Commit apenas se todas as campanhas foram criadas sem erros
+        if created_campaigns and not errors:
+            db.session.commit()
+            
+            # Disparar campanhas criadas (se não for agendado)
+            if not campaign_data.get('scheduled_at'):
+                service = get_remarketing_service()
+                for campaign_info in created_campaigns:
+                    try:
+                        service.send_campaign_async(campaign_info['campaign_id'], current_user.id)
+                        logger.info(f"🚀 Campanha geral {campaign_info['campaign_id']} disparada para bot {campaign_info['bot_id']}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao disparar campanha {campaign_info['campaign_id']}: {e}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Campanhas criadas e em processamento',
+                'campaigns': created_campaigns,
+                'errors': errors
+            })
+        
+        elif created_campaigns:
+            # Commit parcial (algumas criadas, outras com erro)
+            db.session.commit()
+            return jsonify({
+                'success': False,
+                'message': 'Algumas campanhas criadas com erros',
+                'campaigns': created_campaigns,
+                'errors': errors
+            }), 400
+        
+        else:
+            # Nenhuma campanha criada
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'message': 'Nenhuma campanha foi criada',
+                'campaigns': [],
+                'errors': errors
+            }), 400
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao criar campanha geral: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao criar campanha geral: {str(e)}'}), 500
