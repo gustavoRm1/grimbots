@@ -5,7 +5,8 @@ Rotas públicas para redirecionamento de tráfego (/go/<slug>) com Cloaker e Loa
 import logging
 import time
 from datetime import datetime
-from flask import Blueprint, request, redirect, jsonify, render_template, make_response
+from flask import Blueprint, request, redirect, jsonify, render_template, make_response, current_app
+from flask_wtf.csrf import CSRFProtect
 from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
 from internal_logic.core.metrics import MetricsService
@@ -233,6 +234,7 @@ def health_check_all_pools():
 
 
 @public_bp.route('/api/tracking/cookies', methods=['POST'])
+@CSRFProtect.exempt
 def capture_tracking_cookies():
     """
     V4.1: ENDPOINT PARA CAPTURAR COOKIES _FBP E _FBC DO BROWSER
@@ -241,24 +243,38 @@ def capture_tracking_cookies():
     Atualiza tracking_data no Redis com cookies gerados pelo Meta Pixel.
     """
     try:
-        # V4.1: Parsear JSON (Beacon API não envia Content-Type)
-        data = None
+        # V4.1: Parsing robusto da V1 para Beacon API
+        import json as json_lib
         
-        try:
-            data = request.get_json(force=True, silent=True)
-        except Exception:
-            pass
+        # 1. Tentar forçar o JSON ignorando o Content-Type
+        data = request.get_json(force=True, silent=True)
         
+        # 2. Fallback: Parsear manualmente do body
         if not data:
             try:
                 raw_data = request.get_data(as_text=True)
                 if raw_data:
-                    import json as json_lib
                     data = json_lib.loads(raw_data)
-            except (json_lib.JSONDecodeError, ValueError) as e:
-                logger.warning(f"❌ Erro ao parsear JSON: {e}")
-                return jsonify({'success': False}), 400
+            except (json_lib.JSONDecodeError, ValueError):
+                pass
         
+        # 3. Fallback: Form data
+        if not data and request.form:
+            data = {
+                'tracking_token': request.form.get('tracking_token'),
+                '_fbp': request.form.get('_fbp'),
+                '_fbc': request.form.get('_fbc')
+            }
+            
+        if not data:
+            logger.error("[TRACKING API] Nenhum dado recebido do Beacon API.")
+            return jsonify({'success': False, 'error': 'No data received'}), 400
+            
+    except Exception as e:
+        logger.error(f"[TRACKING API] Erro critico no parsing: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    
+    try:
         # V4.1: Validar dados
         tracking_token = data.get('tracking_token')
         if not tracking_token:
