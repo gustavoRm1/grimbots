@@ -114,7 +114,11 @@ def get_remarketing_campaigns(bot_id):
 def create_remarketing_campaign(bot_id):
     """Cria nova campanha de remarketing"""
     try:
-        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
+        if not bot:
+            logger.error(f"[REMARKETING] Bot não encontrado ou sem permissão. BotID recebido: {bot_id}, UserID logado: {current_user.id}")
+            return jsonify({"error": "Bot não encontrado ou você não tem permissão", "bot_id": bot_id}), 404
+        
         data = request.get_json() or {}
         
         # Processar agendamento
@@ -267,8 +271,15 @@ def delete_remarketing_campaign(bot_id, campaign_id):
 def send_remarketing_campaign(bot_id, campaign_id):
     """Dispara campanha imediatamente"""
     try:
-        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-        campaign = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first_or_404()
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
+        if not bot:
+            logger.error(f"[REMARKETING] Bot não encontrado ou sem permissão. BotID recebido: {bot_id}, UserID logado: {current_user.id}")
+            return jsonify({"error": "Bot não encontrado ou você não tem permissão", "bot_id": bot_id}), 404
+
+        campaign = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first()
+        if not campaign:
+            logger.error(f"[REMARKETING] Campanha não encontrada. CampID recebido: {campaign_id}, BotID: {bot_id}")
+            return jsonify({"error": "Campanha não encontrada no banco", "campaign_id": campaign_id}), 404
         
         # Verificar se já está em andamento
         if campaign.status == 'sending':
