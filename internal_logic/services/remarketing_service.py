@@ -203,7 +203,7 @@ class RemarketingService:
         Busca usuários alvo baseado na segmentação da campanha
         THREAD SAFE: user_id explícito para evitar current_user em threads
         """
-        from internal_logic.core.models import PoolBot
+        from internal_logic.core.models import BotUser, Payment
         
         try:
             # LOGS DE AUDITORIA INTERNA - RAIO-X DA QUERY
@@ -212,11 +212,11 @@ class RemarketingService:
             logger.info(f"AUDIT: Cooldown: {campaign.days_since_last_contact} dias")
             logger.info(f"AUDIT: Excluir compradores: {campaign.exclude_buyers}")
             
-            # Base query com filtro de segurança (multitenancy)
-            query = BotUser.query.filter_by(bot_id=campaign.bot_id)
+            # Base query com filtro de segurança (multitenancy) e usuários não bloqueados
+            query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
             
             # Aplicar filtros de segmentação
-            if campaign.target_audience == 'all':
+            if campaign.target_audience in ['all', 'all_users']:
                 pass  # Todos os usuários
             elif campaign.target_audience == 'non_buyers':
                 # Nunca compraram
@@ -242,14 +242,14 @@ class RemarketingService:
             elif campaign.target_audience == 'inactive':
                 # Inativos há 7+ dias
                 cutoff_date = get_brazil_time() - timedelta(days=7)
-                query = query.filter(BotUser.last_message_at < cutoff_date)
+                query = query.filter(BotUser.last_interaction < cutoff_date)
             
             # Filtro de cooldown (último contato)
             if campaign.days_since_last_contact:
                 cutoff_date = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
                 query = query.filter(
-                    (BotUser.last_message_at < cutoff_date) | 
-                    (BotUser.last_message_at.is_(None))
+                    (BotUser.last_interaction < cutoff_date) | 
+                    (BotUser.last_interaction.is_(None))
                 )
             
             # Excluir compradores (legado)
