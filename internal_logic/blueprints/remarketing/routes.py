@@ -533,10 +533,27 @@ def get_group_stats(group_id):
             'last_updated': max((c.completed_at or c.started_at or c.created_at) for c in campaigns).isoformat() if campaigns and len(campaigns) > 0 else None
         }
 
-        # Estrutura alinhada com expectativa do frontend
+        # Estrutura alinhada com expectativa do frontend - campaigns individuais
+        campaign_details = []
+        for campaign in campaigns:
+            campaign_details.append({
+                'id': campaign.id,
+                'name': campaign.name,
+                'bot_id': campaign.bot_id,
+                'bot_name': campaign.bot.name if campaign.bot else 'Bot Desconhecido',
+                'status': campaign.status,
+                'total_targets': campaign.total_targets or 0,
+                'total_sent': campaign.total_sent or 0,
+                'total_failed': campaign.total_failed or 0,
+                'progress_percent': round(((campaign.total_sent or 0) + (campaign.total_failed or 0)) / (campaign.total_targets or 1) * 100, 1) if campaign.total_targets else 0,
+                'created_at': campaign.created_at.isoformat() if campaign.created_at else None,
+                'started_at': campaign.started_at.isoformat() if campaign.started_at else None,
+                'completed_at': campaign.completed_at.isoformat() if campaign.completed_at else None
+            })
+
         response_data = {
             'global_stats': stats,
-            'campaigns': []  # Placeholder para futuras campanhas detalhadas
+            'campaigns': campaign_details  # Campanhas individuais para "Corrida Individual"
         }
 
         logger.info(f"[GROUP_STATS] Stats do grupo {group_id} para usuário {current_user.id}: {stats}")

@@ -1645,7 +1645,7 @@ def generate_pix_async(
     - Envio de mensagem com QR Code
     """
     try:
-        from internal_logic.core.extensions import app  # <--- IMPORTAÇÃO LOCAL (LAZY)
+        from app import app  # <--- IMPORTAR DE QUEM INSTANCIOU A FACTORY
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Bot, BotConfig, Payment, Gateway
         from gateway_factory import GatewayFactory
@@ -1814,7 +1814,7 @@ def task_process_broadcast_campaign(campaign_id: int):
     Args:
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
-    from internal_logic.core.extensions import app  # <--- IMPORTAÇÃO LOCAL (LAZY)
+    from app import app  # <--- IMPORTAR DE QUEM INSTANCIOU A FACTORY
     from internal_logic.core.extensions import db
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
@@ -2031,8 +2031,8 @@ def task_process_broadcast_campaign(campaign_id: int):
             q = q.order_by(BotUser.id)
             
             # Loop principal de envio
-            processed_in_batch = 0  # ✅ CHECKPOINT INCREMENTAL: Contador de progresso
-            CHECKPOINT_INTERVAL = 20  # ✅ Commit a cada 20 leads
+            processed_in_batch = 0  # CHECKPOINT INCREMENTAL: Contador de progresso
+            CHECKPOINT_INTERVAL = 10  # Commit a cada 10 leads para progresso real-time
             
             while offset < total_targets and not bot_is_dead:
                 batch = q.offset(offset).limit(batch_size).all()
