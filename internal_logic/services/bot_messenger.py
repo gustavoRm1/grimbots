@@ -380,6 +380,7 @@ class BotMessenger:
         message: str,
         media_type: Optional[str] = None,
         media_url: Optional[str] = None,
+        audio_url: Optional[str] = None,
         reply_markup: Optional[Dict] = None
     ) -> bool:
         """
