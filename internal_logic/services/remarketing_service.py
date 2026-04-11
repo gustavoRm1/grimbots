@@ -107,6 +107,11 @@ class RemarketingService:
                 
                 # Buscar alvos da campanha
                 targets = self._get_campaign_targets(campaign, user_id)
+                
+                # VALIDAÇÃO DO TOTAL_TARGETS - Impedir campanha com 0 leads
+                if not targets:
+                    raise ValueError("Nenhum lead encontrado para os filtros selecionados.")
+                
                 campaign.total_targets = len(targets)
                 db.session.commit()
                 
@@ -213,7 +218,10 @@ class RemarketingService:
             logger.info(f"AUDIT: Excluir compradores: {campaign.exclude_buyers}")
             
             # Base query com filtro de segurança (multitenancy) e usuários não bloqueados
-            query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
+            # ARMADILHA DO NULL: Leads antigos têm archived=NULL, não False
+            query = BotUser.query.filter(BotUser.bot_id == campaign.bot_id).filter(
+                (BotUser.archived.is_(False)) | (BotUser.archived.is_(None))
+            )
             
             # Aplicar filtros de segmentação
             if campaign.target_audience in ['all', 'all_users']:
@@ -290,10 +298,6 @@ class RemarketingService:
             
             logger.info(f"AUDIT: Convertidos {len(targets)} targets para dicionários")
             return targets
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar alvos da campanha {campaign.id}: {e}", exc_info=True)
-            return []
     
     def _is_blacklisted(self, bot_id: int, telegram_user_id: str) -> bool:
         """Verifica se usuário está na blacklist"""
