@@ -528,6 +528,7 @@ def get_group_stats(group_id):
             'total_failed': total_failed,
             'total_targets': total_targets,
             'success_rate': (total_sent / total_targets * 100) if total_targets > 0 else 0,
+            'progress_percent': ((total_sent + total_failed) / total_targets * 100) if total_targets > 0 else 0,
             'last_updated': max((c.completed_at or c.started_at or c.created_at) for c in campaigns).isoformat() if campaigns and len(campaigns) > 0 else None
         }
 
