@@ -10057,6 +10057,7 @@ Seu pagamento ainda não foi confirmado.
                 message=message,
                 media_type=media_type,
                 media_url=media_url,
+                audio_url=audio_url,
                 reply_markup=self.messenger.build_keyboard(buttons) if buttons else None
             )
         except Exception as e:
