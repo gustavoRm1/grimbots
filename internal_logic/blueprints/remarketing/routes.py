@@ -551,185 +551,55 @@ def get_group_stats(group_id):
 @login_required
 @csrf.exempt
 def create_general_remarketing():
-    """Cria campanhas de remarketing em massa para múltiplos bots"""
     try:
         data = request.get_json() or {}
         bot_ids = data.get('bot_ids', [])
-        
-        # LOGGING CRÍTICO - RASTREAR ORIGEM DOS BOT_IDS
-        logger.info(f"[SECURITY_AUDIT] Criando campanha para usuário {current_user.id}")
-        logger.info(f"[SECURITY_AUDIT] Bot_ids recebidos: {bot_ids}")
-        logger.info(f"[SECURITY_AUDIT] Total de bots: {len(bot_ids)}")
-        
-        if not bot_ids:
+        if not bot_ids: 
             return jsonify({'error': 'Nenhum bot selecionado'}), 400
-        
-        # ✅ GERAR GROUP_ID ÚNICO PARA AGRUPAR AS CAMPANHAS MULTI-BOT
-        # Isso é essencial para que apareçam no histórico de remarketing geral
+
         group_id = str(uuid.uuid4())
-        
-        # Dados da campanha (mesmos para todos os bots)
         campaign_data = {
             'name': data.get('name', 'Campanha Geral'),
             'message': data.get('message'),
-            'media_url': data.get('media_url'),
-            'media_type': data.get('media_type'),
-            'audio_enabled': data.get('audio_enabled', False),
-            'audio_url': data.get('audio_url', ''),
-            'buttons': json.dumps(data.get('buttons', [])),  # Serializar para string JSON
+            'buttons': json.dumps(data.get('buttons', [])),
             'target_audience': data.get('audience_segment', 'all_users'),
             'days_since_last_contact': data.get('days_since_last_contact', 0),
-            'exclude_buyers': data.get('exclude_buyers', False),
-            'cooldown_hours': data.get('cooldown_hours', 24),
-            'status': 'queued',  # CORREÇÃO: 'queued' para destravar State Machine Deadlock
-            'group_id': group_id  # ✅ CARIMBAR TODAS AS CAMPANHAS COM O MESMO GROUP_ID
+            'status': 'queued',
+            'group_id': group_id
         }
-        
-        created_campaigns = []
-        errors = []
-        
-        # BARRREIRA SANITÁRIA - Interseção de Segurança Rígida
-        # Impede matematicamente que qualquer usuário crie campanha para bot de outro
+
         valid_bot_ids = [b.id for b in Bot.query.filter_by(user_id=current_user.id).all()]
         safe_bot_ids = [int(bid) for bid in bot_ids if int(bid) in valid_bot_ids]
-        
-        # LOGGING DE SEGURANÇA - Detectar tentativa de contaminação
-        if len(safe_bot_ids) != len(bot_ids):
-            contaminated = [int(bid) for bid in bot_ids if int(bid) not in valid_bot_ids]
-            logger.warning(f"[SECURITY_BREACH] Bot_ids contaminados bloqueados: {contaminated}")
-            logger.warning(f"[SECURITY_BREACH] Usuário {current_user.id} tentou acessar bots de outros usuários")
-        
-        # Criar campanha para cada bot (APENAS seguros)
+        created_campaigns = []
+
+        from bot_manager import BotManager
+        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=current_user.id)
+
         for bot_id in safe_bot_ids:
-            try:
-                # LOGGING DETALHADO - RASTREAR CONTAMINAÇÃO
-                logger.info(f"[CAMPAIGN_CREATE] Processando bot_id: {bot_id} para usuário: {current_user.id}")
-                
-                # Validar se bot pertence ao usuário
-                bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
-                if not bot:
-                    logger.error(f"[SECURITY] Bot {bot_id} não pertence ao usuário {current_user.id} - POSSÍVEL CONTAMINAÇÃO!")
-                    errors.append(f"Bot {bot_id} não encontrado ou sem permissão")
-                    continue
-                
-                logger.info(f"[CAMPAIGN_CREATE] Bot validado: {bot.name} (ID: {bot.id}) - Dono: {bot.user_id}")
-                
-                # 1. Atualiza o dicionário para evitar colisão
-                campaign_data['group_id'] = group_id
-                
-                # 2. Instancia sem passar group_id por fora
-                campaign = RemarketingCampaign(
-                    bot_id=bot_id,
-                    **campaign_data
-                )
-                
-                db.session.add(campaign)
-                
-                # FORÇAR GERAÇÃO DO ID ANTES DE USAR NO ARRAY
-                db.session.flush()
-                
-                # Validar que ID foi gerado
-                if not campaign.id:
-                    raise Exception("Falha ao gerar ID da campanha após flush()")
-                
-                # CÁLCULO DE TARGETS NA ORIGEM - Calcular total_targets ANTES do commit
-                from bot_manager import BotManager
-                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=current_user.id)
-                
-                # Extrair parâmetros da campanha para contagem
-                audience_segment = campaign.target_audience or 'all_users'
-                days_since_last_contact = campaign.days_since_last_contact or 7
-                
-                logger.info(f"[TARGETS_COUNT] Contando leads para campanha {campaign.id} | Bot: {bot_id} | Segment: {audience_segment}")
-                
-                # Calcular total de leads elegíveis
-                total_targets = local_bot_manager.count_eligible_leads(
-                    bot_id=bot_id,
-                    target_audience=audience_segment,
-                    days_since_last_contact=days_since_last_contact,
-                    exclude_buyers=False,
-                    audience_segment=audience_segment
-                )
-                
-                # ATUALIZAR total_targets na campanha
-                campaign.total_targets = total_targets
-                db.session.flush()  # Persistir total_targets imediatamente
-                
-                logger.info(f"[TARGETS_COUNT] Campanha {campaign.id} | Total targets calculado: {total_targets}")
-                
-                created_campaigns.append({
-                    'bot_id': bot_id,
-                    'campaign_id': campaign.id,
-                    'campaign_name': campaign.name
-                })
-                
-                logger.info(f" Campanha geral criada: {campaign.name} (ID: {campaign.id}) | Targets: {total_targets} para bot {bot_id}")
-                
-            except Exception as e:
-                errors.append(f"Erro ao criar campanha para bot {bot_id}: {str(e)}")
-                logger.error(f"❌ Erro ao criar campanha geral para bot {bot_id}: {e}", exc_info=True)
-        
-        # Commit apenas se todas as campanhas foram criadas sem erros
-        if created_campaigns and not errors:
-            db.session.commit()
-            
-            # Disparar campanhas criadas SEMPRE (não verificar scheduled_at)
-            service = get_remarketing_service()
-            for campaign_info in created_campaigns:
-                try:
-                    logger.info(f"DISPARANDO CAMPANHA {campaign_info['campaign_id']} para bot {campaign_info['bot_id']}")
-                    service.send_campaign_async(campaign_info['campaign_id'], current_user.id)
-                    logger.info(f"CAMPANHA {campaign_info['campaign_id']} disparada para bot {campaign_info['bot_id']}")
-                except Exception as e:
-                    logger.error(f" Erro ao disparar campanha {campaign_info['campaign_id']}: {e}", exc_info=True)
-                    # NÃO ENGOLIR ERRO - Adicionar à lista de erros
-                    errors.append({
-                        'bot_id': campaign_info['bot_id'],
-                        'error': str(e)
-                    })
-                    # MARCAR CAMPANHA COMO FAILED NO BANCO
-                    campaign = RemarketingCampaign.query.get(campaign_info['campaign_id'])
-                    if campaign:
-                        campaign.status = 'failed'
-                        campaign.error_message = str(e)
-                        db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'status': 'success',  # Adicionar compatibilidade com frontend
-                'message': 'Campanhas criadas e em processamento',
-                'campaigns': created_campaigns,
-                'errors': errors,
-                'group_id': group_id  # ✅ Retornar group_id para frontend
-            })
-        
-        elif created_campaigns:
-            # Commit parcial (algumas criadas, outras com erro)
-            db.session.commit()
-            return jsonify({
-                'success': False,
-                'status': 'partial_error',  # Adicionar compatibilidade com frontend
-                'message': 'Algumas campanhas criadas com erros',
-                'campaigns': created_campaigns,
-                'errors': errors
-            }), 400
-        
-        else:
-            # Nenhuma campanha criada
-            db.session.rollback()
-            return jsonify({
-                'success': False,
-                'status': 'error',  # Adicionar compatibilidade com frontend
-                'message': 'Nenhuma campanha foi criada',
-                'campaigns': [],
-                'errors': errors
-            }), 400
-        
+            # Evitar colisão de group_id no construtor
+            current_campaign_data = campaign_data.copy()
+            campaign = RemarketingCampaign(bot_id=bot_id, **current_campaign_data)
+            db.session.add(campaign)
+            db.session.flush() # Gera ID
+
+            # Cálculo de targets real na origem
+            total_targets = local_bot_manager.count_eligible_leads(
+                bot_id=bot_id,
+                target_audience=current_campaign_data['target_audience']
+            )
+            campaign.total_targets = total_targets
+            db.session.flush()
+
+            created_campaigns.append({'bot_id': bot_id, 'campaign_id': campaign.id})
+
+        db.session.commit()
+
+        # Disparo Assíncrono
+        service = get_remarketing_service()
+        for c in created_campaigns:
+            service.send_campaign_async(c['campaign_id'], current_user.id)
+
+        return jsonify({'success': True, 'group_id': group_id, 'campaigns': created_campaigns})
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Erro ao criar campanha geral: {e}", exc_info=True)
-        return jsonify({
-            'success': False,
-            'status': 'error',  # Adicionar compatibilidade com frontend
-            'error': f'Erro ao criar campanha geral: {str(e)}'
-        }), 500
+        return jsonify({'error': str(e)}), 500

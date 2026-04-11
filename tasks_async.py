@@ -27,7 +27,7 @@ from internal_logic.core.extensions import db
 
 # 🚨 CRÍTICO: Importar app REAL do Flask (não o proxy current_app)
 # Workers RQ precisam da instância real para criar app_context
-from app import app
+from wsgi import app
 
 logger = logging.getLogger(__name__)
 
