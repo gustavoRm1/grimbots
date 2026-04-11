@@ -483,6 +483,62 @@ def remove_from_blacklist(bot_id, entry_id):
 # REMARKETING MULTI-BOT (GERAL)
 # ============================================================================
 
+@remarketing_bp.route('/api/group/<group_id>/stats', methods=['GET'])
+@login_required
+def get_group_stats(group_id):
+    """Retorna estatísticas consolidadas do grupo para polling em tempo real"""
+    try:
+        # SEGURANÇA IDOR: Verificar se grupo pertence ao usuário
+        campaign_check = db.session.query(RemarketingCampaign, Bot).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            RemarketingCampaign.group_id == group_id,
+            Bot.user_id == current_user.id
+        ).first()
+
+        if not campaign_check:
+            logger.warning(f"[IDOR BLOCK] Tentativa de acesso a stats do grupo {group_id} por usuário {current_user.id}")
+            return jsonify({'error': 'Grupo não encontrado ou sem permissão'}), 404
+
+        # Buscar todas as campanhas do grupo
+        campaigns = db.session.query(RemarketingCampaign).join(Bot).filter(
+            RemarketingCampaign.group_id == group_id,
+            Bot.user_id == current_user.id
+        ).all()
+
+        # Consolidar estatísticas
+        total_sent = sum(c.total_sent or 0 for c in campaigns)
+        total_failed = sum(c.total_failed or 0 for c in campaigns)
+        total_targets = sum(c.total_targets or 0 for c in campaigns)
+        
+        # Status consolidado
+        completed_campaigns = sum(1 for c in campaigns if c.status == 'completed')
+        sending_campaigns = sum(1 for c in campaigns if c.status == 'sending')
+        queued_campaigns = sum(1 for c in campaigns if c.status == 'queued')
+        failed_campaigns = sum(1 for c in campaigns if c.status == 'failed')
+
+        stats = {
+            'group_id': group_id,
+            'total_campaigns': len(campaigns),
+            'completed_campaigns': completed_campaigns,
+            'sending_campaigns': sending_campaigns,
+            'queued_campaigns': queued_campaigns,
+            'failed_campaigns': failed_campaigns,
+            'total_sent': total_sent,
+            'total_failed': total_failed,
+            'total_targets': total_targets,
+            'success_rate': (total_sent / total_targets * 100) if total_targets > 0 else 0,
+            'last_updated': max((c.updated_at or c.created_at) for c in campaigns).isoformat() if campaigns else None
+        }
+
+        logger.info(f"[GROUP_STATS] Stats do grupo {group_id} para usuário {current_user.id}: {stats}")
+        return jsonify(stats)
+
+    except Exception as e:
+        logger.error(f"Erro ao obter stats do grupo {group_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao obter estatísticas: {str(e)}'}), 500
+
+
 @remarketing_bp.route('/api/general', methods=['POST'])
 @login_required
 @csrf.exempt
