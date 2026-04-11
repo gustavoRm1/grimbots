@@ -632,13 +632,38 @@ def create_general_remarketing():
                 if not campaign.id:
                     raise Exception("Falha ao gerar ID da campanha após flush()")
                 
+                # CÁLCULO DE TARGETS NA ORIGEM - Calcular total_targets ANTES do commit
+                from bot_manager import BotManager
+                local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=current_user.id)
+                
+                # Extrair parâmetros da campanha para contagem
+                audience_segment = campaign.target_audience or 'all_users'
+                days_since_last_contact = campaign.days_since_last_contact or 7
+                
+                logger.info(f"[TARGETS_COUNT] Contando leads para campanha {campaign.id} | Bot: {bot_id} | Segment: {audience_segment}")
+                
+                # Calcular total de leads elegíveis
+                total_targets = local_bot_manager.count_eligible_leads(
+                    bot_id=bot_id,
+                    target_audience=audience_segment,
+                    days_since_last_contact=days_since_last_contact,
+                    exclude_buyers=False,
+                    audience_segment=audience_segment
+                )
+                
+                # ATUALIZAR total_targets na campanha
+                campaign.total_targets = total_targets
+                db.session.flush()  # Persistir total_targets imediatamente
+                
+                logger.info(f"[TARGETS_COUNT] Campanha {campaign.id} | Total targets calculado: {total_targets}")
+                
                 created_campaigns.append({
                     'bot_id': bot_id,
                     'campaign_id': campaign.id,
                     'campaign_name': campaign.name
                 })
                 
-                logger.info(f" Campanha geral criada: {campaign.name} (ID: {campaign.id}) para bot {bot_id}")
+                logger.info(f" Campanha geral criada: {campaign.name} (ID: {campaign.id}) | Targets: {total_targets} para bot {bot_id}")
                 
             except Exception as e:
                 errors.append(f"Erro ao criar campanha para bot {bot_id}: {str(e)}")

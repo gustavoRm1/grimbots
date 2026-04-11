@@ -53,9 +53,10 @@ else:
     queues = [
         Queue('tasks', connection=redis_conn),
         Queue('gateway', connection=redis_conn),
-        Queue('webhook', connection=redis_conn)
+        Queue('webhook', connection=redis_conn),
+        Queue('marathon', connection=redis_conn)  # Adicionar fila marathon para remarketing massivo
     ]
-    print(f" Queues: tasks, gateway, webhook")
+    print(f" Queues: tasks, gateway, webhook, marathon")
 
 if __name__ == '__main__':
     try:
