@@ -528,7 +528,7 @@ def get_group_stats(group_id):
             'total_failed': total_failed,
             'total_targets': total_targets,
             'success_rate': (total_sent / total_targets * 100) if total_targets > 0 else 0,
-            'last_updated': max((c.updated_at or c.created_at) for c in campaigns).isoformat() if campaigns else None
+            'last_updated': max((c.updated_at or c.created_at) for c in campaigns).isoformat() if campaigns and len(campaigns) > 0 else None
         }
 
         logger.info(f"[GROUP_STATS] Stats do grupo {group_id} para usuário {current_user.id}: {stats}")
