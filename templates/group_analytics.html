@@ -459,25 +459,35 @@ function updateDashboard(data) {
     // Atualizar barra de progresso global
     const progressBar = document.getElementById('globalProgressBar');
     const progressText = document.getElementById('globalProgressText');
-    progressBar.style.width = stats.progress_percent + '%';
-    progressText.textContent = stats.progress_percent + '%';
+    const progressPercent = stats?.progress_percent ?? 0;
+    progressBar.style.width = progressPercent + '%';
+    progressText.textContent = progressPercent + '%';
     
-    // Atualizar estatísticas globais
-    document.getElementById('statTotalTargets').textContent = formatNumber(stats.total_targets);
-    document.getElementById('statTotalSent').textContent = formatNumber(stats.total_sent);
-    document.getElementById('statTotalFailed').textContent = formatNumber(stats.total_failed);
-    document.getElementById('statTotalBlocked').textContent = formatNumber(stats.total_blocked);
-    document.getElementById('statSuccessRate').textContent = stats.success_rate + '%';
-    document.getElementById('statCampaigns').textContent = `${stats.completed_campaigns}/${stats.total_campaigns}`;
+    // Atualizar estatísticas globais com Optional Chaining
+    const totalTargets = stats?.total_targets ?? 0;
+    const totalSent = stats?.total_sent ?? 0;
+    const totalFailed = stats?.total_failed ?? 0;
+    const totalBlocked = stats?.total_blocked ?? 0;
+    const successRate = stats?.success_rate ?? 0;
+    const completedCampaigns = stats?.completed_campaigns ?? 0;
+    const totalCampaigns = stats?.total_campaigns ?? 0;
     
-    // Atualizar grid de bots (corrida individual)
-    updateBotRaceGrid(campaigns);
+    document.getElementById('statTotalTargets').textContent = formatNumber(totalTargets);
+    document.getElementById('statTotalSent').textContent = formatNumber(totalSent);
+    document.getElementById('statTotalFailed').textContent = formatNumber(totalFailed);
+    document.getElementById('statTotalBlocked').textContent = formatNumber(totalBlocked);
+    document.getElementById('statSuccessRate').textContent = successRate + '%';
+    document.getElementById('statCampaigns').textContent = `${completedCampaigns}/${totalCampaigns}`;
     
-    // ✅ FREIO LÓGICO: Verificar se campanha atingiu 100% ou todas concluídas/falharam
-    const allProcessed = stats.total_sent + stats.total_failed >= stats.total_targets;
-    const allCompleted = stats.completed_campaigns >= stats.total_campaigns;
+    // Atualizar grid de bots (corrida individual) com blindagem
+    const campaignData = Array.isArray(campaigns) ? campaigns : [];
+    updateBotRaceGrid(campaignData);
     
-    if (!isComplete && (stats.progress_percent >= 100 || allProcessed || allCompleted)) {
+    // FREIO LÓGICO: Verificar se campanha atingiu 100% ou todas concluídas/falharam
+    const allProcessed = totalSent + totalFailed >= totalTargets;
+    const allCompleted = completedCampaigns >= totalCampaigns;
+    
+    if (!isComplete && (progressPercent >= 100 || allProcessed || allCompleted)) {
         isComplete = true;
         stopPolling();
         console.log('✅ Campanha 100% completa. Polling encerrado automaticamente.');
