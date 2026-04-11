@@ -1865,9 +1865,54 @@ def task_process_broadcast_campaign(campaign_id: int):
                 logger.error(f"❌ [MARATHON SETUP] Bot {bot_id} não encontrado")
                 return
             
-            # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do bot
-            from bot_manager import BotManager
-            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=bot.user_id)
+            # ✅# ISOLAMENTO: Evitar BotManager para quebrar ciclo de recursão infinita
+            # BotManager não será instanciado para evitar maximum recursion depth exceeded
+            def send_telegram_message_direct(token, chat_id, message, media_url=None, media_type=None, audio_url=None, buttons=None):
+                """Envio direto de mensagens Telegram sem BotManager"""
+                try:
+                    import requests
+                    
+                    # Preparar dados básicos
+                    data = {
+                        'chat_id': chat_id,
+                        'text': message,
+                        'parse_mode': 'HTML'
+                    }
+                    
+                    # Adicionar mídia se existir
+                    if media_url:
+                        if media_type == 'photo':
+                            data['photo'] = media_url
+                            data['caption'] = message
+                            del data['text']
+                        elif media_type == 'video':
+                            data['video'] = media_url
+                            data['caption'] = message
+                            del data['text']
+                    
+                    # Adicionar botões se existir
+                    if buttons:
+                        keyboard = {'inline_keyboard': [[{'text': btn.get('text', ''), 'callback_data': btn.get('callback_data', '')} for btn in buttons]]}
+                        data['reply_markup'] = json.dumps(keyboard)
+                    
+                    # Enviar mensagem
+                    url = f"https://api.telegram.org/bot{token}/sendMessage"
+                    if media_url and media_type == 'photo':
+                        url = f"https://api.telegram.org/bot{token}/sendPhoto"
+                    elif media_url and media_type == 'video':
+                        url = f"https://api.telegram.org/bot{token}/sendVideo"
+                    
+                    response = requests.post(url, json=data, timeout=30)
+                    
+                    if response.status_code == 200:
+                        return {'ok': True, 'result': response.json()}
+                    else:
+                        error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'description': response.text}
+                        return {'ok': False, 'error_code': response.status_code, 'description': error_data.get('description', 'Unknown error')}
+                        
+                except Exception as e:
+                    return {'ok': False, 'error_code': 500, 'description': str(e)}
+            
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
             # ==========================================
@@ -1875,14 +1920,88 @@ def task_process_broadcast_campaign(campaign_id: int):
             # ==========================================
             logger.info(f"🔍 [MARATHON SETUP] Contando leads elegíveis para campanha {campaign_id} | Bot: {bot_id}")
             
-            # Contar leads elegíveis usando o método correto (count_eligible_leads)
-            total_targets = local_bot_manager.count_eligible_leads(
-                bot_id=bot_id,
-                target_audience=target_audience,
-                days_since_last_contact=days_since_last_contact,
-                exclude_buyers=False,  # Já filtrado pelo target_audience
-                audience_segment=audience_segment
+            # Contar leads elegíveis diretamente (sem BotManager para evitar recursão)
+            from internal_logic.core.models import BotUser, Payment, RemarketingBlacklist
+            from internal_logic.core.models import get_brazil_time
+            from datetime import timedelta
+            
+            # Query base: usuários do bot (apenas ativos, não arquivados)
+            query = db.session.query(BotUser).filter(
+                BotUser.bot_id == bot_id,
+                BotUser.archived == False
             )
+            
+            # Filtro: último contato há X dias
+            if days_since_last_contact > 0:
+                contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
+                query = query.filter(BotUser.last_interaction <= contact_limit)
+            
+            # Filtrar blacklist usando subquery (performance em escala)
+            blacklist_subquery = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+                bot_id=bot_id
+            )
+            query = query.filter(~BotUser.telegram_user_id.in_(blacklist_subquery))
+            
+            # Filtros de segmento (usando subqueries para performance em escala)
+            if target_audience == 'all_users':
+                # Todos os usuários - sem filtro adicional
+                pass
+            elif target_audience == 'buyers':
+                # Todos que compraram (status = 'paid') - usando subquery
+                buyer_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid'
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(buyer_subquery))
+            elif target_audience == 'non_buyers':
+                # Excluir compradores - usando subquery com ~in_
+                buyer_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid'
+                ).distinct()
+                query = query.filter(~BotUser.telegram_user_id.in_(buyer_subquery))
+            elif target_audience == 'abandoned_cart' or target_audience == 'pix_generated':
+                # Usuários que geraram PIX mas não pagaram (status = 'pending') - subquery
+                pending_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'pending'
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(pending_subquery))
+            elif target_audience == 'downsell_buyers':
+                # Todos que compraram via downsell - subquery
+                downsell_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_downsell == True
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(downsell_subquery))
+            elif target_audience == 'order_bump_buyers':
+                # Todos que compraram com order bump - subquery
+                orderbump_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.order_bump_accepted == True
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(orderbump_subquery))
+            elif target_audience == 'upsell_buyers':
+                # Todos que compraram via upsell - subquery
+                upsell_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_upsell == True
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(upsell_subquery))
+            elif target_audience == 'remarketing_buyers':
+                # Todos que compraram via remarketing - subquery
+                remarketing_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_remarketing == True
+                ).distinct()
+                query = query.filter(BotUser.telegram_user_id.in_(remarketing_subquery))
+            
+            # Contar total elegíveis
+            total_targets = query.count()
             
             logger.info(f"📊 [MARATHON SETUP] Campanha {campaign_id} | Leads elegíveis encontrados: {total_targets}")
             
@@ -2102,7 +2221,7 @@ def task_process_broadcast_campaign(campaign_id: int):
                         
                         for attempt in range(3):
                             try:
-                                result = local_bot_manager.send_telegram_message(
+                                result = send_telegram_message_direct(
                                     token=bot_token_str,
                                     chat_id=str(lead.telegram_user_id),
                                     message=personalized_message,
