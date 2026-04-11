@@ -90,6 +90,9 @@ class RemarketingService:
         """
         Worker que processa o envio da campanha com rate limiting
         """
+        import traceback
+        
+        # CAIXA PRETA - Try/Except GLOBAL para capturar morte súbita
         try:
             # INJETAR APP CONTEXT - O DESFIBRILADOR
             with app.app_context():
@@ -114,17 +117,17 @@ class RemarketingService:
                 # Verificar se deve parar
                 if stop_event.is_set():
                     logger.info(f" Worker {thread_id} interrompido")
-                    logger.info(f"⏹️ Worker {thread_id} interrompido")
+                    logger.info(f" Worker {thread_id} interrompido")
                     break
                 
                 try:
-                    # ✅ RATE LIMITING CRÍTICO: 1.2s-2.5s entre mensagens
+                    # RATE LIMITING CRÍTICO: 1.2s-2.5s entre mensagens
                     # Isso é a segurança do sistema contra ban do Telegram
                     delay = 1.2 + (i % 2) * 0.8  # Varia entre 1.2s e 2.0s
                     
                     # Verificar se usuário está na blacklist
                     if self._is_blacklisted(campaign.bot_id, target['telegram_user_id']):
-                        logger.info(f"🚫 Usuário {target['telegram_user_id']} está na blacklist - pulando")
+                        logger.info(f" Usuário {target['telegram_user_id']} está na blacklist - pulando")
                         campaign.total_blocked += 1
                         continue
                     
@@ -148,60 +151,50 @@ class RemarketingService:
                     
                     if success:
                         campaign.total_sent += 1
-                        logger.info(f"✅ [{i+1}/{len(targets)}] Enviado para {target['telegram_user_id']}")
-                        
-                        # Emitir progresso via WebSocket
-                        socketio.emit('remarketing_progress', {
-                            'campaign_id': campaign.id,
-                            'current': i + 1,
-                            'total': len(targets),
-                            'sent': campaign.total_sent,
-                            'failed': campaign.total_failed,
-                            'blocked': campaign.total_blocked
-                        }, room=f"user_{user_id}")
+                        logger.info(f" Mensagem {i+1}/{len(targets)} enviada para {target['telegram_user_id']}")
                     else:
                         campaign.total_failed += 1
-                        logger.warning(f"❌ [{i+1}/{len(targets)}] Falha para {target['telegram_user_id']}")
+                        logger.error(f" Falha ao enviar mensagem {i+1}/{len(targets)} para {target['telegram_user_id']}")
                     
-                    # ✅ RATE LIMITING: Pausa entre mensagens
+                    # Commit progresso
+                    db.session.commit()
+                    
+                    # Rate limiting
                     time.sleep(delay)
                     
                 except Exception as e:
+                    logger.error(f" Erro ao enviar mensagem para {target['telegram_user_id']}: {e}")
                     campaign.total_failed += 1
-                    logger.error(f"❌ Erro ao enviar para {target['telegram_user_id']}: {e}")
+                    db.session.commit()
             
             # Finalizar campanha
             campaign.status = 'completed'
             campaign.completed_at = get_brazil_time()
             db.session.commit()
-            
-            logger.info(f"🏁 Campanha {campaign.id} finalizada:")
-            logger.info(f"   - Total: {campaign.total_targets}")
-            logger.info(f"   - Enviados: {campaign.total_sent}")
-            logger.info(f"   - Falhas: {campaign.total_failed}")
-            logger.info(f"   - Bloqueados: {campaign.total_blocked}")
-            
-            # Emitir evento de conclusão
-            socketio.emit('remarketing_completed', {
-                'campaign_id': campaign.id,
-                'status': 'completed',
-                'total_targets': campaign.total_targets,
-                'total_sent': campaign.total_sent,
-                'total_failed': campaign.total_failed,
-                'total_blocked': campaign.total_blocked
-            }, room=f"user_{user_id}")
+            logger.info(f" Campanha {campaign_id} concluída com sucesso!")
             
         except Exception as e:
-            logger.error(f"❌ Erro no worker {thread_id}: {e}", exc_info=True)
-            campaign.status = 'failed'
-            campaign.error_message = str(e)
-            campaign.completed_at = get_brazil_time()
-            db.session.commit()
+            # AUDIT_CRITICAL - Morte Súbita na Thread!
+            logger.error(f"AUDIT_CRITICAL: Morte Súbita na Thread! Erro: {str(e)}\n{traceback.format_exc()}")
+            
+            # Tentar atualizar status da campanha para failed
+            try:
+                with app.app_context():
+                    campaign = db.session.get(RemarketingCampaign, campaign_id)
+                    if campaign:
+                        campaign.status = 'failed'
+                        campaign.error_message = f"Thread Death: {str(e)}"
+                        campaign.completed_at = get_brazil_time()
+                        db.session.commit()
+                        logger.error(f"AUDIT_CRITICAL: Campanha {campaign_id} marcada como failed")
+            except Exception as commit_error:
+                logger.error(f"AUDIT_CRITICAL: Falha ao marcar campanha como failed: {commit_error}")
         
         finally:
             # Limpar recursos
             self.worker_threads.pop(thread_id, None)
             self.stop_events.pop(thread_id, None)
+            logger.info(f" Worker {thread_id} finalizado e recursos limpos")
             logger.info(f"🧹 Worker {thread_id} finalizado e recursos limpos")
     
     def _get_campaign_targets(self, campaign: RemarketingCampaign, user_id: int) -> List[Dict[str, Any]]:
