@@ -102,12 +102,29 @@ class RemarketingService:
                 logger.info(f"AUDIT: total_targets atualizado para {campaign.total_targets} e commitado")
                 logger.info(f" Campanha {campaign_id}: {len(targets)} alvos encontrados")
             
+            # CACHE ESTÁTICO - Isolar estado da campanha para prevenir DetachedInstanceError
+            campaign_data = {
+                'id': campaign.id,
+                'bot_id': campaign.bot_id,
+                'message': campaign.message,
+                'media_url': campaign.media_url,
+                'media_type': campaign.media_type,
+                'audio_enabled': campaign.audio_enabled,
+                'audio_url': campaign.audio_url,
+                'buttons': campaign.get_buttons() if campaign.buttons else []
+            }
+            
+            # Buscar o bot UMA VEZ e guardar o token
+            bot_model = db.session.get(Bot, campaign.bot_id)
+            bot_token = bot_model.token if bot_model else None
+            
+            if not bot_token:
+                raise ValueError("Bot ou Token não encontrado para disparo.")
+            
+            logger.info(f" Cache estático criado - Bot token: {bot_token[:20]}...")
+            
             # Enviar mensagens com rate limiting
             for i, target in enumerate(targets):
-                # REIDRATAÇÃO NO LOOP - Prevenir DetachedInstanceError
-                current_campaign = db.session.get(RemarketingCampaign, campaign_id)
-                current_bot = db.session.get(Bot, current_campaign.bot_id)
-                
                 # Verificar se deve parar
                 if stop_event.is_set():
                     logger.info(f" Worker {thread_id} interrompido")
@@ -119,35 +136,35 @@ class RemarketingService:
                     # Isso é a segurança do sistema contra ban do Telegram
                     delay = 1.2 + (i % 2) * 0.8  # Varia entre 1.2s e 2.0s
                     
-                    # Verificar se usuário está na blacklist
-                    if self._is_blacklisted(current_campaign.bot_id, target['telegram_user_id']):
+                    # Verificar se usuário está na blacklist (usa cache estático)
+                    if self._is_blacklisted(campaign_data['bot_id'], target['telegram_user_id']):
                         logger.info(f" Usuário {target['telegram_user_id']} está na blacklist - pulando")
-                        current_campaign.total_blocked += 1
+                        campaign.total_blocked += 1
                         continue
                     
-                    # Processar placeholders
+                    # Processar placeholders (usa cache estático)
                     message = self._process_placeholders(
-                        current_campaign.message, 
+                        campaign_data['message'], 
                         target.get('first_name', 'Cliente'),
                         target.get('name', target.get('first_name', 'Cliente'))
                     )
                     
-                    # Enviar mensagem
+                    # Enviar mensagem (usa bot_token em vez de objeto Bot)
                     success = self._send_message(
-                        current_bot,
+                        bot_token,  # Token em vez de objeto Bot
                         target['telegram_user_id'],
                         message,
-                        current_campaign.media_url,
-                        current_campaign.media_type,
-                        current_campaign.audio_url if current_campaign.audio_enabled else None,
-                        current_campaign.get_buttons() if current_campaign.buttons else []
+                        campaign_data['media_url'],
+                        campaign_data['media_type'],
+                        campaign_data['audio_url'] if campaign_data['audio_enabled'] else None,
+                        campaign_data['buttons']
                     )
                     
                     if success:
-                        current_campaign.total_sent += 1
+                        campaign.total_sent += 1
                         logger.info(f" Mensagem {i+1}/{len(targets)} enviada para {target['telegram_user_id']}")
                     else:
-                        current_campaign.total_failed += 1
+                        campaign.total_failed += 1
                         logger.error(f" Falha ao enviar mensagem {i+1}/{len(targets)} para {target['telegram_user_id']}")
                     
                     # Commit progresso
@@ -325,7 +342,7 @@ class RemarketingService:
             logger.error(f"❌ Erro ao processar placeholders: {e}")
             return message or ""
     
-    def _send_message(self, bot: Bot, telegram_user_id: str, message: str, 
+    def _send_message(self, bot_token: str, telegram_user_id: str, message: str, 
                    media_url: Optional[str] = None, media_type: Optional[str] = None,
                    audio_url: Optional[str] = None, buttons: Optional[List[Dict]] = None) -> bool:
         """
@@ -338,12 +355,12 @@ class RemarketingService:
                 self.bot_manager = BotManager(
                     socketio=socketio, 
                     scheduler=None, 
-                    user_id=bot.user_id
+                    user_id=None  # Não precisamos mais do user_id aqui
                 )
             
             # Enviar mensagem
             result = self.bot_manager.send_telegram_message(
-                token=bot.token,
+                token=bot_token,
                 chat_id=telegram_user_id,
                 message=message.strip(),
                 media_url=media_url,
