@@ -397,14 +397,31 @@ class RemarketingService:
             return {'error': str(e)}
 
 
-# Instância global do serviço
-_remarketing_service = None
+# BOMBA GLOBAL DESARMADA - Isolamento por usuário para prevenir contaminação
+# TODO: Implementar arquitetura multitenancy completa com user_id como chave
+_user_services = {}  # user_id -> RemarketingService isolado
 
-def get_remarketing_service(bot_manager: Optional[BotManager] = None) -> RemarketingService:
+def get_remarketing_service(bot_manager: Optional[BotManager] = None, user_id: Optional[int] = None) -> RemarketingService:
     """
-    Retorna instância singleton do RemarketingService
+    Retorna instância ISOLADA por usuário para prevenir vazamento de dados
+    
+    CRITICAL: Singleton global foi removido para impedir contaminação cruzada
+    entre sessões de diferentes usuários (Herança Maldita)
     """
-    global _remarketing_service
-    if _remarketing_service is None:
-        _remarketing_service = RemarketingService(bot_manager)
-    return _remarketing_service
+    from flask_login import current_user
+    
+    # Usar user_id explícito ou current_user.id
+    effective_user_id = user_id or (current_user.id if current_user else None)
+    
+    if not effective_user_id:
+        # Fallback para modo legado (sem isolamento) - LOGAR COMO RISCO
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("[SECURITY] get_remarketing_service chamado sem user_id - RISCO DE CONTAMINAÇÃO")
+        return RemarketingService(bot_manager)
+    
+    # Isolar instância por usuário
+    if effective_user_id not in _user_services:
+        _user_services[effective_user_id] = RemarketingService(bot_manager)
+    
+    return _user_services[effective_user_id]

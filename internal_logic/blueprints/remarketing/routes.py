@@ -49,25 +49,28 @@ def bot_remarketing_page(bot_id):
 def remarketing_history_page():
     """Página de histórico de todas as campanhas"""
     try:
-        # ✅ LEITURA PERFEITA: Buscar TODAS as campanhas do usuário sem filtros de status
-        # Isso garante que campanhas recém-criadas (sending, queued) apareçam imediatamente
-        campaigns = db.session.query(RemarketingCampaign, Bot).join(
-            Bot, RemarketingCampaign.bot_id == Bot.id
-        ).filter(
+        # EXPURGO DO HISTÓRICO - Query 100% blindada para curar erro 403
+        # Remove matematicamente qualquer campanha que não pertença ao usuário
+        campaigns = db.session.query(RemarketingCampaign).join(Bot).filter(
             Bot.user_id == current_user.id
         ).order_by(
-            RemarketingCampaign.created_at.desc()  # ✅ NOVAS CAMPANHAS NO TOPO
+            RemarketingCampaign.created_at.desc()
         ).all()
         
-        # ✅ AGRUPAR POR BOT PARA EXIBIÇÃO COM LÓGICA DE MULTI-BOT
+        # ✅# EXPURGO DE HERANÇA MALDITA - Limpeza silenciosa de dados órfãos
+        # Ignora campanhas com bots inválidos que causam erro 403
         history_by_bot = {}
-        for campaign, bot in campaigns:
-            bot_id = bot.id
+        for campaign in campaigns:
+            # BLOQUEIO DE DADOS ÓRFÃOS - Verificar se bot existe e pertence ao usuário
+            bot = Bot.query.filter_by(id=campaign.bot_id, user_id=current_user.id).first()
+            if not bot:
+                logger.warning(f"[EXPURGO] Ignorando campanha órfã {campaign.id} - bot_id: {campaign.bot_id}")
+                continue
             
             # Adicionar group_id aos dados da campanha para o template
             campaign_dict = campaign.to_dict()
             
-            # ✅ PRIORIZAR GROUP_ID REAL (para campanhas multi-bot)
+            # PRIORIZAR GROUP_ID REAL (para campanhas multi-bot)
             # Se existir group_id, usar; senão, usar ID da campanha como fallback
             if campaign.group_id:
                 campaign_dict['group_id'] = campaign.group_id
@@ -83,20 +86,20 @@ def remarketing_history_page():
             campaign_dict['bot_name'] = bot.name
             
             # LÓGICA DE MULTI-BOT: Agrupar por group_id se existir
-            grouping_key = campaign.group_id or f"bot_{bot_id}"
+            grouping_key = campaign.group_id or f"bot_{campaign.bot_id}"
             
             # Se ainda não existe entrada para este grupo, criar
             if grouping_key not in history_by_bot:
                 history_by_bot[grouping_key] = campaign_dict
                 # Inicializar set para rastrear bots únicos neste grupo
                 history_by_bot[grouping_key]['bot_ids'] = set()
-                history_by_bot[grouping_key]['bot_ids'].add(bot_id)
+                history_by_bot[grouping_key]['bot_ids'].add(campaign.bot_id)
                 history_by_bot[grouping_key]['bot_count'] = 1  # Inicial com 1 bot
                 history_by_bot[grouping_key]['is_multi_bot'] = bool(campaign.group_id)
             else:
                 # Adicionar bot_id ao set (só incrementa se for novo bot)
-                if bot_id not in history_by_bot[grouping_key]['bot_ids']:
-                    history_by_bot[grouping_key]['bot_ids'].add(bot_id)
+                if campaign.bot_id not in history_by_bot[grouping_key]['bot_ids']:
+                    history_by_bot[grouping_key]['bot_ids'].add(campaign.bot_id)
                     history_by_bot[grouping_key]['bot_count'] += 1
                 # Manter a campanha mais recente como representante (já está ordenado)
             
@@ -521,8 +524,19 @@ def create_general_remarketing():
         created_campaigns = []
         errors = []
         
-        # Criar campanha para cada bot
-        for bot_id in bot_ids:
+        # BARRREIRA SANITÁRIA - Interseção de Segurança Rígida
+        # Impede matematicamente que qualquer usuário crie campanha para bot de outro
+        valid_bot_ids = [b.id for b in Bot.query.filter_by(user_id=current_user.id).all()]
+        safe_bot_ids = [int(bid) for bid in bot_ids if int(bid) in valid_bot_ids]
+        
+        # LOGGING DE SEGURANÇA - Detectar tentativa de contaminação
+        if len(safe_bot_ids) != len(bot_ids):
+            contaminated = [int(bid) for bid in bot_ids if int(bid) not in valid_bot_ids]
+            logger.warning(f"[SECURITY_BREACH] Bot_ids contaminados bloqueados: {contaminated}")
+            logger.warning(f"[SECURITY_BREACH] Usuário {current_user.id} tentou acessar bots de outros usuários")
+        
+        # Criar campanha para cada bot (APENAS seguros)
+        for bot_id in safe_bot_ids:
             try:
                 # LOGGING DETALHADO - RASTREAR CONTAMINAÇÃO
                 logger.info(f"[CAMPAIGN_CREATE] Processando bot_id: {bot_id} para usuário: {current_user.id}")
