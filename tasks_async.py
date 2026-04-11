@@ -1657,7 +1657,7 @@ def generate_pix_async(
         import uuid
         import time
         
-        with current_app.app_context():
+        with app.app_context():
             bot = db.session.get(Bot, bot_id)
             if not bot:
                 logger.error(f"Bot {bot_id} não encontrado")
@@ -1828,7 +1828,7 @@ def task_process_broadcast_campaign(campaign_id: int):
     import time
     import requests
     
-    with current_app.app_context():
+    with app.app_context():
         try:
             # ✅ BUSCAR CAMPANHA EXISTENTE NO BANCO
             campaign = db.session.query(RemarketingCampaign).get(campaign_id)
