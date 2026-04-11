@@ -1848,18 +1848,9 @@ def task_process_broadcast_campaign(campaign_id: int):
             days_since_last_contact = campaign.days_since_last_contact or 7
             audience_segment = campaign.target_audience or 'all_users'
             
-            # Mapeamento de segmento
-            target_audience_mapping = {
-                'all_users': 'all',
-                'buyers': 'buyers',
-                'pix_generated': 'abandoned_cart',
-                'downsell_buyers': 'downsell_buyers',
-                'order_bump_buyers': 'order_bump_buyers',
-                'upsell_buyers': 'upsell_buyers',
-                'remarketing_buyers': 'remarketing_buyers',
-                'non_buyers': 'non_buyers'
-            }
-            target_audience = target_audience_mapping.get(audience_segment, 'all')
+            # ✅ CORREÇÃO: Passar audience_segment diretamente (sem mapeamento)
+            # O count_eligible_leads() espera o audience_segment original do frontend
+            target_audience = audience_segment
             
             # ✅ INICIALIZAR CONEXÕES
             redis_conn = get_redis_connection()
