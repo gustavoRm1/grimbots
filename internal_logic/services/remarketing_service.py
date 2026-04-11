@@ -365,7 +365,6 @@ class RemarketingService:
                 message=message.strip(),
                 media_url=media_url,
                 media_type=media_type,
-                audio_url=audio_url,
                 buttons=buttons or []
             )
             
