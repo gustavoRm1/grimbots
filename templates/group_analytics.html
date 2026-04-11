@@ -460,8 +460,9 @@ function updateDashboard(data) {
     const progressBar = document.getElementById('globalProgressBar');
     const progressText = document.getElementById('globalProgressText');
     const progressPercent = stats?.progress_percent ?? 0;
-    progressBar.style.width = progressPercent + '%';
-    progressText.textContent = progressPercent + '%';
+    const displayProgress = Number(progressPercent).toFixed(1);
+    progressBar.style.width = displayProgress + '%';
+    progressText.textContent = displayProgress + '%';
     
     // Atualizar estatísticas globais com Optional Chaining
     const totalTargets = stats?.total_targets ?? 0;
@@ -469,6 +470,7 @@ function updateDashboard(data) {
     const totalFailed = stats?.total_failed ?? 0;
     const totalBlocked = stats?.total_blocked ?? 0;
     const successRate = stats?.success_rate ?? 0;
+    const displaySuccessRate = Number(successRate).toFixed(1);
     const completedCampaigns = stats?.completed_campaigns ?? 0;
     const totalCampaigns = stats?.total_campaigns ?? 0;
     
@@ -476,7 +478,7 @@ function updateDashboard(data) {
     document.getElementById('statTotalSent').textContent = formatNumber(totalSent);
     document.getElementById('statTotalFailed').textContent = formatNumber(totalFailed);
     document.getElementById('statTotalBlocked').textContent = formatNumber(totalBlocked);
-    document.getElementById('statSuccessRate').textContent = successRate + '%';
+    document.getElementById('statSuccessRate').textContent = displaySuccessRate + '%';
     document.getElementById('statCampaigns').textContent = `${completedCampaigns}/${totalCampaigns}`;
     
     // Atualizar grid de bots (corrida individual) com blindagem
