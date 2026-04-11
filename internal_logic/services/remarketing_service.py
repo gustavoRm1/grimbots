@@ -106,6 +106,7 @@ class RemarketingService:
                 campaign.total_targets = len(targets)
                 db.session.commit()
                 
+                logger.info(f"AUDIT: total_targets atualizado para {campaign.total_targets} e commitado")
                 logger.info(f" Campanha {campaign_id}: {len(targets)} alvos encontrados")
             
             # Enviar mensagens com rate limiting
@@ -211,6 +212,12 @@ class RemarketingService:
         from internal_logic.core.models import PoolBot
         
         try:
+            # LOGS DE AUDITORIA INTERNA - RAIO-X DA QUERY
+            logger.info(f"AUDIT: Buscando leads para Bot {campaign.bot_id} do Usuário {user_id}")
+            logger.info(f"AUDIT: Segmento: {campaign.target_audience}")
+            logger.info(f"AUDIT: Cooldown: {campaign.days_since_last_contact} dias")
+            logger.info(f"AUDIT: Excluir compradores: {campaign.exclude_buyers}")
+            
             # Base query com filtro de segurança (multitenancy)
             query = BotUser.query.filter_by(bot_id=campaign.bot_id)
             
@@ -259,21 +266,35 @@ class RemarketingService:
                 ).with_entities(Payment.customer_user_id).distinct().subquery()
                 query = query.filter(~BotUser.telegram_user_id.in_(paid_users))
             
+            # LOG DE CONTAGEM ANTES DA EXECUÇÃO
+            leads_count = query.count()
+            logger.info(f"AUDIT: Encontrados {leads_count} leads no banco (antes da execução)")
+            
             # Executar query
             users = query.all()
+            logger.info(f"AUDIT: Query executada - {len(users)} usuários retornados")
+            
+            # LOG SQL GERADO (para debug avançado)
+            try:
+                from sqlalchemy.dialects import postgresql
+                compiled_query = query.statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+                logger.info(f"AUDIT: SQL Gerado: {compiled_query}")
+            except:
+                logger.info(f"AUDIT: SQL Query: {str(query)}")
             
             # Converter para dicionários
             targets = []
             for user in users:
-                # Extrair primeiro nome do full_name se disponível
-                first_name = user.full_name.split()[0] if user.full_name else user.first_name or "Cliente"
+                # CORREÇÃO: BotUser não tem campo full_name - usar apenas first_name
+                first_name = user.first_name or "Cliente"
                 
                 targets.append({
                     'telegram_user_id': user.telegram_user_id,
-                    'name': user.full_name or user.first_name or "Cliente",
+                    'name': user.first_name or "Cliente",
                     'first_name': first_name
                 })
             
+            logger.info(f"AUDIT: Convertidos {len(targets)} targets para dicionários")
             return targets
             
         except Exception as e:
