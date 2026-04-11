@@ -38,14 +38,18 @@ class RemarketingService:
         (similar ao legado que usava RQ worker)
         """
         try:
+            # Capturar app Flask ANTES da thread para App Context
+            from flask import current_app
+            app = current_app._get_current_object()
+            
             campaign = RemarketingCampaign.query.filter_by(id=campaign_id).first()
             if not campaign:
-                logger.error(f"❌ Campanha {campaign_id} não encontrada")
+                logger.error(f" Campanha {campaign_id} não encontrada")
                 return
             
             # Verificar se já está rodando
             if campaign.status == 'sending':
-                logger.warning(f"⚠️ Campanha {campaign_id} já está em andamento")
+                logger.warning(f" Campanha {campaign_id} já está em andamento")
                 return
             
             # Atualizar status
@@ -57,14 +61,14 @@ class RemarketingService:
             campaign.total_blocked = 0
             db.session.commit()
             
-            # Criar thread dedicada
+            # Criar thread dedicada com App Context injetado
             stop_event = threading.Event()
             thread_id = f"remarketing_{campaign_id}_{int(time.time())}"
             self.stop_events[thread_id] = stop_event
             
             worker_thread = threading.Thread(
                 target=self._campaign_worker,
-                args=(campaign, user_id, stop_event, thread_id),
+                args=(app, campaign.id, user_id, stop_event, thread_id),  # Passar ID, não objeto
                 name=f"RemarketingWorker-{campaign_id}"
             )
             
@@ -75,31 +79,40 @@ class RemarketingService:
             logger.info(f"🚀 Campanha {campaign_id} iniciada em thread {thread_id}")
             
         except Exception as e:
-            logger.error(f"❌ Erro ao iniciar campanha {campaign_id}: {e}", exc_info=True)
+            logger.error(f" Erro ao iniciar campanha {campaign_id}: {e}", exc_info=True)
             if campaign:
                 campaign.status = 'failed'
                 campaign.error_message = str(e)
                 db.session.commit()
     
-    def _campaign_worker(self, campaign: RemarketingCampaign, user_id: int, 
+    def _campaign_worker(self, app, campaign_id: int, user_id: int, 
                      stop_event: threading.Event, thread_id: str):
         """
         Worker que processa o envio da campanha com rate limiting
         """
         try:
-            logger.info(f"🔄 Worker {thread_id} iniciado para campanha {campaign.id}")
-            
-            # Buscar alvos da campanha
-            targets = self._get_campaign_targets(campaign)
-            campaign.total_targets = len(targets)
-            db.session.commit()
-            
-            logger.info(f"🎯 Campanha {campaign.id}: {len(targets)} alvos encontrados")
+            # INJETAR APP CONTEXT - O DESFIBRILADOR
+            with app.app_context():
+                logger.info(f" Worker {thread_id} iniciado para campanha {campaign_id}")
+                
+                # Buscar campanha FRESCA do banco (evitar DetachedInstanceError)
+                campaign = db.session.get(RemarketingCampaign, campaign_id)
+                if not campaign:
+                    logger.error(f" Campanha {campaign_id} não encontrada no worker")
+                    return
+                
+                # Buscar alvos da campanha
+                targets = self._get_campaign_targets(campaign, user_id)
+                campaign.total_targets = len(targets)
+                db.session.commit()
+                
+                logger.info(f" Campanha {campaign_id}: {len(targets)} alvos encontrados")
             
             # Enviar mensagens com rate limiting
             for i, target in enumerate(targets):
                 # Verificar se deve parar
                 if stop_event.is_set():
+                    logger.info(f" Worker {thread_id} interrompido")
                     logger.info(f"⏹️ Worker {thread_id} interrompido")
                     break
                 
@@ -190,14 +203,15 @@ class RemarketingService:
             self.stop_events.pop(thread_id, None)
             logger.info(f"🧹 Worker {thread_id} finalizado e recursos limpos")
     
-    def _get_campaign_targets(self, campaign: RemarketingCampaign) -> List[Dict[str, Any]]:
+    def _get_campaign_targets(self, campaign: RemarketingCampaign, user_id: int) -> List[Dict[str, Any]]:
         """
         Busca usuários alvo baseado na segmentação da campanha
+        THREAD SAFE: user_id explícito para evitar current_user em threads
         """
         from internal_logic.core.models import PoolBot
         
         try:
-            # Base query
+            # Base query com filtro de segurança (multitenancy)
             query = BotUser.query.filter_by(bot_id=campaign.bot_id)
             
             # Aplicar filtros de segmentação
@@ -407,11 +421,23 @@ def get_remarketing_service(bot_manager: Optional[BotManager] = None, user_id: O
     
     CRITICAL: Singleton global foi removido para impedir contaminação cruzada
     entre sessões de diferentes usuários (Herança Maldita)
-    """
-    from flask_login import current_user
     
-    # Usar user_id explícito ou current_user.id
-    effective_user_id = user_id or (current_user.id if current_user else None)
+    THREAD SAFE: Para chamadas dentro de threads, user_id é OBRIGATÓRIO
+    """
+    # Para threads, user_id é OBRIGATÓRIO (current_user não existe em background)
+    if user_id is None:
+        # Tentar obter da requisição web (fallback apenas para contexto web)
+        try:
+            from flask_login import current_user
+            effective_user_id = current_user.id if current_user else None
+        except:
+            # Fora de contexto web/Flask - CRÍTICO!
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("[SECURITY] get_remarketing_service chamado sem user_id em thread - IMPOSSÍVEL CONTINUAR")
+            raise RuntimeError("user_id é obrigatório para chamadas em background threads")
+    else:
+        effective_user_id = user_id
     
     if not effective_user_id:
         # Fallback para modo legado (sem isolamento) - LOGAR COMO RISCO
