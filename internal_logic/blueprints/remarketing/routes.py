@@ -621,13 +621,21 @@ def create_general_remarketing():
                 )
                 
                 db.session.add(campaign)
+                
+                # FORÇAR GERAÇÃO DO ID ANTES DE USAR NO ARRAY
+                db.session.flush()
+                
+                # Validar que ID foi gerado
+                if not campaign.id:
+                    raise Exception("Falha ao gerar ID da campanha após flush()")
+                
                 created_campaigns.append({
                     'bot_id': bot_id,
                     'campaign_id': campaign.id,
                     'campaign_name': campaign.name
                 })
                 
-                logger.info(f"✅ Campanha geral criada: {campaign.name} (ID: {campaign.id}) para bot {bot_id}")
+                logger.info(f" Campanha geral criada: {campaign.name} (ID: {campaign.id}) para bot {bot_id}")
                 
             except Exception as e:
                 errors.append(f"Erro ao criar campanha para bot {bot_id}: {str(e)}")
