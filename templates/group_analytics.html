@@ -392,7 +392,11 @@ let isComplete = false;  // ✅ Flag de completude (freio lógico)
 // ✅ FUNÇÃO PRINCIPAL: Buscar dados da API
 async function fetchGroupStats() {
     try {
-        const response = await fetch(CONFIG.apiUrl, {
+        // Cache-buster para forçar atualização da API
+        const cacheBuster = new Date().getTime();
+        const urlWithCache = `${CONFIG.apiUrl}?_t=${cacheBuster}`;
+        
+        const response = await fetch(urlWithCache, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
             credentials: 'same-origin'
