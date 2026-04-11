@@ -52,8 +52,8 @@ class RemarketingService:
                 logger.warning(f" Campanha {campaign_id} já está em andamento")
                 return
             
-            # Atualizar status
-            campaign.status = 'sending'
+            # Atualizar status - Web server APENAS enfileira, não inicia disparo
+            campaign.status = 'queued'
             campaign.started_at = get_brazil_time()
             campaign.total_targets = 0
             campaign.total_sent = 0
@@ -61,23 +61,7 @@ class RemarketingService:
             campaign.total_blocked = 0
             db.session.commit()
             
-            # Criar thread dedicada com App Context injetado
-            stop_event = threading.Event()
-            thread_id = f"remarketing_{campaign_id}_{int(time.time())}"
-            self.stop_events[thread_id] = stop_event
-            
-            # RELIGAR MOTOR ASSÍNCRONO - Thread para 10K+ leads sem timeout no Gunicorn
-            worker_thread = threading.Thread(
-                target=self._campaign_worker,
-                args=(app, campaign.id, user_id, stop_event, thread_id),  # Passar ID, não objeto
-                name=f"RemarketingWorker-{campaign_id}"
-            )
-            
-            self.worker_threads[thread_id] = worker_thread
-            worker_thread.daemon = True
-            worker_thread.start()
-            
-            logger.info(f" Motor assíncrono religado - Thread {thread_id} iniciada para campanha {campaign_id}")
+            logger.info(f" Campanha {campaign_id} enfileirada para processamento assíncrono")
             
         except Exception as e:
             logger.error(f" Erro ao iniciar campanha {campaign_id}: {e}", exc_info=True)
