@@ -36,28 +36,31 @@ class RemarketingService:
         """
         Envia campanha para processamento distribuído via RQ (Redis Queue)
         """
+        campaign = None
         try:
+            logger.info(f"💣 [DEBUG] INICIANDO send_campaign_async para campanha {campaign_id}")
+            
             campaign = RemarketingCampaign.query.filter_by(id=campaign_id).first()
             if not campaign:
-                logger.error(f" Campanha {campaign_id} não encontrada")
+                logger.error(f"💣 [DEBUG] Campanha {campaign_id} não encontrada no banco!")
                 return
+            
+            logger.info(f"💣 [DEBUG] Campanha {campaign_id} encontrada | Status atual: {campaign.status}")
             
             # Verificar se já está rodando
             if campaign.status == 'sending':
-                logger.warning(f" Campanha {campaign_id} já está em andamento")
+                logger.warning(f"💣 [DEBUG] Campanha {campaign_id} já está em andamento - ignorando enqueue")
                 return
             
-            # Atualizar status para 'sending' (processamento iniciado)
-            campaign.status = 'sending'
-            campaign.started_at = get_brazil_time()
-            campaign.total_targets = 0
-            campaign.total_sent = 0
-            campaign.total_failed = 0
-            campaign.total_blocked = 0
-            db.session.commit()
+            # ✅ CORREÇÃO: Manter status 'queued' até enqueue confirmado
+            # NÃO mudar para 'sending' aqui - a task fará isso
+            logger.info(f"💣 [DEBUG] Mantendo status como 'queued' até enqueue confirmado")
             
             # Importar fila RQ e task de processamento
             from tasks_async import marathon_queue, task_process_broadcast_campaign
+            
+            logger.info(f"💣 [DEBUG] IMPORTAÇÃO CONCLUÍDA | marathon_queue: {marathon_queue}")
+            logger.info(f"💣 [DEBUG] PREPARANDO PARA ENFILEIRAR CAMPANHA {campaign_id} NO REDIS...")
             
             # Enfileirar na fila marathon para processamento distribuído
             job = marathon_queue.enqueue(
@@ -66,14 +69,17 @@ class RemarketingService:
                 job_timeout='12h'  # Timeout estendido para campanhas massivas
             )
             
-            logger.info(f" Campanha {campaign_id} despachada para Worker Marathon | Job ID: {job.id}")
+            logger.info(f"✅ [DEBUG] CAMPANHA {campaign_id} ENFILEIRADA COM SUCESSO! JOB ID: {job.id}")
+            logger.info(f"✅ [DEBUG] QUEUE LENGTH: {len(marathon_queue)} jobs na fila marathon")
             
         except Exception as e:
-            logger.error(f" Erro ao enfileirar campanha {campaign_id}: {e}", exc_info=True)
+            logger.error(f"💣 [CRITICAL] ERRO AO ENFILEIRAR CAMPANHA {campaign_id}: {e}", exc_info=True)
             if campaign:
                 campaign.status = 'failed'
                 campaign.error_message = str(e)
                 db.session.commit()
+                logger.error(f"💣 [CRITICAL] CAMPANHA {campaign_id} MARCADA COMO FAILED DEVIDO AO ERRO")
+            raise  # ✅ PROPAGAR ERRO - NÃO ENGOLIR EXCEÇÃO!
     
     def _campaign_worker(self, app, campaign_id: int, user_id: int, 
                      stop_event: threading.Event, thread_id: str):

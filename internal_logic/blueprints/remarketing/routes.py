@@ -641,10 +641,26 @@ def create_general_remarketing():
             service = get_remarketing_service()
             for campaign_info in created_campaigns:
                 try:
+                    logger.info(f"💣 [DEBUG] DISPARANDO CAMPANHA {campaign_info['campaign_id']} para bot {campaign_info['bot_id']}")
                     service.send_campaign_async(campaign_info['campaign_id'], current_user.id)
-                    logger.info(f" Campanha geral {campaign_info['campaign_id']} disparada para bot {campaign_info['bot_id']}")
+                    logger.info(f"✅ [DEBUG] CAMPANHA {campaign_info['campaign_id']} DISPARADA COM SUCESSO!")
                 except Exception as e:
-                    logger.error(f" Erro ao disparar campanha {campaign_info['campaign_id']}: {e}")
+                    logger.error(f"💣 [CRITICAL] ERRO AO DISPARAR CAMPANHA {campaign_info['campaign_id']}: {e}", exc_info=True)
+                    # ✅ NÃO ENGOLIR ERRO - Adicionar à lista de erros
+                    errors.append({
+                        'bot_id': campaign_info['bot_id'],
+                        'error': str(e)
+                    })
+                    # ✅ MARCAR CAMPANHA COMO FAILED NO BANCO
+                    try:
+                        from internal_logic.core.models import RemarketingCampaign
+                        campaign = RemarketingCampaign.query.get(campaign_info['campaign_id'])
+                        if campaign:
+                            campaign.status = 'failed'
+                            campaign.error_message = str(e)
+                            db.session.commit()
+                    except:
+                        pass
             
             return jsonify({
                 'success': True,

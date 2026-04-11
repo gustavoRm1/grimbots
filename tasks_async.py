@@ -1836,6 +1836,13 @@ def task_process_broadcast_campaign(campaign_id: int):
                 logger.error(f"🚨 [MARATHON] Campanha {campaign_id} não encontrada no banco!")
                 return
             
+            # ✅ ALINHAMENTO STATE MACHINE: Validar status inicial
+            if campaign.status not in ['pending', 'queued', 'created']:
+                logger.warning(f"⚠️ [MARATHON] Campanha {campaign_id} ignorada. Status atual: {campaign.status}")
+                return
+            
+            logger.info(f"✅ [MARATHON] Campanha {campaign_id} aceita para processamento | Status: {campaign.status}")
+            
             # Extrair todos os dados da campanha
             bot_id = campaign.bot_id
             group_id = campaign.group_id
@@ -1924,10 +1931,11 @@ def task_process_broadcast_campaign(campaign_id: int):
                 db.session.commit()
                 return
             
-            # Atualizar status para 'sending'
+            # ✅ ALINHAMENTO STATE MACHINE: Mudar status para 'sending' ANTES do loop
             campaign.status = 'sending'
             campaign.started_at = get_brazil_time()
             db.session.commit()
+            logger.info(f"🚀 [MARATHON] Campanha {campaign_id} status mudado para 'sending' | Iniciando loop de envio")
             
             logger.info(f"📊 [MARATHON] Processando bot {bot.name} (ID: {bot_id}) | Campaign: {campaign_id}")
             
