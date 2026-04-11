@@ -10032,6 +10032,7 @@ Seu pagamento ainda não foi confirmado.
     def send_telegram_message(self, token: str, chat_id: str, message: str, 
                              media_url: Optional[str] = None, 
                              media_type: str = 'video',
+                             audio_url: Optional[str] = None,
                              buttons: Optional[list] = None):
         """
         Envia mensagem pelo Telegram (delegado ao BotMessenger)
@@ -10042,6 +10043,7 @@ Seu pagamento ainda não foi confirmado.
             message: Mensagem de texto
             media_url: URL da mídia (opcional)
             media_type: Tipo da mídia (video, photo ou audio)
+            audio_url: URL do áudio (opcional)
             buttons: Lista de botões inline
             
         Returns:
