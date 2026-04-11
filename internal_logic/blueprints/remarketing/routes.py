@@ -489,6 +489,11 @@ def create_general_remarketing():
         data = request.get_json() or {}
         bot_ids = data.get('bot_ids', [])
         
+        # LOGGING CRÍTICO - RASTREAR ORIGEM DOS BOT_IDS
+        logger.info(f"[SECURITY_AUDIT] Criando campanha para usuário {current_user.id}")
+        logger.info(f"[SECURITY_AUDIT] Bot_ids recebidos: {bot_ids}")
+        logger.info(f"[SECURITY_AUDIT] Total de bots: {len(bot_ids)}")
+        
         if not bot_ids:
             return jsonify({'error': 'Nenhum bot selecionado'}), 400
         
@@ -519,11 +524,17 @@ def create_general_remarketing():
         # Criar campanha para cada bot
         for bot_id in bot_ids:
             try:
+                # LOGGING DETALHADO - RASTREAR CONTAMINAÇÃO
+                logger.info(f"[CAMPAIGN_CREATE] Processando bot_id: {bot_id} para usuário: {current_user.id}")
+                
                 # Validar se bot pertence ao usuário
                 bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
                 if not bot:
+                    logger.error(f"[SECURITY] Bot {bot_id} não pertence ao usuário {current_user.id} - POSSÍVEL CONTAMINAÇÃO!")
                     errors.append(f"Bot {bot_id} não encontrado ou sem permissão")
                     continue
+                
+                logger.info(f"[CAMPAIGN_CREATE] Bot validado: {bot.name} (ID: {bot.id}) - Dono: {bot.user_id}")
                 
                 # Criar campanha individual
                 campaign = RemarketingCampaign(
