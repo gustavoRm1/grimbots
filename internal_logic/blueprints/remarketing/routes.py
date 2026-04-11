@@ -581,7 +581,7 @@ def create_general_remarketing():
             'days_since_last_contact': data.get('days_since_last_contact', 0),
             'exclude_buyers': data.get('exclude_buyers', False),
             'cooldown_hours': data.get('cooldown_hours', 24),
-            'status': 'sending',  # Mudar para 'sending' para iniciar imediatamente
+            'status': 'queued',  # CORREÇÃO: 'queued' para destravar State Machine Deadlock
             'group_id': group_id  # ✅ CARIMBAR TODAS AS CAMPANHAS COM O MESMO GROUP_ID
         }
         

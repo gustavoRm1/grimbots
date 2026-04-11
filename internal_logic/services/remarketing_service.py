@@ -66,22 +66,18 @@ class RemarketingService:
             thread_id = f"remarketing_{campaign_id}_{int(time.time())}"
             self.stop_events[thread_id] = stop_event
             
-            # O TESTE SINCRONO - A Bala de Prata para forçar diagnóstico
-            # COMENTADO: Thread assíncrona que causa morte súbita
-            # worker_thread = threading.Thread(
-            #     target=self._campaign_worker,
-            #     args=(app, campaign.id, user_id, stop_event, thread_id),  # Passar ID, não objeto
-            #     name=f"RemarketingWorker-{campaign_id}"
-            # )
-            # 
-            # self.worker_threads[thread_id] = worker_thread
-            # worker_thread.daemon = True
-            # worker_thread.start()
+            # RELIGAR MOTOR ASSÍNCRONO - Thread para 10K+ leads sem timeout no Gunicorn
+            worker_thread = threading.Thread(
+                target=self._campaign_worker,
+                args=(app, campaign.id, user_id, stop_event, thread_id),  # Passar ID, não objeto
+                name=f"RemarketingWorker-{campaign_id}"
+            )
             
-            # CHAMADA DIRETA SÍNCRONA - Força traceback completo se houver erro
-            logger.info(f"� TESTE SINCRONO: Iniciando worker diretamente para campanha {campaign_id}")
-            self._campaign_worker(app, campaign.id, user_id, stop_event, thread_id)
-            logger.info(f"✅ TESTE SINCRONO: Worker concluído para campanha {campaign_id}")
+            self.worker_threads[thread_id] = worker_thread
+            worker_thread.daemon = True
+            worker_thread.start()
+            
+            logger.info(f" Motor assíncrono religado - Thread {thread_id} iniciada para campanha {campaign_id}")
             
         except Exception as e:
             logger.error(f" Erro ao iniciar campanha {campaign_id}: {e}", exc_info=True)
