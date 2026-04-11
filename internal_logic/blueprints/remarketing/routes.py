@@ -5,7 +5,7 @@ Blueprint para gerenciar campanhas de remarketing com
 controle de cadência e histórico detalhado.
 """
 
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from internal_logic.core.extensions import db, csrf
 from internal_logic.core.models import (
