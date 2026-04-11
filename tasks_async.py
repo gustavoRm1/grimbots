@@ -25,10 +25,6 @@ from sqlalchemy.exc import IntegrityError
 from redis_manager import get_redis_connection
 from internal_logic.core.extensions import db
 
-# 🚨 CRÍTICO: Importar app REAL do Flask (não o proxy current_app)
-# Workers RQ precisam da instância real para criar app_context
-from wsgi import app
-
 logger = logging.getLogger(__name__)
 
 # Conectar ao Redis
@@ -1649,7 +1645,7 @@ def generate_pix_async(
     - Envio de mensagem com QR Code
     """
     try:
-        from flask import current_app
+        from internal_logic.core.extensions import app  # <--- IMPORTAÇÃO LOCAL (LAZY)
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Bot, BotConfig, Payment, Gateway
         from gateway_factory import GatewayFactory
@@ -1818,7 +1814,7 @@ def task_process_broadcast_campaign(campaign_id: int):
     Args:
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
-    from flask import current_app
+    from internal_logic.core.extensions import app  # <--- IMPORTAÇÃO LOCAL (LAZY)
     from internal_logic.core.extensions import db
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
