@@ -617,6 +617,7 @@ def create_general_remarketing():
                 # Criar campanha individual
                 campaign = RemarketingCampaign(
                     bot_id=bot_id,
+                    group_id=group_id,  # FORÇAR ATRIBUIÇÃO EXPLÍCITA DO GROUP_ID
                     **campaign_data
                 )
                 
