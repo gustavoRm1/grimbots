@@ -614,10 +614,12 @@ def create_general_remarketing():
                 
                 logger.info(f"[CAMPAIGN_CREATE] Bot validado: {bot.name} (ID: {bot.id}) - Dono: {bot.user_id}")
                 
-                # Criar campanha individual
+                # 1. Atualiza o dicionário para evitar colisão
+                campaign_data['group_id'] = group_id
+                
+                # 2. Instancia sem passar group_id por fora
                 campaign = RemarketingCampaign(
                     bot_id=bot_id,
-                    group_id=group_id,  # FORÇAR ATRIBUIÇÃO EXPLÍCITA DO GROUP_ID
                     **campaign_data
                 )
                 
