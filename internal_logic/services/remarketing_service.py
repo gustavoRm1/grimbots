@@ -298,6 +298,10 @@ class RemarketingService:
             
             logger.info(f"AUDIT: Convertidos {len(targets)} targets para dicionários")
             return targets
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar alvos da campanha {campaign.id}: {e}", exc_info=True)
+            raise e  # Erro sobe para o worker em vez de ser engolido
     
     def _is_blacklisted(self, bot_id: int, telegram_user_id: str) -> bool:
         """Verifica se usuário está na blacklist"""
