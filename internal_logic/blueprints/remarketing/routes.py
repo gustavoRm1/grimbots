@@ -130,8 +130,8 @@ def group_remarketing_analytics(group_id):
     View: Dashboard Master de Analytics Global (Multi-Bot)
     Renderiza o template com o group_id para o Smart Polling
     """
-    # SEGURANÇA IDOR: Verificar se o grupo pertence ao usuário antes de renderizar
     try:
+        # SEGURANÇA IDOR: Verificar se o grupo pertence ao usuário antes de renderizar
         # Verificar se existe pelo menos uma campanha no grupo e se pertence ao usuário
         campaign_check = db.session.query(RemarketingCampaign, Bot).join(
             Bot, RemarketingCampaign.bot_id == Bot.id
@@ -148,8 +148,11 @@ def group_remarketing_analytics(group_id):
         return render_template('group_analytics.html', group_id=group_id)
 
     except Exception as e:
-        logger.error(f"Erro ao acessar grupo {group_id}: {e}", exc_info=True)
-        abort(500)
+        # FORÇAR EXIBIÇÃO DO ERRO - DEBUGGER RADICAL
+        print(f"DEBUG_ERROR_GROUP: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return f"ERRO DETECTADO NO GROUP: {str(e)}", 500
 
 
 # ============================================================================
