@@ -125,66 +125,31 @@ def remarketing_history_page():
 
 @remarketing_bp.route('/group/<group_id>')
 @login_required
-def remarketing_group_analytics(group_id):
-    """Página de analytics detalhado de um grupo de campanhas multi-bot"""
+def group_remarketing_analytics(group_id):
+    """
+    View: Dashboard Master de Analytics Global (Multi-Bot)
+    Renderiza o template com o group_id para o Smart Polling
+    """
+    # SEGURANÇA IDOR: Verificar se o grupo pertence ao usuário antes de renderizar
     try:
-        # Buscar todas as campanhas do grupo
-        campaigns = db.session.query(RemarketingCampaign, Bot).join(
+        # Verificar se existe pelo menos uma campanha no grupo e se pertence ao usuário
+        campaign_check = db.session.query(RemarketingCampaign, Bot).join(
             Bot, RemarketingCampaign.bot_id == Bot.id
         ).filter(
-            Bot.user_id == current_user.id,
-            RemarketingCampaign.group_id == group_id
-        ).order_by(
-            RemarketingCampaign.created_at.desc()
-        ).all()
-        
-        if not campaigns:
-            flash('Grupo de campanhas não encontrado', 'error')
-            return redirect(url_for('remarketing.remarketing_history_page'))
-        
-        # Agrupar dados do grupo
-        group_data = {
-            'group_id': group_id,
-            'campaigns': [],
-            'total_bots': set(),
-            'total_targets': 0,
-            'total_sent': 0,
-            'total_failed': 0,
-            'total_blocked': 0,
-            'total_clicks': 0,
-            'total_sales': 0,
-            'revenue_generated': 0.0,
-            'created_at': None,
-            'completed_at': None
-        }
-        
-        for campaign, bot in campaigns:
-            campaign_data = campaign.to_dict()
-            campaign_data['bot_name'] = bot.name
-            group_data['campaigns'].append(campaign_data)
-            group_data['total_bots'].add(bot.id)
-            group_data['total_targets'] += campaign.total_targets or 0
-            group_data['total_sent'] += campaign.total_sent or 0
-            group_data['total_failed'] += campaign.total_failed or 0
-            group_data['total_blocked'] += campaign.total_blocked or 0
-            group_data['total_clicks'] += campaign.total_clicks or 0
-            group_data['total_sales'] += campaign.total_sales or 0
-            group_data['revenue_generated'] += campaign.revenue_generated or 0.0
-            
-            if not group_data['created_at']:
-                group_data['created_at'] = campaign.created_at
-            if campaign.completed_at and (not group_data['completed_at'] or campaign.completed_at > group_data['completed_at']):
-                group_data['completed_at'] = campaign.completed_at
-        
-        # Converter set para count
-        group_data['total_bots'] = len(group_data['total_bots'])
-        
-        return render_template('remarketing_group_analytics.html', group=group_data)
-        
+            RemarketingCampaign.group_id == group_id,
+            Bot.user_id == current_user.id
+        ).first()
+
+        if not campaign_check:
+            # Tentativa de acesso a grupo inexistente ou não autorizado
+            logger.warning(f"[IDOR BLOCK] Tentativa de acesso a grupo {group_id} por usuário {current_user.id}")
+            abort(403)
+
+        return render_template('group_analytics.html', group_id=group_id)
+
     except Exception as e:
-        logger.error(f"Erro ao carregar analytics do grupo {group_id}: {e}", exc_info=True)
-        flash('Erro ao carregar analytics do grupo', 'error')
-        return redirect(url_for('remarketing.remarketing_history_page'))
+        logger.error(f"Erro ao acessar grupo {group_id}: {e}", exc_info=True)
+        abort(500)
 
 
 # ============================================================================
