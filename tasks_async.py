@@ -2113,6 +2113,7 @@ def task_process_broadcast_campaign(campaign_id: int):
                                     message=personalized_message,
                                     media_url=media_url,
                                     media_type=media_type if media_url else None,
+                                    audio_url=audio_url if audio_enabled and audio_url else None,
                                     buttons=remarketing_buttons if remarketing_buttons else None
                                 )
                                 
