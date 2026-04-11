@@ -104,6 +104,10 @@ class RemarketingService:
             
             # Enviar mensagens com rate limiting
             for i, target in enumerate(targets):
+                # REIDRATAÇÃO NO LOOP - Prevenir DetachedInstanceError
+                current_campaign = db.session.get(RemarketingCampaign, campaign_id)
+                current_bot = db.session.get(Bot, current_campaign.bot_id)
+                
                 # Verificar se deve parar
                 if stop_event.is_set():
                     logger.info(f" Worker {thread_id} interrompido")
@@ -116,34 +120,34 @@ class RemarketingService:
                     delay = 1.2 + (i % 2) * 0.8  # Varia entre 1.2s e 2.0s
                     
                     # Verificar se usuário está na blacklist
-                    if self._is_blacklisted(campaign.bot_id, target['telegram_user_id']):
+                    if self._is_blacklisted(current_campaign.bot_id, target['telegram_user_id']):
                         logger.info(f" Usuário {target['telegram_user_id']} está na blacklist - pulando")
-                        campaign.total_blocked += 1
+                        current_campaign.total_blocked += 1
                         continue
                     
                     # Processar placeholders
                     message = self._process_placeholders(
-                        campaign.message, 
+                        current_campaign.message, 
                         target.get('first_name', 'Cliente'),
                         target.get('name', target.get('first_name', 'Cliente'))
                     )
                     
                     # Enviar mensagem
                     success = self._send_message(
-                        campaign.bot,
+                        current_bot,
                         target['telegram_user_id'],
                         message,
-                        campaign.media_url,
-                        campaign.media_type,
-                        campaign.audio_url if campaign.audio_enabled else None,
-                        campaign.get_buttons() if campaign.buttons else []
+                        current_campaign.media_url,
+                        current_campaign.media_type,
+                        current_campaign.audio_url if current_campaign.audio_enabled else None,
+                        current_campaign.get_buttons() if current_campaign.buttons else []
                     )
                     
                     if success:
-                        campaign.total_sent += 1
+                        current_campaign.total_sent += 1
                         logger.info(f" Mensagem {i+1}/{len(targets)} enviada para {target['telegram_user_id']}")
                     else:
-                        campaign.total_failed += 1
+                        current_campaign.total_failed += 1
                         logger.error(f" Falha ao enviar mensagem {i+1}/{len(targets)} para {target['telegram_user_id']}")
                     
                     # Commit progresso
