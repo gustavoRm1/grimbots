@@ -248,7 +248,10 @@ def process_start_async(
     - Salvar welcome_sent no banco
     """
     try:
-        from flask import current_app
+        # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
+        from internal_logic.core.extensions import create_app
+        app = create_app()
+        
         from internal_logic.core.models import BotUser, Bot, get_brazil_time
         from bot_manager import send_meta_pixel_viewcontent_event
         import base64
@@ -840,11 +843,9 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
     from bot_manager import BotManager
     from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
     
-    # LAZY IMPORT DA INSTÂNCIA FLASK PARA EVITAR CIRCULAR IMPORTS
-    try:
-        from wsgi import app
-    except ImportError:
-        from app import app
+    # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
+    from internal_logic.core.extensions import create_app
+    app = create_app()
     
     job_id = f"{bot_id}_{datetime.utcnow().timestamp()}"
     logger.critical(f"?? [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
@@ -1820,7 +1821,8 @@ def task_process_broadcast_campaign(campaign_id: int):
     Args:
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
-    from wsgi import application as app  # <--- IMPORTAR DE QUEM INSTANCIOU A FACTORY
+    from internal_logic.core.extensions import create_app
+    app = create_app()
     from internal_logic.core.extensions import db
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
@@ -2466,6 +2468,10 @@ def send_downsell_async(
     """
     from internal_logic.core.models import Payment
     
+    # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
+    from internal_logic.core.extensions import create_app
+    app = create_app()
+    
     with app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento ainda está pendente
@@ -2510,6 +2516,10 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     """
     from internal_logic.core.models import Payment
     
+    # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
+    from internal_logic.core.extensions import create_app
+    app = create_app()
+    
     with app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento está pago
@@ -2553,6 +2563,10 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     Executado pelos workers RQ da fila 'tasks' ou 'marathon'
     """
     from internal_logic.core.models import Payment
+    
+    # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
+    from internal_logic.core.extensions import create_app
+    app = create_app()
     
     with app.app_context():
         try:
