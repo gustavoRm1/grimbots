@@ -1868,7 +1868,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             # ✅# ISOLAMENTO: Evitar BotManager para quebrar ciclo de recursão infinita
             # BotManager não será instanciado para evitar maximum recursion depth exceeded
             def send_telegram_message_direct(token, chat_id, message, media_url=None, media_type=None, audio_url=None, buttons=None):
-                """Envio direto de mensagens Telegram sem BotManager"""
+                """Envio direto de mensagens Telegram sem BotManager - COM TRATAMENTO GRANULAR DE ERROS"""
                 try:
                     import requests
                     
@@ -1904,14 +1904,44 @@ def task_process_broadcast_campaign(campaign_id: int):
                     
                     response = requests.post(url, json=data, timeout=30)
                     
+                    # TRATAMENTO GRANULAR DE RESPOSTAS HTTP
                     if response.status_code == 200:
-                        return {'ok': True, 'result': response.json()}
-                    else:
+                        result = response.json()
+                        if result.get('ok'):
+                            return {'ok': True, 'status': 'success', 'result': result}
+                        else:
+                            return {'ok': False, 'status': 'failed', 'error_code': result.get('error_code', 400), 'description': result.get('description', 'API returned ok=False')}
+                    
+                    elif response.status_code == 403:
+                        # HTTP 403: Forbidden (bot was blocked by the user)
                         error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'description': response.text}
-                        return {'ok': False, 'error_code': response.status_code, 'description': error_data.get('description', 'Unknown error')}
+                        return {'ok': False, 'status': 'blocked', 'error_code': 403, 'description': error_data.get('description', 'Bot was blocked by user'), 'telegram_user_id': chat_id}
+                    
+                    elif response.status_code == 400:
+                        # HTTP 400: Bad Request (user not found/chat not found)
+                        error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'description': response.text}
+                        description = error_data.get('description', 'Bad Request')
+                        
+                        # Verificar se é "user not found" ou "chat not found"
+                        if 'user not found' in description.lower() or 'chat not found' in description.lower():
+                            return {'ok': False, 'status': 'failed', 'error_code': 400, 'description': description, 'telegram_user_id': chat_id}
+                        else:
+                            # Outros erros 400 (bad request format, etc.)
+                            return {'ok': False, 'status': 'failed', 'error_code': 400, 'description': description}
+                    
+                    elif response.status_code == 429:
+                        # HTTP 429: Too Many Requests (Flood Control)
+                        error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'description': response.text}
+                        retry_after = error_data.get('retry_after', 30)
+                        return {'ok': False, 'status': 'floodwait', 'error_code': 429, 'description': error_data.get('description', 'Too Many Requests'), 'retry_after': retry_after}
+                    
+                    else:
+                        # Outros erros HTTP (500, 502, etc.)
+                        error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'description': response.text}
+                        return {'ok': False, 'status': 'failed', 'error_code': response.status_code, 'description': error_data.get('description', f'HTTP {response.status_code}')}
                         
                 except Exception as e:
-                    return {'ok': False, 'error_code': 500, 'description': str(e)}
+                    return {'ok': False, 'status': 'failed', 'error_code': 500, 'description': str(e)}
             
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
@@ -2070,6 +2100,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             offset = 0
             sent_count = 0
             failed_count = 0
+            blocked_count = 0  # NOVO: Contador específico de usuários bloqueados
             skipped_count = 0
             bot_is_dead = False
             
@@ -2214,10 +2245,10 @@ def task_process_broadcast_campaign(campaign_id: int):
                                         'url': btn.get('url')
                                     })
                         
-                        # ✅ MARATHON LOOP DE RETRY (com FloodWait e Network handling)
+                        # ✅# MARATHON LOOP DE RETRY (com FloodWait e Network handling)
                         lead_sent = False
                         flood_wait_happened = False
-                        floodwait_attempts = 0  # ✅ Contador de FloodWait consecutivos
+                        floodwait_attempts = 0  # Contador de FloodWait consecutivos
                         
                         for attempt in range(3):
                             try:
@@ -2231,67 +2262,89 @@ def task_process_broadcast_campaign(campaign_id: int):
                                     buttons=remarketing_buttons if remarketing_buttons else None
                                 )
                                 
-                                # 🚨 VALIDAÇÃO STRICT
-                                if isinstance(result, dict) and result.get('error'):
-                                    error_code = result.get('error_code')
+                                # TRATAMENTO GRANULAR DE RESPOSTAS
+                                if isinstance(result, dict):
+                                    status = result.get('status', 'failed')
                                     
-                                    # 🌊 FLOODWAIT HANDLING: Erro 429 com retry_after explícito
-                                    if error_code == 429:
-                                        retry_after = result.get('retry_after')
+                                    if status == 'success':
+                                        # SUCESSO REAL
+                                        sent_count += 1
+                                        consecutive_sent += 1
+                                        redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
+                                        lead_sent = True
+                                        flood_wait_happened = False
+                                        
+                                        # MACRO-BATCHING: Resfriamento a cada 800 envios consecutivos
+                                        if consecutive_sent >= MACRO_BATCH_SIZE:
+                                            logger.info(f" [MACRO-BATCH] Resfriando API por {MACRO_BATCH_COOLDOWN}s após {consecutive_sent} envios")
+                                            time.sleep(MACRO_BATCH_COOLDOWN)
+                                            consecutive_sent = 0
+                                        
+                                        if sent_count % 100 == 0:
+                                            logger.info(f" [MARATHON] Bot {bot_id} | Progresso: {sent_count}/{total_targets} | Campaign: {campaign_id_int}")
+                                        
+                                        break  # Sucesso, sair do loop de retry
+                                    
+                                    elif status == 'blocked':
+                                        # HTTP 403: Bot foi bloqueado pelo usuário
+                                        failed_count += 1
+                                        blocked_count += 1  # NOVO: Contador específico de bloqueados
+                                        
+                                        # AUTO-BLACKLIST: Inserir usuário na RemarketingBlacklist
+                                        try:
+                                            blacklist_entry = RemarketingBlacklist(
+                                                bot_id=bot_id,
+                                                telegram_user_id=str(lead.telegram_user_id),
+                                                reason='blocked_by_user',
+                                                created_at=get_brazil_time()
+                                            )
+                                            db.session.add(blacklist_entry)
+                                            db.session.commit()
+                                            logger.info(f" [AUTO-BLACKLIST] Usuário {lead.telegram_user_id} adicionado à blacklist (bot bloqueado)")
+                                        except Exception as blacklist_err:
+                                            logger.error(f" [AUTO-BLACKLIST] Erro ao adicionar {lead.telegram_user_id}: {blacklist_err}")
+                                            db.session.rollback()
+                                        
+                                        logger.warning(f" [BLOCKED] Usuário {lead.telegram_user_id} bloqueou o bot")
+                                        break  # Não tentar novamente
+                                    
+                                    elif status == 'floodwait':
+                                        # HTTP 429: Flood Control
+                                        retry_after = result.get('retry_after', 30)
                                         floodwait_attempts += 1
                                         
-                                        # ✅ QUEBRA DE CICLO: Se já tentou 3x com FloodWait, desistir do lead
+                                        # QUEBRA DE CICLO: Se já tentou 3x com FloodWait, desistir do lead
                                         if floodwait_attempts >= 3:
-                                            logger.error(f"❌ [FLOODWAIT] Lead {lead.telegram_user_id} esgotou 3 tentativas de FloodWait. Contabilizando falha.")
+                                            logger.error(f" [FLOODWAIT] Lead {lead.telegram_user_id} esgotou 3 tentativas de FloodWait. Contabilizando falha.")
+                                            failed_count += 1
                                             break  # Sai do for attempt, lead será marcado como falha
                                         
                                         if retry_after:
-                                            logger.warning(f"⏸️ [FLOODWAIT] Telegram pediu espera de {retry_after}s (tentativa {floodwait_attempts}/3)")
+                                            logger.warning(f" [FLOODWAIT] Telegram pediu espera de {retry_after}s (tentativa {floodwait_attempts}/3)")
                                             time.sleep(retry_after)
                                             flood_wait_happened = True
                                             # NÃO contar como tentativa usada - tentar mesmo lead novamente
                                             continue
                                         else:
                                             # Fallback: retry_after não fornecido, aguardar 30s
-                                            logger.warning(f"⏸️ [FLOODWAIT] 429 sem retry_after, aguardando 30s")
+                                            logger.warning(f" [FLOODWAIT] 429 sem retry_after, aguardando 30s")
                                             time.sleep(30)
                                             continue
                                     
-                                    # Outros erros: lançar exceção para tratamento downstream
-                                    raise Exception(f"status={error_code}, desc={result.get('description', '')}")
+                                    elif status == 'failed':
+                                        # HTTP 400, 500, etc: Falha genérica
+                                        failed_count += 1
+                                        logger.warning(f" [FAILED] Erro ao enviar para {lead.telegram_user_id}: {result.get('description', 'Unknown error')}")
+                                        break  # Não tentar novamente
+                                    
+                                    else:
+                                        # Status desconhecido
+                                        failed_count += 1
+                                        logger.error(f" [UNKNOWN] Status desconhecido para {lead.telegram_user_id}: {status}")
+                                        break
                                 
                                 elif not result:
-                                    raise Exception("Falha silenciosa: Função retornou False ou None")
-                                
-                                # ✅ SUCESSO REAL
-                                sent_count += 1
-                                consecutive_sent += 1
-                                redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
-                                lead_sent = True
-                                flood_wait_happened = False
-                                
-                                # 🎯 MACRO-BATCHING: Resfriamento a cada 800 envios consecutivos
-                                if consecutive_sent >= MACRO_BATCH_SIZE:
-                                    logger.info(f"⏸️ [MACRO-BATCH] Resfriando API por {MACRO_BATCH_COOLDOWN}s após {consecutive_sent} envios")
-                                    time.sleep(MACRO_BATCH_COOLDOWN)
-                                    consecutive_sent = 0
-                                
-                                if sent_count % 100 == 0:
-                                    logger.info(f"📤 [MARATHON] Bot {bot_id} | Progresso: {sent_count}/{total_targets} | Campaign: {campaign_id_int}")
-                                
-                                break  # Sucesso, sair do loop de retry
-                                
-                            except requests.exceptions.Timeout as timeout_err:
-                                # 🌐 NETWORK TIMEOUT HANDLING: Aguardar 10s e tentar novamente
-                                logger.warning(f"⏱️ [NETWORK TIMEOUT] Timeout na tentativa {attempt + 1}/3. Aguardando 10s...")
-                                time.sleep(10)
-                                if attempt == 2:
-                                    logger.error(f"❌ [NETWORK TIMEOUT] Esgotadas 3 tentativas para {lead.telegram_user_id}")
-                                continue
-                                
-                            except Exception as send_error:
-                                error_str = str(send_error).lower()
-                                result_from_exception = send_error  # fallback para inspeção
+                                    # Falha silenciosa
 
                                 # ══════════════════════════════════════════════════════════════════
                                 # TELEGRAM ERROR TAXONOMY — 3 BUCKETS ESTRITOS
