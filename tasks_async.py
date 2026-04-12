@@ -2345,185 +2345,31 @@ def task_process_broadcast_campaign(campaign_id: int):
                                 
                                 elif not result:
                                     # Falha silenciosa
-
-                                # ══════════════════════════════════════════════════════════════════
-                                # TELEGRAM ERROR TAXONOMY — 3 BUCKETS ESTRITOS
-                                # Fonte: Telegram Bot API — https://core.telegram.org/bots/api#making-requests
-                                # ══════════════════════════════════════════════════════════════════
-
-                                # ──────────────────────────────────────────────────────────────────
-                                # BUCKET 1: USER_FATAL — O problema é o Lead
-                                # Ação: blacklist + failed_count++ + break (tentativas) + continue (próximo lead)
-                                # A campanha NÃO PARA.
-                                # ──────────────────────────────────────────────────────────────────
-                                USER_FATAL_KEYWORDS = [
-                                    # 403 Forbidden — Usuário bloqueou o bot ou o bot foi removido do chat
-                                    'bot was blocked by the user',
-                                    'user is deactivated',                  # Conta Telegram deletada/desativada
-                                    'have no rights to send a message',     # Bot sem permissão nesse chat específico
-                                    'not enough rights',                    # Permissão insuficiente (chat específico)
-                                    # 400 Bad Request — O destinatário/chat não existe ou é inválido
-                                    'chat not found',
-                                    'user not found',
-                                    'chat_id is empty',
-                                    'peer_id_invalid',                      # ID de peer inválido (MTProto traduzido)
-                                    'input_user_deactivated',               # Variante MTProto de conta desativada
-                                    'bot was kicked from the group',        # Bot expulso do grupo (problema desse chat)
-                                    'bot was kicked from the supergroup',
-                                    'bot is not a member',                  # Bot não é membro do canal/grupo
-                                    'need administrator rights',            # Falta de admin nesse chat específico
-                                    'group chat was upgraded to a supergroup',  # Chat migrou, ID antigo inválido
-                                    'blocked by the user',                  # Variante curta
-                                    'user blocked',                         # Variante interna
-                                ]
-
-                                is_user_fatal = any(kw in error_str for kw in USER_FATAL_KEYWORDS)
-
-                                # ──────────────────────────────────────────────────────────────────
-                                # BUCKET 3: BOT_FATAL — O problema é o Sistema/Credenciais
-                                # Verificado ANTES do RETRYABLE para evitar retry infinito em token morto.
-                                # Ação: bot_is_dead = True + break no loop principal.
-                                # ──────────────────────────────────────────────────────────────────
-                                BOT_FATAL_KEYWORDS = [
-                                    # 401 Unauthorized — Token inválido, revogado ou bot deletado pelo owner
-                                    'unauthorized',
-                                    'token is invalid',
-                                    'bot token is invalid',
-                                    '401',
-                                    # Bot banido globalmente pela plataforma Telegram
-                                    'bot was banned',
-                                    'this bot has been blocked',            # Bloqueio global (diferente de por usuário)
-                                    # Webhook conflitando — indica misconfiguration sistêmica
-                                    'terminated by other getupdates request',
-                                ]
-
-                                is_bot_fatal = any(kw in error_str for kw in BOT_FATAL_KEYWORDS)
-
-                                # ──────────────────────────────────────────────────────────────────
-                                # BUCKET 2: RETRYABLE — O problema é Rede/Rate Limits
-                                # Ação: sleep (retry_after ou backoff) + continue no loop de tentativas.
-                                # Se esgotar tentativas: failed_count++ + continue (próximo lead).
-                                # A campanha NÃO PARA.
-                                # ──────────────────────────────────────────────────────────────────
-                                RETRYABLE_KEYWORDS = [
-                                    # 429 Too Many Requests — FloodWait explícito do Telegram
-                                    'too many requests',
-                                    'retry_after',
-                                    'flood',
-                                    # 5xx — Erros do lado do servidor Telegram (instabilidade)
-                                    '500',
-                                    '502',
-                                    '503',
-                                    '504',
-                                    'bad gateway',
-                                    'service unavailable',
-                                    'gateway timeout',
-                                    'internal server error',
-                                    # Erros de rede/transporte (requests library)
-                                    'connection',
-                                    'timeout',
-                                    'timed out',
-                                    'network',
-                                    'remotedisconnected',
-                                    'connectionreset',
-                                    'connectionrefused',
-                                    # 400 temporários/ambíguos que podem ser retentados
-                                    'migrate_to_chat_id',               # Chat migrou — pode ser retentado com novo ID
-                                    'retry',
-                                ]
-
-                                is_retryable = any(kw in error_str for kw in RETRYABLE_KEYWORDS)
-
-                                # ══════════════════════════════════════════════════════════════════
-                                # ROTEADOR DE BUCKETS — Prioridade: BOT_FATAL > USER_FATAL > RETRYABLE
-                                # ══════════════════════════════════════════════════════════════════
-
-                                if is_bot_fatal:
-                                    # ── BUCKET 3: BOT_FATAL ────────────────────────────────────────
-                                    logger.error(
-                                        f"🚨 [BOT_FATAL] Token morto/revogado para bot_id={bot_id}. "
-                                        f"Motivo: '{send_error}'. Encerrando campanha deste bot."
-                                    )
-                                    bot_is_dead = True
-                                    db.session.query(Bot).filter(Bot.id == bot_id).update({
-                                        'is_active': False,
-                                        'last_error': f"[BOT_FATAL] Desativado automaticamente: {str(send_error)[:200]}"
-                                    })
-                                    db.session.commit()
-                                    break  # ← Sai do for attempt (loop de tentativas)
-
-                                elif is_user_fatal:
-                                    # ── BUCKET 1: USER_FATAL ───────────────────────────────────────
-                                    logger.info(
-                                        f"🚫 [USER_FATAL] Lead {lead.telegram_user_id} inválido/bloqueado. "
-                                        f"Motivo: '{send_error}'. Adicionando à blacklist."
-                                    )
-                                    redis_conn.sadd(blacklist_key, str(lead.telegram_user_id))
-                                    lead.unsubscribed = True
-                                    lead.inactive = True
                                     failed_count += 1
-                                    # ✅ Removido db.session.commit() - aguarda checkpoint incremental (a cada 20 leads)
-                                    break  # ← Sai do for attempt; próximo lead via continue externo
+                                    logger.warning(f" [SILENT_FAIL] Falha silenciosa para {lead.telegram_user_id}")
+                                    break
 
-                                elif is_retryable:
-                                    # ── BUCKET 2: RETRYABLE ────────────────────────────────────────
-                                    # ✅ Correção SRE: Extrair retry_after via Regex (não hasattr)
-                                    retry_after_secs = None
-                                    match = re.search(r'retry[_\s]after[=\s]*(\d+)', error_str)
-                                    if match:
-                                        retry_after_secs = int(match.group(1))
-                                    
-                                    if retry_after_secs:
-                                        sleep_time = int(retry_after_secs) + 1  # +1s de margem de segurança
-                                        logger.warning(
-                                            f"⏸️ [RETRYABLE/FLOODWAIT] Lead {lead.telegram_user_id}, "
-                                            f"tentativa {attempt + 1}/3. "
-                                            f"Telegram pediu {retry_after_secs}s. Aguardando {sleep_time}s."
-                                        )
-                                    else:
-                                        # Exponential Backoff: 5s, 15s, 45s para tentativas 1, 2, 3
-                                        sleep_time = (3 ** attempt) * 5
-                                        logger.warning(
-                                            f"⏸️ [RETRYABLE/BACKOFF] Lead {lead.telegram_user_id}, "
-                                            f"tentativa {attempt + 1}/3. "
-                                            f"Erro: '{send_error}'. Backoff: {sleep_time}s."
-                                        )
-                                    
-                                    time.sleep(sleep_time)
+                            # TRATAMENTO DE EXCEÇÕES
+                            except requests.exceptions.Timeout as timeout_err:
+                                # NETWORK TIMEOUT HANDLING: Aguardar 10s e tentar novamente
+                                logger.warning(f" [NETWORK TIMEOUT] Timeout na tentativa {attempt + 1}/3. Aguardando 10s...")
+                                time.sleep(10)
+                                if attempt == 2:
+                                    logger.error(f" [NETWORK TIMEOUT] Esgotadas 3 tentativas para {lead.telegram_user_id}")
+                                continue
 
-                                    if attempt >= 2:  # Última tentativa (0, 1, 2)
-                                        # Esgotou todas as tentativas — falha do lead, campanha continua
-                                        logger.error(
-                                            f"❌ [RETRYABLE_EXHAUSTED] Lead {lead.telegram_user_id} esgotou "
-                                            f"3 tentativas. Contabilizando como falha."
-                                        )
-                                        failed_count += 1
-                                        # Não adiciona à blacklist — é erro temporário, não permanente
-                                    # continue implícito: o loop de `attempt` segue para a próxima tentativa
-
-                                else:
-                                    # ── BUCKET FALLBACK: UNKNOWN ────────────────────────────────────
-                                    # Erro não mapeado — trata como RETRYABLE conservador para não matar campanha
-                                    sleep_time = (3 ** attempt) * 5
-                                    logger.warning(
-                                        f"⚠️ [UNKNOWN_ERROR] Lead {lead.telegram_user_id}, "
-                                        f"tentativa {attempt + 1}/3. "
-                                        f"Erro não classificado: '{send_error}'. "
-                                        f"Tratando como RETRYABLE. Backoff: {sleep_time}s."
-                                    )
-                                    time.sleep(sleep_time)
-
-                                    if attempt >= 2:  # Última tentativa
-                                        logger.error(
-                                            f"❌ [UNKNOWN_EXHAUSTED] Lead {lead.telegram_user_id} esgotou tentativas "
-                                            f"em erro desconhecido. Contabilizando como falha."
-                                        )
-                                        failed_count += 1
-                        
-                        # ✅ TRAVA DE SEGURANÇA SRE: Abortar lote se bot morreu
+                            except Exception as send_error:
+                                # Erros gerais de envio (ex: Telegram API retornou erro 4xx, 5xx)
+                                error_str = str(send_error).lower()
+                                logger.error(f" [SEND_ERROR] Erro geral ao enviar para {lead.telegram_user_id}: {send_error}")
+                                failed_count += 1
+                                break
+                            
+                        # TRAVA DE SEGURANÇA SRE: Abortar lote se bot morreu
                         if bot_is_dead:
                             break  # ← Este break sai do 'for lead in batch'
                         
+                        # CHECKPOINT INCREMENTAL: Atualizar dashboard a cada 20 leads
                         # ✅ CHECKPOINT INCREMENTAL: Atualizar dashboard a cada 20 leads
                         processed_in_batch += 1
                         if not lead_sent and not bot_is_dead:
