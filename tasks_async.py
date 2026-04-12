@@ -840,6 +840,12 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
     from bot_manager import BotManager
     from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
     
+    # LAZY IMPORT DA INSTÂNCIA FLASK PARA EVITAR CIRCULAR IMPORTS
+    try:
+        from wsgi import app
+    except ImportError:
+        from app import app
+    
     job_id = f"{bot_id}_{datetime.utcnow().timestamp()}"
     logger.critical(f"?? [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
     
