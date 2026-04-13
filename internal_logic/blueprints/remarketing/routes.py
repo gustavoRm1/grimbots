@@ -582,7 +582,12 @@ def create_general_remarketing():
             'target_audience': data.get('audience_segment', 'all_users'),
             'days_since_last_contact': data.get('days_since_last_contact', 0),
             'status': 'queued',
-            'group_id': group_id
+            'group_id': group_id,
+            # FIX: Adicionando os campos de mídia perdidos
+            'media_url': data.get('media_url'),
+            'media_type': data.get('media_type', 'video'),
+            'audio_enabled': data.get('audio_enabled', False),
+            'audio_url': data.get('audio_url')
         }
 
         valid_bot_ids = [b.id for b in Bot.query.filter_by(user_id=current_user.id).all()]
