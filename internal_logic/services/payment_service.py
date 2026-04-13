@@ -140,6 +140,10 @@ class GatewayFactory:
                 credentials['api_key'] = gateway_config.api_key
             if hasattr(gateway_config, 'secret_key') and gateway_config.secret_key:
                 credentials['secret_key'] = gateway_config.secret_key
+            if hasattr(gateway_config, 'client_id') and gateway_config.client_id:
+                credentials['client_id'] = gateway_config.client_id
+            if hasattr(gateway_config, 'client_secret') and gateway_config.client_secret:
+                credentials['client_secret'] = gateway_config.client_secret
             if hasattr(gateway_config, 'product_hash') and gateway_config.product_hash:
                 credentials['product_hash'] = gateway_config.product_hash
             if hasattr(gateway_config, 'offer_hash') and gateway_config.offer_hash:
@@ -154,24 +158,33 @@ class GatewayFactory:
                 credentials['split_percentage'] = gateway_config.split_percentage
             
             # Instanciar gateway baseado no tipo
-            if gateway_type == 'paradise':
-                gateway_instance = gateway_class(credentials)
-            elif gateway_type == 'aguia' or gateway_type == 'aguiapags':
-                api_key = credentials.get('api_key', '')
-                gateway_instance = gateway_class(api_key=api_key, sandbox=True)
-            elif gateway_type == 'bolt':
-                api_key = credentials.get('api_key', '')
-                company_id = credentials.get('company_id', '')
-                gateway_instance = gateway_class(api_key=api_key, company_id=company_id)
-            elif gateway_type == 'wiinpay':
-                api_key = credentials.get('api_key', '')
-                split_user_id = credentials.get('split_user_id')
-                split_percentage = credentials.get('split_percentage')
-                gateway_instance = gateway_class(api_key=api_key, split_user_id=split_user_id, split_percentage=split_percentage)
+            if gateway_type == 'syncpay':
+                # ROTA ISOLADA APENAS PARA SYNCPAY
+                gateway_instance = gateway_class(
+                    client_id=credentials.get('client_id'),
+                    client_secret=credentials.get('client_secret')
+                )
             else:
-                # Para outros gateways, tentar passar apenas api_key
-                api_key = credentials.get('api_key', '')
-                gateway_instance = gateway_class(api_key=api_key)
+                # ROTA LEGADA (INTOCADA) PARA PARADISE, HOOPAY, ETC
+                # Mantém EXATAMENTE o código que já existia
+                if gateway_type == 'paradise':
+                    gateway_instance = gateway_class(credentials)
+                elif gateway_type == 'aguia' or gateway_type == 'aguiapags':
+                    api_key = credentials.get('api_key', '')
+                    gateway_instance = gateway_class(api_key=api_key, sandbox=True)
+                elif gateway_type == 'bolt':
+                    api_key = credentials.get('api_key', '')
+                    company_id = credentials.get('company_id', '')
+                    gateway_instance = gateway_class(api_key=api_key, company_id=company_id)
+                elif gateway_type == 'wiinpay':
+                    api_key = credentials.get('api_key', '')
+                    split_user_id = credentials.get('split_user_id')
+                    split_percentage = credentials.get('split_percentage')
+                    gateway_instance = gateway_class(api_key=api_key, split_user_id=split_user_id, split_percentage=split_percentage)
+                else:
+                    # Para outros gateways, tentar passar apenas api_key
+                    api_key = credentials.get('api_key', '')
+                    gateway_instance = gateway_class(api_key=api_key)
             
             logger.info(f"GatewayFactory: Criado {gateway_class.__name__} para {gateway_type}")
             return gateway_instance
