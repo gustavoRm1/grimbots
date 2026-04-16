@@ -2775,12 +2775,19 @@ def api_create_gateway():
         except Exception as reload_error:
             logger.error(f"Erro ao recarregar bots: {reload_error}")
         
-        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict()
+        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict() + error key para compatibilidade
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'error': gateway.last_error or 'Falha na verificação da API',
+                'gateway': gateway.to_dict()
+            }), 400
+        
         return jsonify({
-            'success': is_valid,
+            'success': True,
             'gateway': gateway.to_dict(),
-            'message': 'Gateway configurado com sucesso' if is_valid else 'Falha na verificação da API'
-        }), 200 if is_valid else 400
+            'message': 'Gateway configurado com sucesso'
+        }), 200
         
     except Exception as e:
         db.session.rollback()
@@ -2883,12 +2890,19 @@ def api_update_gateway(gateway_id):
         except Exception as reload_error:
             logger.error(f"Erro ao recarregar bots: {reload_error}")
         
-        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict()
+        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict() + error key para compatibilidade
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'error': gateway.last_error or 'Falha na verificação da API',
+                'gateway': gateway.to_dict()
+            }), 400
+        
         return jsonify({
-            'success': is_valid,
+            'success': True,
             'gateway': gateway.to_dict(),
-            'message': 'Gateway atualizado com sucesso' if is_valid else 'Falha na verificação da API'
-        }), 200 if is_valid else 400
+            'message': 'Gateway atualizado com sucesso'
+        }), 200
         
     except Exception as e:
         db.session.rollback()

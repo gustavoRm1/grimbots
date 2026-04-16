@@ -2387,11 +2387,22 @@ function settingsApp() {
         async saveGateway(type) {
             this.loading = true;
             try {
-                const payload = { gateway_type: type, ...this.gateways[type] };
-                // ✅ Remover split_user_id do payload para WiinPay (configuração interna, não editável pelo usuário)
-                if (type === 'wiinpay' && payload.split_user_id) {
-                    delete payload.split_user_id;
-                }
+                // ✅ DEVOLVER CAMPOS ESPECÍFICOS: Explicitar payload completo com hashes da Paradise
+                const payload = {
+                    gateway_type: type,
+                    api_key: this.gateways[type].api_key || '',
+                    client_id: this.gateways[type].client_id || '',
+                    client_secret: this.gateways[type].client_secret || '',
+                    product_hash: this.gateways[type].product_hash || '',
+                    offer_hash: this.gateways[type].offer_hash || '',
+                    store_id: this.gateways[type].store_id || ''
+                };
+                // ✅ Remover campos vazios para não enviar lixo
+                Object.keys(payload).forEach(key => {
+                    if (payload[key] === '' && key !== 'gateway_type') {
+                        delete payload[key];
+                    }
+                });
                 const response = await fetch('/api/gateways', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
