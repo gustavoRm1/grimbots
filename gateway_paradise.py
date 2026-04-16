@@ -547,6 +547,9 @@ class ParadisePaymentGateway(PaymentGateway):
                     if response.status_code == 400 and attempt == 0:
                         try:
                             error_data = response.json()
+                            # FIX: Check if error_data is None before calling .get()
+                            if error_data is None:
+                                error_data = {}
                             error_message = error_data.get('message', 'Erro desconhecido')
                             acquirer = error_data.get('acquirer', 'N/A')
                             
@@ -645,10 +648,24 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.error(f"❌ Paradise API Error: {response.status_code}")
                 logger.error(f"❌ Response: {response.text}")
                 
+                # ✅ TRATAMENTO ESPECÍFICO PARA ERRO 401 (API Key inválida)
+                if response.status_code == 401:
+                    try:
+                        error_data = response.json() or {}
+                        error_message = error_data.get('error', 'API Key inválida ou loja inativa')
+                    except:
+                        error_message = 'API Key inválida ou loja inativa'
+                    logger.error(f"❌ Paradise 401: {error_message}")
+                    # Retornar None com log claro - o chamador deve tratar como erro de credenciais
+                    return None
+                
                 # ✅ DIAGNÓSTICO DETALHADO PARA ERRO 400
                 if response.status_code == 400:
                     try:
                         error_data = response.json()
+                        # FIX: Check if error_data is None before calling .get()
+                        if error_data is None:
+                            error_data = {}
                         error_message = error_data.get('message', 'Erro desconhecido')
                         acquirer = error_data.get('acquirer', 'N/A')
                         
@@ -712,6 +729,12 @@ class ParadisePaymentGateway(PaymentGateway):
                 data = response.json()
             except ValueError as e:
                 logger.error(f"❌ Paradise: Resposta não é JSON válido: {e}")
+                logger.error(f"❌ Response body: {response.text}")
+                return None
+            
+            # FIX: Check if data is None before proceeding
+            if data is None:
+                logger.error(f"❌ Paradise: Resposta JSON é None (corpo vazio ou inválido)")
                 logger.error(f"❌ Response body: {response.text}")
                 return None
             
