@@ -2399,7 +2399,18 @@ function settingsApp() {
                 });
                 const data = await response.json();
                 if (response.ok) {
-                    this.showNotification(`Gateway ${type} configurado!`);
+                    this.showNotification(`Gateway ${type.toUpperCase()} configurado e ativado!`);
+                    
+                    // ✅ REATIVIDADE INSTANTÂNEA: Atualizar gatewaysList localmente
+                    if (data.gateway) {
+                        const newGateway = data.gateway;
+                        // Desativar todos os gateways localmente (o novo será o único ativo)
+                        this.gatewaysList.forEach(g => g.is_active = false);
+                        
+                        // Adicionar novo gateway
+                        this.gatewaysList.push(newGateway);
+                    }
+                    
                     await this.loadGateways();
                     // Limpar formulário (resetar para valores padrão)
                     if (type === 'syncpay') {
@@ -2447,6 +2458,29 @@ function settingsApp() {
                 const data = await response.json();
                 if (response.ok) {
                     this.showNotification(`✅ Credenciais do ${type.toUpperCase()} atualizadas e gateway ativado!`);
+                    
+                    // ✅ REATIVIDADE INSTANTÂNEA: Atualizar gatewaysList localmente
+                    // sem esperar pelo reload completo, para o visor reagir imediatamente
+                    if (data.gateway) {
+                        const updatedGateway = data.gateway;
+                        const existingIndex = this.gatewaysList.findIndex(g => g.id === updatedGateway.id);
+                        if (existingIndex >= 0) {
+                            // Atualizar gateway existente
+                            this.gatewaysList[existingIndex] = { ...this.gatewaysList[existingIndex], ...updatedGateway };
+                        } else {
+                            // Adicionar novo gateway
+                            this.gatewaysList.push(updatedGateway);
+                        }
+                        
+                        // Desativar outros gateways localmente (regra: apenas 1 ativo)
+                        this.gatewaysList.forEach(g => {
+                            if (g.id !== updatedGateway.id) {
+                                g.is_active = false;
+                            }
+                        });
+                    }
+                    
+                    // Recarregar do servidor para garantir sincronia
                     await this.loadGateways();
                     this.editGateway = {};
                     this.editMode = false;

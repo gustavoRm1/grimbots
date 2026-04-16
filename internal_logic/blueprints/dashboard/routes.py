@@ -2944,6 +2944,18 @@ def api_update_gateway(gateway_id):
             gateway.is_active = True
             gateway.is_verified = True
         
+        # ✅ REGRA DE NEGÓCIO: Apenas 1 gateway ativo por vez
+        # Desativar todos os outros gateways do usuário
+        other_active_gateways = Gateway.query.filter(
+            Gateway.user_id == current_user.id,
+            Gateway.id != gateway_id,
+            Gateway.is_active == True
+        ).all()
+        
+        for other_gateway in other_active_gateways:
+            other_gateway.is_active = False
+            logger.info(f"   🔄 Desativado gateway {other_gateway.gateway_type} (ID: {other_gateway.id}) - apenas 1 ativo permitido")
+        
         db.session.commit()
         
         logger.info(f"✅ Gateway {gateway.gateway_type} atualizado e ativado (ID: {gateway_id})")
