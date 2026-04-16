@@ -3,6 +3,7 @@ Extensions - Instâncias Flask sem aplicação vinculada (Application Factory Pa
 Todas as extensões são inicializadas aqui sem o app, depois vinculadas via init_app()
 """
 
+import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
@@ -11,6 +12,8 @@ from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 import os
 from flask_limiter.util import get_remote_address
+
+logger = logging.getLogger(__name__)
 
 # Instâncias vazias — serão inicializadas via init_app() dentro de create_app()
 db = SQLAlchemy()

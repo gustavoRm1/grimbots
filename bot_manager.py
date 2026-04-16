@@ -9543,11 +9543,15 @@ Seu pagamento ainda não foi confirmado.
             True se credenciais forem válidas
         """
         try:
-            # Criar instância do gateway via Factory
-            payment_gateway = GatewayFactory.create_gateway(
-                gateway_type=gateway_type,
-                credentials=credentials
-            )
+            # ✅ BLINDAGEM: Factory pode falhar com dados corrompidos/None
+            try:
+                payment_gateway = GatewayFactory.create_gateway(
+                    gateway_type=gateway_type,
+                    credentials=credentials
+                )
+            except Exception as factory_error:
+                logger.warning(f"❌ Falha ao inicializar Factory para {gateway_type} (Possível dado corrompido): {factory_error}")
+                return False
             
             if not payment_gateway:
                 logger.error(f"❌ Erro ao criar gateway {gateway_type} para verificação")
