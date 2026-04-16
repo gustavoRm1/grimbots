@@ -2657,10 +2657,16 @@ def api_get_gateways():
         
         gateways_data = []
         for gateway in gateways:
-            # Mascarar credenciais para segurança no frontend
+            # FIX: Handle decryption errors gracefully - return empty strings on failure
             api_key_masked = None
-            if gateway.api_key:
-                api_key_masked = f"****{gateway.api_key[-4:]}" if len(gateway.api_key) > 4 else "****"
+            try:
+                if gateway.api_key:
+                    api_key_masked = f"****{gateway.api_key[-4:]}" if len(gateway.api_key) > 4 else "****"
+            except Exception as decrypt_error:
+                # Log warning but keep gateway in list with empty credentials
+                logger.warning(f"⚠️ Erro de descriptografia no gateway {gateway.id} ({gateway.gateway_type}): {decrypt_error}")
+                logger.warning(f"   O gateway será exibido para reconfiguração em /settings")
+                api_key_masked = None
             
             gateways_data.append({
                 'id': gateway.id,
@@ -2770,13 +2776,40 @@ def api_delete_gateway(gateway_id):
     try:
         db.session.delete(gateway)
         db.session.commit()
-        
-        logger.info(f"Gateway deletado: {gateway_id} por {current_user.email}")
-        return jsonify({'success': True, 'message': 'Gateway deletado com sucesso'})
+        return jsonify({'success': True, 'message': 'Gateway removido com sucesso'})
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao deletar gateway: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/gateways/<int:gateway_id>/clear-credentials', methods=['POST', 'DELETE'])
+@login_required
+@csrf.exempt
+def clear_gateway_credentials(gateway_id):
+    """Limpa as credenciais de um gateway (mantém o registro, apenas apaga os dados sensíveis)"""
+    gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        # Limpar todas as credenciais sensíveis
+        gateway.client_id = None
+        gateway.client_secret = None
+        gateway.api_key = None
+        gateway.api_token = None
+        gateway.offer_hash = None
+        gateway.product_hash = None
+        gateway.company_id = None
+        gateway.split_user_id = None
+        gateway.webhook_secret = None
+        gateway.is_active = False
+        gateway.is_verified = False
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Credenciais apagadas com sucesso'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao limpar credenciais do gateway {gateway_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 

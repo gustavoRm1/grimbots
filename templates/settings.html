@@ -2221,6 +2221,25 @@ function settingsApp() {
     return {
         activeTab: 'profile',
         loading: false,
+        
+        // FIX: Ensure gateways object has all required properties with fallbacks
+        initGateways() {
+            if (!this.gateways) this.gateways = {};
+            
+            // List of all gateway types that need default structure
+            const gatewayTypes = ['orionpay', 'pushynpay', 'paradise', 'aguia', 'wiinpay', 'atomopay', 'syncpay', 'umbrellapag', 'babylon', 'bolt'];
+            
+            gatewayTypes.forEach(type => {
+                if (!this.gateways[type]) {
+                    this.gateways[type] = { api_key: '', client_id: '', client_secret: '' };
+                } else {
+                    // Ensure all required fields exist
+                    if (!this.gateways[type].api_key) this.gateways[type].api_key = '';
+                    if (!this.gateways[type].client_id) this.gateways[type].client_id = '';
+                    if (!this.gateways[type].client_secret) this.gateways[type].client_secret = '';
+                }
+            });
+        },
         profile: {
             full_name: '{{ current_user.full_name or "" }}',
             email: '{{ current_user.email }}',
@@ -2254,12 +2273,14 @@ function settingsApp() {
         serviceWorkerRegistration: null,
 
         async init() {
+            this.initGateways();
             await this.loadGateways();
             await this.loadNotificationSettings();
             await this.checkPushSubscriptionStatus();
             await this.initPWA();
         },
 
+        // QI 500: Copiar URL do webhook específico
         // ✅ QI 500: Copiar URL do webhook específico
         copyWebhookUrlSpecific(gatewayType) {
             const inputId = `webhook-url-input-${gatewayType}`;
