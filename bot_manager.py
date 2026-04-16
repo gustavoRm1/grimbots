@@ -7978,6 +7978,12 @@ Seu pagamento ainda não foi confirmado.
             redirect_id = None
             meta_pixel_id = None
             tracking_token = None
+            
+            # FIX: Initialize lock variables BEFORE try block to avoid UnboundLocalError in finally
+            lock_acquired = False
+            lock_key = None
+            redis_conn = None
+            
             try:
                 # Importar models dentro da função para evitar circular import
                 from internal_logic.core.models import Bot, Gateway, Payment
