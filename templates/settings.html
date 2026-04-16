@@ -2446,15 +2446,19 @@ function settingsApp() {
                 });
                 const data = await response.json();
                 if (response.ok) {
-                    this.showNotification(`Credenciais do ${type.toUpperCase()} atualizadas!`);
+                    this.showNotification(`✅ Credenciais do ${type.toUpperCase()} atualizadas e gateway ativado!`);
                     await this.loadGateways();
                     this.editGateway = {};
                     this.editMode = false;
                 } else {
-                    alert('Erro: ' + data.error);
+                    // ✅ EXIBIR ERRO ESPECÍFICO DO BACKEND (ex: 401 API Key inválida)
+                    const errorMsg = data.error || 'Erro ao salvar credenciais';
+                    this.showNotification(`❌ ${errorMsg}`, 'error');
+                    console.error(`Gateway update failed (${response.status}):`, errorMsg);
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                this.showNotification(`❌ Erro de conexão: ${error.message}`, 'error');
+                console.error('Gateway update error:', error);
             } finally {
                 this.loading = false;
             }
@@ -2487,12 +2491,14 @@ function settingsApp() {
             }
         },
 
-        showNotification(message) {
+        showNotification(message, type = 'success') {
             const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold bg-green-500';
-            notification.textContent = '✅ ' + message;
+            const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
+            const icon = type === 'error' ? '❌' : '✅';
+            notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold ${bgColor}`;
+            notification.textContent = icon + ' ' + message;
             document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
+            setTimeout(() => notification.remove(), 5000);  // Error messages stay longer
         },
 
         // Carregar configurações de notificações

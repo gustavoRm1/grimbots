@@ -16,6 +16,7 @@ from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 import logging
 import os
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -2782,6 +2783,186 @@ def api_delete_gateway(gateway_id):
         db.session.rollback()
         logger.error(f"Erro ao deletar gateway: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/gateways/<int:gateway_id>', methods=['PUT'])
+@login_required
+@csrf.exempt
+def api_update_gateway(gateway_id):
+    """
+    Atualiza credenciais de um gateway e ativa se as credenciais forem válidas.
+    
+    Para Paradise: faz verificação de credenciais via API e retorna erro 401 se inválidas.
+    """
+    gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+    data = request.get_json()
+    
+    try:
+        # Atualizar campos básicos
+        api_key = data.get('api_key', '').strip()
+        client_secret = data.get('client_secret', '').strip()
+        store_id = data.get('store_id', '').strip()
+        product_hash = data.get('product_hash', '').strip()
+        offer_hash = data.get('offer_hash', '').strip()
+        
+        # Atualizar credenciais (serão criptografadas automaticamente)
+        if api_key:
+            gateway.api_key = api_key
+        if client_secret:
+            gateway.client_secret = client_secret
+        if store_id:
+            gateway.store_id = store_id
+        
+        # Campos específicos por gateway
+        if gateway.gateway_type == 'paradise':
+            if product_hash:
+                gateway._product_hash = product_hash
+            if offer_hash:
+                gateway._offer_hash = offer_hash
+            
+            # ✅ VERIFICAÇÃO DE CREDENCIAIS PARADISE
+            logger.info(f"🔍 Verificando credenciais Paradise (Gateway ID: {gateway_id})")
+            
+            try:
+                # Importar e criar instância do gateway Paradise
+                from gateway_paradise import ParadisePaymentGateway
+                
+                # Obter credenciais descriptografadas para teste
+                test_api_key = api_key or gateway.api_key
+                test_product_hash = product_hash or gateway.product_hash
+                test_store_id = store_id or gateway.store_id
+                
+                logger.info(f"   - API Key length: {len(test_api_key) if test_api_key else 0}")
+                logger.info(f"   - Product Hash: {test_product_hash[:20] if test_product_hash else 'N/A'}...")
+                logger.info(f"   - Store ID: {test_store_id}")
+                
+                # Criar instância para teste
+                test_gateway = ParadisePaymentGateway(credentials={
+                    'api_key': test_api_key,
+                    'product_hash': test_product_hash,
+                    'offer_hash': offer_hash or gateway.offer_hash or '',
+                    'store_id': test_store_id,
+                    'split_percentage': gateway.split_percentage or 2.0
+                })
+                
+                # Verificar formato das credenciais
+                if not test_gateway.verify_credentials():
+                    logger.error(f"❌ Paradise: Formato das credenciais inválido")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Formato das credenciais inválido. Verifique API Key e Product Hash.'
+                    }), 400
+                
+                # ✅ TESTE REAL VIA API: Fazer requisição de teste
+                test_url = 'https://multi.paradisepags.com/api/v1/transaction.php'
+                test_headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-API-Key': test_api_key
+                }
+                # Payload mínimo para teste (valor muito baixo que será rejeitado mas valida auth)
+                test_payload = {
+                    'amount': 100,  # R$ 1,00
+                    'description': 'Teste de validação',
+                    'reference': f'test-validation-{gateway_id}',
+                    'productHash': test_product_hash,
+                    'checkoutUrl': 'https://example.com/test',
+                    'webhookUrl': 'https://example.com/webhook',
+                    'customer': {
+                        'name': 'Teste Validação',
+                        'email': 'teste@teste.com',
+                        'phone': '11999999999',
+                        'document': '56657477007'
+                    }
+                }
+                
+                logger.info(f"   🧪 Enviando requisição de teste para Paradise...")
+                test_response = requests.post(test_url, json=test_payload, headers=test_headers, timeout=10)
+                
+                logger.info(f"   📡 Resposta do teste: Status {test_response.status_code}")
+                
+                # ✅ TRATAMENTO ESPECÍFICO DO ERRO 401
+                if test_response.status_code == 401:
+                    try:
+                        error_json = test_response.json() or {}
+                        error_message = error_json.get('error', 'API Key inválida ou loja inativa')
+                    except Exception:
+                        error_message = 'API Key inválida ou loja inativa'
+                    
+                    logger.error(f"❌ Paradise 401: {error_message}")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Credenciais inválidas: {error_message}. Verifique sua API Key no painel da Paradise.'
+                    }), 401
+                
+                # Se retornar 400, é normal (dados de teste inválidos) - significa que auth funcionou
+                # Se retornar 200, é sucesso total
+                # Se retornar 401, é falha de autenticação
+                if test_response.status_code in [200, 400]:
+                    logger.info(f"✅ Paradise: Credenciais válidas! Status: {test_response.status_code}")
+                    gateway.is_active = True
+                    gateway.is_verified = True
+                else:
+                    # Outros erros (500, etc) - logar mas não ativar
+                    logger.warning(f"⚠️ Paradise: Status inesperado no teste: {test_response.status_code}")
+                    logger.warning(f"   Response: {test_response.text[:200]}")
+                    # Não ativar em caso de erro de servidor
+                    return jsonify({
+                        'success': False,
+                        'error': f'Erro ao verificar credenciais (HTTP {test_response.status_code}). Tente novamente.'
+                    }), 502
+                    
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar credenciais Paradise: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': f'Erro ao verificar credenciais: {str(e)}'
+                }), 500
+        
+        elif gateway.gateway_type == 'wiinpay':
+            # WiinPay não requer validação complexa
+            gateway.is_active = True
+            gateway.is_verified = True
+            
+        elif gateway.gateway_type == 'pushynpay':
+            # PushynPay não requer validação complexa
+            gateway.is_active = True
+            gateway.is_verified = True
+            
+        elif gateway.gateway_type == 'syncpay':
+            # SyncPay não requer validação complexa
+            gateway.is_active = True
+            gateway.is_verified = True
+            
+        elif gateway.gateway_type == 'atomopay':
+            # Átomo Pay não requer validação complexa
+            gateway.is_active = True
+            gateway.is_verified = True
+            
+        else:
+            # Outros gateways: ativar por padrão
+            gateway.is_active = True
+            gateway.is_verified = True
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Gateway {gateway.gateway_type} atualizado e ativado (ID: {gateway_id})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Gateway {gateway.gateway_type.upper()} ativado com sucesso!',
+            'gateway': {
+                'id': gateway.id,
+                'gateway_type': gateway.gateway_type,
+                'is_active': gateway.is_active,
+                'is_verified': gateway.is_verified
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar gateway {gateway_id}: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @dashboard_bp.route('/api/gateways/<int:gateway_id>/clear-credentials', methods=['POST', 'DELETE'])
