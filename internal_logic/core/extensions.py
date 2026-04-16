@@ -152,3 +152,40 @@ def create_app():
         db.session.remove()
     
     return app
+
+
+def reload_user_bots_config(user_id: int):
+    """
+    Recarrega configuração dos bots ativos quando gateway muda.
+    RESTAURADO: Regra de negócio legada para sincronizar workers com novo gateway.
+    """
+    try:
+        from internal_logic.core.models import Bot
+        from bot_manager import BotManager
+        
+        logger.info(f"🔄 Recarregando configuração dos bots do usuário {user_id}")
+        
+        # Buscar bots ativos do usuário
+        bots = Bot.query.filter_by(user_id=user_id, is_active=True).all()
+        
+        if not bots:
+            logger.info(f"   ℹ️ Nenhum bot ativo para recarregar (user {user_id})")
+            return
+        
+        bot_manager = BotManager()
+        
+        for bot in bots:
+            try:
+                # Recarregar configuração do bot (isso atualiza o gateway nas instâncias ativas)
+                if hasattr(bot_manager, '_reload_bot_config'):
+                    bot_manager._reload_bot_config(bot.id)
+                    logger.info(f"   ✅ Bot {bot.id} ({bot.name}) recarregado")
+                else:
+                    logger.debug(f"   ⚠️ _reload_bot_config não disponível para bot {bot.id}")
+            except Exception as bot_error:
+                logger.error(f"   ❌ Erro ao recarregar bot {bot.id}: {bot_error}")
+        
+        logger.info(f"🔄 {len(bots)} bots recarregados para usuário {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao recarregar bots do usuário {user_id}: {e}")

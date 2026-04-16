@@ -2695,7 +2695,7 @@ def api_get_gateways():
 @login_required
 @csrf.exempt
 def api_create_gateway():
-    """Cria um novo gateway de pagamento"""
+    """Cria um novo gateway de pagamento com validação oficial e reload de workers"""
     data = request.get_json()
     
     gateway_type = data.get('gateway_type', '').strip().lower()
@@ -2712,7 +2712,7 @@ def api_create_gateway():
             user_id=current_user.id,
             gateway_type=gateway_type,
             store_id=store_id,
-            is_active=True,  # Novo gateway começa ativo
+            is_active=False,  # Só ativa após verificação
             is_verified=False,
             split_percentage=2.0  # Padrão 2%
         )
@@ -2734,37 +2734,58 @@ def api_create_gateway():
         elif gateway_type == 'atomo':
             gateway.producer_hash = data.get('producer_hash', '').strip()
         
-        # REGRA DE NEGÓCIO: Desativar outros gateways do usuário
-        # (apenas 1 gateway ativo por vez)
-        existing_gateways = Gateway.query.filter_by(
-            user_id=current_user.id, 
-            is_active=True
-        ).all()
-        
-        for existing in existing_gateways:
-            existing.is_active = False
+        # ✅ REGRA 1: MONOPÓLIO - Desativar outros gateways do usuário
+        Gateway.query.filter(
+            Gateway.user_id == current_user.id,
+            Gateway.id != gateway.id
+        ).update({'is_active': False})
         
         db.session.add(gateway)
         db.session.commit()
         
-        logger.info(f"Gateway criado: {gateway_type} (ID: {gateway.id}) por {current_user.email}")
+        # ✅ REGRA 2: TESTE REAL DA API via bot_manager
+        from bot_manager import BotManager
+        bot_manager = BotManager()
         
+        credentials = {
+            'api_key': gateway.api_key,
+            'client_secret': gateway.client_secret,
+            'product_hash': gateway.product_hash,
+            'offer_hash': gateway.offer_hash,
+            'store_id': gateway.store_id,
+            'producer_hash': gateway.producer_hash,
+            'organization_id': gateway.organization_id,
+            'split_user_id': gateway.split_user_id
+        }
+        
+        is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
+        gateway.is_verified = is_valid
+        gateway.is_active = is_valid
+        gateway.last_error = None if is_valid else 'Credenciais inválidas na verificação oficial'
+        
+        db.session.commit()
+        
+        logger.info(f"Gateway criado e verificado: {gateway_type} (ID: {gateway.id}, Válido: {is_valid}) por {current_user.email}")
+        
+        # ✅ REGRA 3: RECARREGAR WORKERS
+        try:
+            from internal_logic.core.extensions import reload_user_bots_config
+            reload_user_bots_config(current_user.id)
+            logger.info(f"Bots recarregados para usuário {current_user.id}")
+        except Exception as reload_error:
+            logger.error(f"Erro ao recarregar bots: {reload_error}")
+        
+        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict()
         return jsonify({
-            'success': True,
-            'gateway': {
-                'id': gateway.id,
-                'gateway_type': gateway.gateway_type,
-                'store_id': gateway.store_id,
-                'is_active': gateway.is_active,
-                'is_verified': gateway.is_verified,
-                'created_at': gateway.created_at.isoformat() if gateway.created_at else None
-            }
-        }), 201
+            'success': is_valid,
+            'gateway': gateway.to_dict(),
+            'message': 'Gateway configurado com sucesso' if is_valid else 'Falha na verificação da API'
+        }), 200 if is_valid else 400
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao criar gateway: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Erro ao criar gateway: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @dashboard_bp.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
@@ -2790,9 +2811,8 @@ def api_delete_gateway(gateway_id):
 @csrf.exempt
 def api_update_gateway(gateway_id):
     """
-    Atualiza credenciais de um gateway e ativa se as credenciais forem válidas.
-    
-    Para Paradise: faz verificação de credenciais via API e retorna erro 401 se inválidas.
+    Atualiza credenciais de um gateway e ativa via verificação oficial do bot_manager.
+    RESTAURADO: 4 regras de negócio legadas (monopoly, API test, worker reload, to_dict)
     """
     gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
     data = request.get_json()
@@ -2819,157 +2839,56 @@ def api_update_gateway(gateway_id):
                 gateway._product_hash = product_hash
             if offer_hash:
                 gateway._offer_hash = offer_hash
-            
-            # ✅ VERIFICAÇÃO DE CREDENCIAIS PARADISE
-            logger.info(f"🔍 Verificando credenciais Paradise (Gateway ID: {gateway_id})")
-            
-            try:
-                # Importar e criar instância do gateway Paradise
-                from gateway_paradise import ParadisePaymentGateway
-                
-                # Obter credenciais descriptografadas para teste
-                test_api_key = api_key or gateway.api_key
-                test_product_hash = product_hash or gateway.product_hash
-                test_store_id = store_id or gateway.store_id
-                
-                logger.info(f"   - API Key length: {len(test_api_key) if test_api_key else 0}")
-                logger.info(f"   - Product Hash: {test_product_hash[:20] if test_product_hash else 'N/A'}...")
-                logger.info(f"   - Store ID: {test_store_id}")
-                
-                # Criar instância para teste
-                test_gateway = ParadisePaymentGateway(credentials={
-                    'api_key': test_api_key,
-                    'product_hash': test_product_hash,
-                    'offer_hash': offer_hash or gateway.offer_hash or '',
-                    'store_id': test_store_id,
-                    'split_percentage': gateway.split_percentage or 2.0
-                })
-                
-                # Verificar formato das credenciais
-                if not test_gateway.verify_credentials():
-                    logger.error(f"❌ Paradise: Formato das credenciais inválido")
-                    return jsonify({
-                        'success': False,
-                        'error': 'Formato das credenciais inválido. Verifique API Key e Product Hash.'
-                    }), 400
-                
-                # ✅ TESTE REAL VIA API: Fazer requisição de teste
-                test_url = 'https://multi.paradisepags.com/api/v1/transaction.php'
-                test_headers = {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-API-Key': test_api_key
-                }
-                # Payload mínimo para teste (valor muito baixo que será rejeitado mas valida auth)
-                test_payload = {
-                    'amount': 100,  # R$ 1,00
-                    'description': 'Teste de validação',
-                    'reference': f'test-validation-{gateway_id}',
-                    'productHash': test_product_hash,
-                    'checkoutUrl': 'https://example.com/test',
-                    'webhookUrl': 'https://example.com/webhook',
-                    'customer': {
-                        'name': 'Teste Validação',
-                        'email': 'teste@teste.com',
-                        'phone': '11999999999',
-                        'document': '56657477007'
-                    }
-                }
-                
-                logger.info(f"   🧪 Enviando requisição de teste para Paradise...")
-                test_response = requests.post(test_url, json=test_payload, headers=test_headers, timeout=10)
-                
-                logger.info(f"   📡 Resposta do teste: Status {test_response.status_code}")
-                
-                # ✅ TRATAMENTO ESPECÍFICO DO ERRO 401
-                if test_response.status_code == 401:
-                    try:
-                        error_json = test_response.json() or {}
-                        error_message = error_json.get('error', 'API Key inválida ou loja inativa')
-                    except Exception:
-                        error_message = 'API Key inválida ou loja inativa'
-                    
-                    logger.error(f"❌ Paradise 401: {error_message}")
-                    return jsonify({
-                        'success': False,
-                        'error': f'Credenciais inválidas: {error_message}. Verifique sua API Key no painel da Paradise.'
-                    }), 401
-                
-                # Se retornar 400, é normal (dados de teste inválidos) - significa que auth funcionou
-                # Se retornar 200, é sucesso total
-                # Se retornar 401, é falha de autenticação
-                if test_response.status_code in [200, 400]:
-                    logger.info(f"✅ Paradise: Credenciais válidas! Status: {test_response.status_code}")
-                    gateway.is_active = True
-                    gateway.is_verified = True  # ✅ CHAVE DUPLA: O visor exige is_verified
-                else:
-                    # Outros erros (500, etc) - logar mas não ativar
-                    logger.warning(f"⚠️ Paradise: Status inesperado no teste: {test_response.status_code}")
-                    logger.warning(f"   Response: {test_response.text[:200]}")
-                    # Não ativar em caso de erro de servidor
-                    return jsonify({
-                        'success': False,
-                        'error': f'Erro ao verificar credenciais (HTTP {test_response.status_code}). Tente novamente.'
-                    }), 502
-                    
-            except Exception as e:
-                logger.error(f"❌ Erro ao verificar credenciais Paradise: {e}", exc_info=True)
-                return jsonify({
-                    'success': False,
-                    'error': f'Erro ao verificar credenciais: {str(e)}'
-                }), 500
-        
         elif gateway.gateway_type == 'wiinpay':
-            # WiinPay não requer validação complexa
-            gateway.is_active = True
-            gateway.is_verified = True
-            
-        elif gateway.gateway_type == 'pushynpay':
-            # PushynPay não requer validação complexa
-            gateway.is_active = True
-            gateway.is_verified = True
-            
-        elif gateway.gateway_type == 'syncpay':
-            # SyncPay não requer validação complexa
-            gateway.is_active = True
-            gateway.is_verified = True
-            
+            pass  # WiinPay não tem campos extras editáveis
         elif gateway.gateway_type == 'atomopay':
-            # Átomo Pay não requer validação complexa
-            gateway.is_active = True
-            gateway.is_verified = True
-            
-        else:
-            # Outros gateways: ativar por padrão
-            gateway.is_active = True
-            gateway.is_verified = True
+            if product_hash:
+                gateway.producer_hash = product_hash
         
-        # ✅ REGRA DE NEGÓCIO: Apenas 1 gateway ativo por vez
-        # Desativar todos os outros gateways do usuário
-        other_active_gateways = Gateway.query.filter(
+        # ✅ REGRA 1: MONOPÓLIO - Desativar outros gateways do usuário
+        Gateway.query.filter(
             Gateway.user_id == current_user.id,
-            Gateway.id != gateway_id,
-            Gateway.is_active == True
-        ).all()
+            Gateway.id != gateway_id
+        ).update({'is_active': False})
         
-        for other_gateway in other_active_gateways:
-            other_gateway.is_active = False
-            logger.info(f"   🔄 Desativado gateway {other_gateway.gateway_type} (ID: {other_gateway.id}) - apenas 1 ativo permitido")
+        # ✅ REGRA 2: TESTE REAL DA API via bot_manager
+        from bot_manager import BotManager
+        bot_manager = BotManager()
+        
+        credentials = {
+            'api_key': gateway.api_key,
+            'client_secret': gateway.client_secret,
+            'product_hash': gateway.product_hash,
+            'offer_hash': gateway.offer_hash,
+            'store_id': gateway.store_id,
+            'producer_hash': gateway.producer_hash,
+            'organization_id': gateway.organization_id,
+            'split_user_id': gateway.split_user_id
+        }
+        
+        is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
+        gateway.is_verified = is_valid
+        gateway.is_active = is_valid
+        gateway.last_error = None if is_valid else 'Credenciais inválidas na verificação oficial'
         
         db.session.commit()
         
-        logger.info(f"✅ Gateway {gateway.gateway_type} atualizado e ativado (ID: {gateway_id})")
+        logger.info(f"Gateway atualizado e verificado: {gateway.gateway_type} (ID: {gateway_id}, Válido: {is_valid})")
         
+        # ✅ REGRA 3: RECARREGAR WORKERS
+        try:
+            from internal_logic.core.extensions import reload_user_bots_config
+            reload_user_bots_config(current_user.id)
+            logger.info(f"Bots recarregados para usuário {current_user.id}")
+        except Exception as reload_error:
+            logger.error(f"Erro ao recarregar bots: {reload_error}")
+        
+        # ✅ REGRA 4: CONTRATO FRONTEND com to_dict()
         return jsonify({
-            'success': True,
-            'message': f'Gateway {gateway.gateway_type.upper()} ativado com sucesso!',
-            'gateway': {
-                'id': gateway.id,
-                'gateway_type': gateway.gateway_type,
-                'is_active': gateway.is_active,
-                'is_verified': gateway.is_verified
-            }
-        })
+            'success': is_valid,
+            'gateway': gateway.to_dict(),
+            'message': 'Gateway atualizado com sucesso' if is_valid else 'Falha na verificação da API'
+        }), 200 if is_valid else 400
         
     except Exception as e:
         db.session.rollback()
