@@ -2901,7 +2901,7 @@ def api_update_gateway(gateway_id):
                 if test_response.status_code in [200, 400]:
                     logger.info(f"✅ Paradise: Credenciais válidas! Status: {test_response.status_code}")
                     gateway.is_active = True
-                    gateway.is_verified = True
+                    gateway.is_verified = True  # ✅ CHAVE DUPLA: O visor exige is_verified
                 else:
                     # Outros erros (500, etc) - logar mas não ativar
                     logger.warning(f"⚠️ Paradise: Status inesperado no teste: {test_response.status_code}")

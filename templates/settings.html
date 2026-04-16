@@ -2445,11 +2445,21 @@ function settingsApp() {
         async updateGateway(gatewayId, type) {
             this.loading = true;
             try {
-                const payload = { gateway_type: type, ...this.editGateway };
-                // ✅ Remover split_user_id do payload para WiinPay (configuração interna, não editável pelo usuário)
-                if (type === 'wiinpay' && payload.split_user_id) {
-                    delete payload.split_user_id;
-                }
+                // ✅ BLINDAGEM: Enviar APENAS campos de credenciais, não o objeto completo
+                const payload = {
+                    gateway_type: type,
+                    api_key: this.editGateway.api_key || '',
+                    client_secret: this.editGateway.client_secret || '',
+                    store_id: this.editGateway.store_id || '',
+                    product_hash: this.editGateway.product_hash || '',
+                    offer_hash: this.editGateway.offer_hash || ''
+                };
+                // ✅ Remover campos vazios para não sobrescrever dados existentes
+                Object.keys(payload).forEach(key => {
+                    if (payload[key] === '' && key !== 'gateway_type') {
+                        delete payload[key];
+                    }
+                });
                 const response = await fetch(`/api/gateways/${gatewayId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
