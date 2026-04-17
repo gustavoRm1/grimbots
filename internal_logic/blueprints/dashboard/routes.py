@@ -2747,15 +2747,16 @@ def api_create_gateway():
         from bot_manager import BotManager
         bot_manager = BotManager()
         
+        # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
-            'api_key': gateway.api_key,
-            'client_secret': gateway.client_secret,
-            'product_hash': gateway.product_hash,
-            'offer_hash': gateway.offer_hash,
-            'store_id': gateway.store_id,
-            'producer_hash': gateway.producer_hash,
-            'organization_id': gateway.organization_id,
-            'split_user_id': gateway.split_user_id
+            'api_key': data.get('api_key', gateway.api_key),
+            'client_secret': data.get('client_secret', gateway.client_secret),
+            'product_hash': data.get('product_hash', gateway.product_hash),
+            'offer_hash': data.get('offer_hash', gateway.offer_hash),
+            'store_id': data.get('store_id', gateway.store_id),
+            'producer_hash': data.get('producer_hash', gateway.producer_hash),
+            'organization_id': data.get('organization_id', gateway.organization_id),
+            'split_user_id': data.get('split_user_id', gateway.split_user_id)
         }
         
         is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
@@ -2862,15 +2863,16 @@ def api_update_gateway(gateway_id):
         from bot_manager import BotManager
         bot_manager = BotManager()
         
+        # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
-            'api_key': gateway.api_key,
-            'client_secret': gateway.client_secret,
-            'product_hash': gateway.product_hash,
-            'offer_hash': gateway.offer_hash,
-            'store_id': gateway.store_id,
-            'producer_hash': gateway.producer_hash,
-            'organization_id': gateway.organization_id,
-            'split_user_id': gateway.split_user_id
+            'api_key': data.get('api_key', gateway.api_key),
+            'client_secret': data.get('client_secret', gateway.client_secret),
+            'product_hash': data.get('product_hash', gateway.product_hash),
+            'offer_hash': data.get('offer_hash', gateway.offer_hash),
+            'store_id': data.get('store_id', gateway.store_id),
+            'producer_hash': data.get('producer_hash', gateway.producer_hash),
+            'organization_id': data.get('organization_id', gateway.organization_id),
+            'split_user_id': data.get('split_user_id', gateway.split_user_id)
         }
         
         is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
