@@ -2747,6 +2747,14 @@ def api_create_gateway():
         from bot_manager import BotManager
         bot_manager = BotManager()
         
+        # ✅ FIX: GRAVAR DADOS NOVOS NO BANCO ANTES DE TESTAR (evita persistir dados corrompidos antigos)
+        if 'api_key' in data and data['api_key']: gateway.api_key = data['api_key']
+        if 'client_id' in data and data['client_id']: gateway.client_id = data['client_id']
+        if 'client_secret' in data and data['client_secret']: gateway.client_secret = data['client_secret']
+        if 'product_hash' in data and data['product_hash']: gateway.product_hash = data['product_hash']
+        if 'offer_hash' in data and data['offer_hash']: gateway.offer_hash = data['offer_hash']
+        if 'store_id' in data and data['store_id']: gateway.store_id = data['store_id']
+        
         # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
             'api_key': data.get('api_key', gateway.api_key),
@@ -2862,6 +2870,14 @@ def api_update_gateway(gateway_id):
         # ✅ REGRA 2: TESTE REAL DA API via bot_manager
         from bot_manager import BotManager
         bot_manager = BotManager()
+        
+        # ✅ FIX: GRAVAR DADOS NOVOS NO BANCO ANTES DE TESTAR (evita persistir dados corrompidos antigos)
+        if 'api_key' in data and data['api_key']: gateway.api_key = data['api_key']
+        if 'client_id' in data and data['client_id']: gateway.client_id = data['client_id']
+        if 'client_secret' in data and data['client_secret']: gateway.client_secret = data['client_secret']
+        if 'product_hash' in data and data['product_hash']: gateway.product_hash = data['product_hash']
+        if 'offer_hash' in data and data['offer_hash']: gateway.offer_hash = data['offer_hash']
+        if 'store_id' in data and data['store_id']: gateway.store_id = data['store_id']
         
         # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
