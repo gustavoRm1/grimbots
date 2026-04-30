@@ -5,75 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrega - Acesso Liberado</title>
     
-    <!-- V4.1: META PIXEL PURCHASE -->
+    <!-- V5.0: META PIXEL COM TRAVA DUPLA (LOCALSTORAGE + BACKEND) -->
     {% if pixel_id and not purchase_already_sent %}
     <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
 
-    fbq('init', '{{ pixel_id }}');
-    
-    // V4.1: Disparar Purchase com tracking completo
-    var purchaseData = {
-        value: {{ payment.amount }},
-        currency: 'BRL',
-        content_ids: ['{{ payment.payment_id }}'],
-        content_type: 'product'
-    };
-    
-    // V4.1: Adicionar external_id se existir
-    {% if fbclid %}
-    purchaseData.external_id = '{{ fbclid }}';
-    {% endif %}
-    
-    // V4.1: Preparar parâmetros de matching
-    var purchaseParams = {};
-    
-    // V4.1: Adicionar FBP se existir (matching perfeito)
-    {% if fbp %}
-    purchaseParams.fbp = '{{ fbp }}';
-    {% endif %}
-    
-    // V4.1: Adicionar FBC se existir e não for sintético
-    {% if fbc and fbc_origin != 'synthetic' %}
-    purchaseParams.fbc = '{{ fbc }}';
-    {% endif %}
-    
-    // V4.1: Disparar Purchase com event_id para deduplicação
-    fbq('track', 'Purchase', purchaseData, {
-        eventID: '{{ purchase_event_id }}'
-    }, purchaseParams);
-    
-    console.log('?? V4.1 - Purchase disparado:', {
-        pixel_id: '{{ pixel_id }}',
-        event_id: '{{ purchase_event_id }}',
-        value: {{ payment.amount }},
-        fbp: '{{ fbp }}',
-        fbc: '{{ fbc }}',
-        fbc_origin: '{{ fbc_origin }}',
-        fbclid: '{{ fbclid }}'
-    });
-    
-    // V4.1: Marcar como enviado via API (anti-duplicação)
-    fetch('/api/tracking/mark-purchase-sent', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            payment_id: {{ payment.id }},
-            event_id: '{{ purchase_event_id }}'
-        })
-    }).then(response => response.json())
-      .then(data => console.log('?? V4.1 - Purchase marcado:', data))
-      .catch(error => console.error('?? V4.1 - Erro ao marcar Purchase:', error));
+      fbq('init', '{{ pixel_id }}');
       
+      // ✅ 1. TRAVA DE TITÂNIO: LocalStorage baseada no ID Único do Pagamento
+      const paymentId = '{{ payment.id }}';
+      const purchaseKey = 'grimbots_purchase_' + paymentId;
+      const purchaseTracked = localStorage.getItem(purchaseKey);
+
+      function dispararCompra() {
+          if (purchaseTracked) {
+              console.log('⚠️ [ANTI-DUP] Purchase ' + paymentId + ' já está na memória do navegador. Bloqueado.');
+              return;
+          }
+
+          // Tranca a porta instantaneamente
+          localStorage.setItem(purchaseKey, 'true');
+
+          // Prepara os dados de LRO (Advanced Matching)
+          var purchaseData = {
+              value: {{ payment.amount }},
+              currency: 'BRL',
+              content_ids: ['{{ payment.payment_id }}'],
+              content_name: '{{ payment.product_name | default("Acesso Premium") | replace("'", "\\'") }}',
+              content_type: 'product'
+          };
+
+          {% if fbclid %} purchaseData.external_id = '{{ fbclid }}'; {% endif %}
+
+          var purchaseParams = {};
+          {% if fbp %} purchaseParams.fbp = '{{ fbp }}'; {% endif %}
+          {% if fbc and fbc_origin != 'synthetic' %} purchaseParams.fbc = '{{ fbc }}'; {% endif %}
+
+          // Atira o Pixel
+          fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}' }, purchaseParams);
+          console.log('✅ [META] Purchase Disparado pela primeira vez. Trava acionada.');
+
+          // O Fetch Fantasma: Avisa o banco apenas como Backup (não bloqueia o frontend)
+          fetch('/api/tracking/mark-purchase-sent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ payment_id: paymentId, event_id: '{{ purchase_event_id }}' })
+          }).catch(e => console.log('Fetch secundário ignorado.'));
+      }
+
+      // Executa o disparo
+      dispararCompra();
     </script>
     {% endif %}
     
