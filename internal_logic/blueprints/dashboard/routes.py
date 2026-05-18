@@ -1451,23 +1451,24 @@ def get_redirect_pools():
     """Retorna lista de pools do usuário"""
     from internal_logic.core.models import RedirectPool
     
-    # DEBUG: Expor identidade do usuário
-    print(f"DEBUG POOLS: Buscando pools para User ID: {current_user.id} (Tipo: {type(current_user.id)})")
-    print(f"DEBUG POOLS: Telegram User ID do User: {getattr(current_user, 'telegram_user_id', 'N/A')}")
-    print(f"DEBUG POOLS: Email do User: {getattr(current_user, 'email', 'N/A')}")
+    # 🔍 LOG SENIOR: Rastrear falha na listagem
+    logger.info(f"🔍 [GET_POOLS] User ID: {current_user.id} | Email: {current_user.email}")
     
-    # DEBUG: Verificar TODOS os pools no banco (independentemente de user_id)
-    all_pools = RedirectPool.query.all()
-    print(f"DEBUG POOLS: Total de pools no banco: {len(all_pools)}")
-    for p in all_pools:
-        print(f"DEBUG POOLS: Pool ID={p.id}, name={p.name}, user_id={p.user_id}")
-    
-    pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
-    
-    print(f"DEBUG POOLS: Quantidade de pools encontrados para este usuário: {len(pools)}")
-    
-    # ✅ PADRONIZAÇÃO: Usar to_dict() do modelo para garantir contrato consistente
-    return jsonify([pool.to_dict() for pool in pools])
+    try:
+        # Busca direta por user_id
+        pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
+        
+        logger.info(f"✅ [GET_POOLS] Encontrados {len(pools)} pools para o usuário {current_user.id}")
+        
+        # Log detalhado dos pools encontrados (apenas IDs e nomes para segurança)
+        for p in pools:
+            logger.debug(f"   - Pool ID: {p.id} | Name: {p.name}")
+            
+        return jsonify([pool.to_dict() for pool in pools])
+        
+    except Exception as e:
+        logger.error(f"❌ [GET_POOLS] Erro ao listar pools: {e}", exc_info=True)
+        return jsonify({'error': 'Erro interno ao carregar redirecionadores', 'details': str(e)}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['GET'])

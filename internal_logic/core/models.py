@@ -666,44 +666,60 @@ class RedirectPool(db.Model):
     
     def to_dict(self):
         """Retorna dados do pool em formato dict"""
-        # Contadores calculados de bots (pool_bots é dynamic - usar SQLAlchemy queries)
-        bots_count = self.pool_bots.count()
-        active_bots_count = self.pool_bots.filter_by(is_enabled=True).count()
-        
-        # Bots online para health_score
-        online_bots = [b for b in self.pool_bots.filter_by(status='online', is_enabled=True).all() if not (b.circuit_breaker_until and b.circuit_breaker_until > get_brazil_time())]
-        
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'name': self.name,
-            'slug': self.slug,
-            'is_active': self.is_active,
-            'distribution_strategy': self.distribution_strategy,
-            'total_visits': self.total_redirects,
-            'health_score': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
-            'public_url': f'/go/{self.slug}',
-            'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            # ✅ CRÍTICO: Contadores de bots (calculados)
-            'bots_count': bots_count,
-            'active_bots_count': active_bots_count,
-            'healthy_bots': len(online_bots),
-            'total_bots': bots_count,
-            # ✅ CRÍTICO: Retornar configurações do Meta Pixel
-            'meta_pixel_id': self.meta_pixel_id,
-            'meta_access_token': self.meta_access_token,
-            'meta_tracking_enabled': self.meta_tracking_enabled,
-            'meta_test_event_code': self.meta_test_event_code,
-            'meta_events_pageview': self.meta_events_pageview,
-            'meta_events_viewcontent': self.meta_events_viewcontent,
-            'meta_events_purchase': self.meta_events_purchase,
-            'meta_cloaker_enabled': self.meta_cloaker_enabled,
-            'meta_cloaker_param_name': self.meta_cloaker_param_name,
-            'meta_cloaker_param_value': self.meta_cloaker_param_value,
-            'utmify_pixel_id': self.utmify_pixel_id
-        }
+        try:
+            # Contadores calculados de bots
+            bots_count = self.pool_bots.count() if hasattr(self.pool_bots, 'count') else len(list(self.pool_bots))
+            active_bots_count = self.pool_bots.filter_by(is_enabled=True).count() if hasattr(self.pool_bots, 'filter_by') else sum(1 for b in self.pool_bots if b.is_enabled)
+            
+            # Bots online para health_score
+            now = get_brazil_time()
+            online_bots_query = self.pool_bots.filter_by(status='online', is_enabled=True) if hasattr(self.pool_bots, 'filter_by') else [b for b in self.pool_bots if b.status == 'online' and b.is_enabled]
+            
+            online_bots = []
+            if isinstance(online_bots_query, list):
+                online_bots = [b for b in online_bots_query if not (b.circuit_breaker_until and b.circuit_breaker_until > now)]
+            else:
+                online_bots = [b for b in online_bots_query.all() if not (b.circuit_breaker_until and b.circuit_breaker_until > now)]
+            
+            return {
+                'id': self.id,
+                'user_id': self.user_id,
+                'name': self.name,
+                'slug': self.slug,
+                'is_active': self.is_active,
+                'distribution_strategy': self.distribution_strategy,
+                'total_visits': self.total_redirects,
+                'health_score': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
+                'public_url': f'/go/{self.slug}',
+                'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+                'bots_count': bots_count,
+                'active_bots_count': active_bots_count,
+                'healthy_bots': len(online_bots),
+                'total_bots': bots_count,
+                'meta_pixel_id': self.meta_pixel_id,
+                'meta_tracking_enabled': self.meta_tracking_enabled,
+                'meta_test_event_code': self.meta_test_event_code,
+                'meta_events_pageview': self.meta_events_pageview,
+                'meta_events_viewcontent': self.meta_events_viewcontent,
+                'meta_events_purchase': self.meta_events_purchase,
+                'meta_cloaker_enabled': self.meta_cloaker_enabled,
+                'meta_cloaker_param_name': self.meta_cloaker_param_name,
+                'meta_cloaker_param_value': self.meta_cloaker_param_value,
+                'utmify_pixel_id': self.utmify_pixel_id,
+                'fallback_url': self.fallback_url
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro ao serializar RedirectPool {self.id}: {e}")
+            # Fallback seguro para não quebrar a listagem
+            return {
+                'id': self.id,
+                'name': self.name,
+                'slug': self.slug,
+                'is_active': self.is_active,
+                'error': 'Erro ao carregar detalhes'
+            }
 
 
 class PoolBot(db.Model):
