@@ -106,11 +106,33 @@ class BotIntelligenceService:
         """
         🔄 Estratégia Round Robin
         
-        Mantém um índice rotativo baseado no total de redirects do pool.
+        USA REDIS para garantir atomicidade e alta escala.
+        Fallback para total_redirects do banco se o Redis falhar.
         """
         if not bots:
             return None
         
+        try:
+            # 🚀 HIGH SCALE: Usar Redis para contador atômico (evita contenção no DB)
+            from internal_logic.core.redis_wrapper import get_namespaced_redis
+            
+            user_id = getattr(pool, 'user_id', None)
+            if user_id:
+                redis = get_namespaced_redis(user_id)
+                # Chave isolada por pool para evitar colisões
+                counter_key = f"pool:{pool.id}:rr_counter"
+                
+                # Incrementa e obtém o novo valor em uma única operação atômica
+                current_count = redis.incr(counter_key)
+                index = current_count % len(bots)
+                
+                logger.debug(f"🎯 Round Robin (Redis): pool={pool.id}, index={index}/{len(bots)}")
+                return bots[index]
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao usar Redis para Round Robin, usando fallback DB: {e}")
+        
+        # 🔄 FALLBACK: Usar métrica do banco
         try:
             total_redirects = getattr(pool, 'total_redirects', 0)
             index = total_redirects % len(bots)

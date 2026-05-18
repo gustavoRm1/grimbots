@@ -9,7 +9,7 @@ from flask import Blueprint, request, redirect, jsonify, render_template, make_r
 from internal_logic.core.extensions import csrf
 from internal_logic.core.models import RedirectPool, PoolBot, db
 from internal_logic.core.extensions import limiter
-from internal_logic.core.metrics import MetricsService
+from internal_logic.core.metrics import get_metrics_service
 from internal_logic.services.cloaker_service import CloakerService
 from internal_logic.services.tracking_service import TrackingService
 from internal_logic.services.bot_intelligence import BotIntelligenceService
@@ -119,7 +119,8 @@ def public_redirect(slug):
     # 5. MÉTRICAS ATÔMICAS - NÃO BLOQUEANTE
     # ═══════════════════════════════════════════════════════════
     try:
-        MetricsService.increment_redirect_counters(pool.id, selected_bot.bot_id)
+        metrics_service = get_metrics_service(db.session)
+        metrics_service.increment_redirect_counters(pool.id, selected_bot.id)
     except Exception as e:
         # Métricas nunca bloqueiam o redirect
         logger.debug(f"📊 Métricas não incrementadas: {e}")

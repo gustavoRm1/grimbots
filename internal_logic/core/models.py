@@ -555,6 +555,7 @@ class RedirectPool(db.Model):
     name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(50), nullable=False, index=True)  # "red1", "red2", etc
     description = db.Column(db.Text)
+    fallback_url = db.Column(db.String(500))  # URL caso todos os bots estejam offline
     
     # Configuração
     is_active = db.Column(db.Boolean, default=True, index=True)
