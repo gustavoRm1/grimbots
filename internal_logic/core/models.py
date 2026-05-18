@@ -690,6 +690,7 @@ class RedirectPool(db.Model):
                 'distribution_strategy': self.distribution_strategy,
                 'total_visits': self.total_redirects,
                 'health_score': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
+                'health_percentage': int((len(online_bots) / bots_count * 100)) if bots_count > 0 else 0,
                 'public_url': f'/go/{self.slug}',
                 'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
                 'created_at': self.created_at.isoformat() if self.created_at else None,
