@@ -97,8 +97,8 @@ def public_redirect(slug):
             # Fallback: tentar URL de fallback ou primeiro bot
             logger.warning(f"⚠️ Nenhum bot online no pool {pool.id}")
             
-            if hasattr(pool, 'fallback_url') and pool.fallback_url:
-                return redirect(pool.fallback_url, code=302)
+            # if hasattr(pool, 'fallback_url') and pool.fallback_url:
+            #     return redirect(pool.fallback_url, code=302)
             
             all_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
             if all_bots:

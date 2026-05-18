@@ -555,7 +555,7 @@ class RedirectPool(db.Model):
     name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(50), nullable=False, index=True)  # "red1", "red2", etc
     description = db.Column(db.Text)
-    fallback_url = db.Column(db.String(500))  # URL caso todos os bots estejam offline
+    # fallback_url = db.Column(db.String(500))  # URL caso todos os bots estejam offline
     
     # Configuração
     is_active = db.Column(db.Boolean, default=True, index=True)
@@ -708,7 +708,7 @@ class RedirectPool(db.Model):
                 'meta_cloaker_param_name': self.meta_cloaker_param_name,
                 'meta_cloaker_param_value': self.meta_cloaker_param_value,
                 'utmify_pixel_id': self.utmify_pixel_id,
-                'fallback_url': self.fallback_url
+                # 'fallback_url': self.fallback_url
             }
         except Exception as e:
             logger.error(f"❌ Erro ao serializar RedirectPool {self.id}: {e}")
