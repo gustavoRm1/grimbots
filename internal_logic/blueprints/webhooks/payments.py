@@ -13,7 +13,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 from internal_logic.core.extensions import limiter, csrf, db
 from internal_logic.core.models import Payment, Gateway, Bot
-from gateway_factory import GatewayFactory
+from gateways import GatewayFactory
 
 logger = logging.getLogger(__name__)
 

@@ -14,15 +14,11 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 # Import real gateway implementations
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-from gateway_paradise import ParadisePaymentGateway
+from gateways.gateway_paradise import ParadisePaymentGateway
 from gateways.gateway_aguia import AguiaGateway
-from gateway_bolt import BoltGateway
-from gateway_syncpay import SyncPayGateway
-from gateway_wiinpay import WiinPayGateway
+from gateways.gateway_bolt import BoltGateway
+from gateways.gateway_syncpay import SyncPayGateway
+from gateways.gateway_wiinpay import WiinPayGateway
 # from gateway_atomopay import AtomoGateway  # Commented out - requires encryption setup
 # from gateway_orionpay import OrionPayGateway  # Commented out - requires encryption setup
 # from gateway_pushyn import PushynGateway  # Commented out - requires encryption setup

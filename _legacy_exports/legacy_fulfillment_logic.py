@@ -210,7 +210,7 @@ def _generate_pix_payment_legacy(bot_id, amount, description, customer_name,
     
     try:
         # Tentar adquirir lock distribuído
-        from redis_manager import get_redis_connection
+        from internal_logic.core.redis_manager import get_redis_connection
         redis_conn = get_redis_connection()
         if redis_conn:
             lock_key = f"lock:pix:{bot_id}:{customer_user_id}"
@@ -226,7 +226,7 @@ def _generate_pix_payment_legacy(bot_id, amount, description, customer_name,
     try:
         # ... (resto da lógica de geração de PIX)
         from models import Bot, Gateway, Payment
-        from gateway_factory import GatewayFactory
+        from gateways import GatewayFactory
         from internal_logic.core.extensions import db
         from internal_logic.core.models import get_brazil_time
         

@@ -35,7 +35,7 @@ from internal_logic.core.extensions import db
 from internal_logic.services.payment_processor import send_payment_delivery
 from internal_logic.core.models import Payment, Gateway
 from gateway_factory import GatewayFactory
-from redis_manager import get_redis_connection
+from internal_logic.core.redis_manager import get_redis_connection
 from tasks_async import webhook_queue, process_webhook_async, process_pending_webhooks
 from internal_logic.core.models import get_brazil_time
 from internal_logic.core.models import Commission

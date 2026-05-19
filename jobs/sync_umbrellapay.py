@@ -30,7 +30,7 @@ def sync_umbrellapay_payments():
         from flask import current_app
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time
-        from gateway_factory import GatewayFactory
+        from gateways import GatewayFactory
         # from app import send_meta_pixel_purchase_event  # TODO: Import from correct location
         
         with current_app.app_context():

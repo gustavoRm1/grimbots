@@ -21,7 +21,7 @@ import re
 import unicodedata
 from typing import Dict, Any, Optional
 from datetime import datetime
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 from utils.validators import cpf_valido
 
 logger = logging.getLogger(__name__)

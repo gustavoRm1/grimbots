@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List
 
 import requests
 
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 

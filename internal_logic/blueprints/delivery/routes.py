@@ -44,7 +44,7 @@ def delivery_page(token):
         from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway
         from internal_logic.services.tracking_service import TrackingService
         from internal_logic.core.models import get_brazil_time
-        from gateway_factory import GatewayFactory
+        from gateways import GatewayFactory
         import time
         from datetime import datetime
         

@@ -1,43 +1,36 @@
 [Unit]
-Description=RQ Worker %I
-After=network.target redis.service grimbots.service
+Description=RQ Worker %i - GrimBots Queue Worker
+After=network.target redis.service
 Wants=redis.service
-PartOf=grimbots.service
-Documentation=https://python-rq.org/
 
 [Service]
 Type=simple
-User=grimbots
-Group=grimbots
-WorkingDirectory=/opt/grimbots
+User=root
+WorkingDirectory=/root/grimbots
+Environment=PYTHONPATH=/root/grimbots
+Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Environment
-Environment="PATH=/opt/grimbots/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=/opt/grimbots"
-Environment="REDIS_URL=redis://localhost:6379/0"
-Environment="DATABASE_URL=postgresql://grimbots:YOUR_PASSWORD@localhost:5432/grimbots"
+# ✅ CORREÇÃO: Extrair nome da fila do nome da instância (ex: marathon-1 -> marathon)
+ExecStart=/bin/bash -c 'QUEUE_NAME=$(echo %i | sed "s/-[0-9]*$//"); exec /root/grimbots/venv/bin/python /root/grimbots/start_rq_worker.py "$QUEUE_NAME"'
 
-# RQ Worker command
-# %i será substituído pelo nome após @ (ex: tasks-1, gateway-1)
-ExecStart=/opt/grimbots/venv/bin/python /opt/grimbots/start_rq_worker.py %i
-
-# Restart policy
+# ✅ RESILIÊNCIA MÁXIMA
 Restart=always
-RestartSec=10
-StartLimitInterval=0
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
 
-# Resource limits
-LimitNOFILE=4096
-
-# Logging
+# ✅ LOGS VIA JOURNALD (não precisa de arquivos)
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=rq-worker-%i
 
-# Security
-NoNewPrivileges=true
-PrivateTmp=true
+# ✅ LIMITE DE RECURSOS (evita memory leaks)
+MemoryMax=512M
+CPUQuota=200%
+
+# ✅ GRACEFUL SHUTDOWN
+TimeoutStopSec=30
+KillSignal=SIGTERM
 
 [Install]
 WantedBy=multi-user.target
-

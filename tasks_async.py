@@ -22,7 +22,7 @@ from redis import Redis
 from typing import Dict, Any, Optional
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from redis_manager import get_redis_connection
+from internal_logic.core.redis_manager import get_redis_connection
 from internal_logic.core.extensions import db
 
 logger = logging.getLogger(__name__)

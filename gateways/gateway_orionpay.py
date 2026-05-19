@@ -19,7 +19,7 @@ import logging
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 

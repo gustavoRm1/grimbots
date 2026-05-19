@@ -4,7 +4,7 @@ Implementado por: Engineer QI 500
 """
 
 from typing import Dict, Any, Optional
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 import logging
 
 logger = logging.getLogger(__name__)

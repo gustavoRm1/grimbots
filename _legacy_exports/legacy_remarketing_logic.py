@@ -440,7 +440,7 @@ def send_remarketing_campaign(self, campaign_id: int, bot_token: str):
     # Envia campanha de remarketing em background
     
     try:
-        from redis_manager import get_redis_connection
+        from internal_logic.core.redis_manager import get_redis_connection
         import json
         from app import app, db, socketio
         from internal_logic.core.models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time, Bot
@@ -641,7 +641,7 @@ def _remarketing_worker(self, bot_id: int, queue_key: str, stop_event: threading
     import time
     import random
     import json
-    from redis_manager import get_redis_connection
+    from internal_logic.core.redis_manager import get_redis_connection
     
     logger.info(f"🚀 Remarketing worker iniciado: bot_id={bot_id} queue={queue_key}")
     

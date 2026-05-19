@@ -21,7 +21,7 @@ import logging
 import json
 import time
 from typing import Dict, Any, Optional
-from redis_manager import get_redis_connection
+from internal_logic.core.redis_manager import get_redis_connection
 
 logger = logging.getLogger(__name__)
 

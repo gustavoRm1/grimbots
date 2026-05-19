@@ -18,7 +18,7 @@ from flask import url_for, current_app
 from internal_logic.core.extensions import db, socketio
 from bot_manager import BotManager
 from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway, User, RemarketingCampaign
-from gateway_factory import GatewayFactory
+from gateways import GatewayFactory
 
 logger = logging.getLogger(__name__)
 

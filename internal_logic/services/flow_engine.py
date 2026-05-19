@@ -449,7 +449,7 @@ Código: <code>{payment.payment_id}</code>
             bool: True se processado com sucesso
         """
         try:
-            from flow_engine_router_v8 import get_message_router
+            from internal_logic.services.flow_engine_router_v8 import get_message_router
             
             # Obter router (precisa do BotManager como contexto)
             # Nota: Isso é um workaround - idealmente o router seria injetado

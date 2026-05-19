@@ -5,17 +5,17 @@ Gerencia criação e registro de gateways de pagamento
 
 import logging
 from typing import Dict, Any, Optional, Type, List
-from gateway_interface import PaymentGateway
-from gateway_syncpay import SyncPayGateway
-from gateway_pushyn import PushynGateway
-from gateway_paradise import ParadisePaymentGateway
-from gateway_wiinpay import WiinPayGateway
-from gateway_atomopay import AtomPayGateway
-from gateway_umbrellapag import UmbrellaPagGateway
-from gateway_orionpay import OrionPayGateway
-from gateway_babylon import BabylonGateway
-from gateway_bolt import BoltGateway
-from gateways.gateway_aguia import AguiaGateway
+from .gateway_interface import PaymentGateway
+from .gateway_syncpay import SyncPayGateway
+from .gateway_pushyn import PushynGateway
+from .gateway_paradise import ParadisePaymentGateway
+from .gateway_wiinpay import WiinPayGateway
+from .gateway_atomopay import AtomPayGateway
+from .gateway_umbrellapag import UmbrellaPagGateway
+from .gateway_orionpay import OrionPayGateway
+from .gateway_babylon import BabylonGateway
+from .gateway_bolt import BoltGateway
+from .gateway_aguia import AguiaGateway
 
 logger = logging.getLogger(__name__)
 

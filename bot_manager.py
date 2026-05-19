@@ -17,10 +17,10 @@ import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import pytz
-from redis_manager import get_redis_connection
+from internal_logic.core.redis_manager import get_redis_connection
 import hashlib
 import hmac
-from flow_engine_router_v8 import get_message_router
+from internal_logic.services.flow_engine_router_v8 import get_message_router
 from internal_logic.services.bot_messenger import BotMessenger
 from internal_logic.services.bot_runner import BotRunner
 from internal_logic.services.flow_engine import FlowEngine
@@ -431,9 +431,9 @@ def get_brazil_time():
     except Exception:
         return datetime.now()
 
-from gateway_factory import GatewayFactory
-from redis_manager import get_redis_connection
-from redis_bot_state import redis_bot_state, get_namespaced_bot_state  # ✅ ISOLAMENTO: Importar factory V2
+from gateways import GatewayFactory
+from internal_logic.core.redis_manager import get_redis_connection
+from internal_logic.core.redis_bot_state import redis_bot_state, get_namespaced_bot_state  # ✅ ISOLAMENTO: Importar factory V2
 import json
 import random
 import time
@@ -597,7 +597,7 @@ class BotManager:
             return None
 
     def _remarketing_worker_loop(self, *, bot_id: int, stop_event: threading.Event) -> None:
-        from redis_manager import get_redis_connection
+        from internal_logic.core.redis_manager import get_redis_connection
         import json
         import random
         import time
@@ -1936,7 +1936,7 @@ class BotManager:
                 
                 # Mensagem de texto normal - usar MessageRouter
                 try:
-                    from flow_engine_router_v8 import get_message_router
+                    from internal_logic.services.flow_engine_router_v8 import get_message_router
                     router = get_message_router(self)
                     
                     result = router.process_message(
@@ -11105,7 +11105,7 @@ Seu pagamento ainda não foi confirmado.
             bot_token: Token do bot
         """
         try:
-            from redis_manager import get_redis_connection
+            from internal_logic.core.redis_manager import get_redis_connection
             import json
             from flask import current_app
             from internal_logic.core.extensions import db, socketio

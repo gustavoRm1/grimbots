@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from rq import Worker, Queue
     from redis import Redis
-    from redis_manager import get_redis_connection
+    from internal_logic.core.redis_manager import get_redis_connection
 except ImportError as e:
     print(f"❌ ERRO: Módulo não encontrado: {e}")
     sys.exit(1)

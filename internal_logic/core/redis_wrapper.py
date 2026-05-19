@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 def _get_redis_client():
     """Retorna cliente Redis singleton (lazy import para evitar circular)."""
-    from redis_manager import get_redis_connection
+    from internal_logic.core.redis_manager import get_redis_connection
     return get_redis_connection()
 
 

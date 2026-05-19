@@ -11,7 +11,7 @@ import os
 import random
 from typing import Dict, Optional, Any
 from datetime import datetime
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 

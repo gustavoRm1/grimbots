@@ -24,7 +24,7 @@ import logging
 import random
 import csv
 from typing import Dict, Optional
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 

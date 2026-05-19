@@ -439,7 +439,7 @@ class NamespacedRedisBotState:
 # ============================================================================
 
 # Importar a instância original para fallback
-from redis_bot_state import RedisBotState, redis_bot_state as _legacy_redis_bot_state
+from internal_logic.core.redis_bot_state import RedisBotState, redis_bot_state as _legacy_redis_bot_state
 
 # Instância global será substituída gradualmente
 # BotManager deve usar NamespacedRedisBotState(user_id=...) explicitamente

@@ -52,7 +52,7 @@ def telegram_webhook(bot_id):
         bot_manager = BotManager(socketio=None, user_id=bot.user_id)
         
         # ✅ BUROCRACIA 5: Obter estado Redis isolado
-        from redis_bot_state import get_namespaced_bot_state
+        from internal_logic.core.redis_bot_state import get_namespaced_bot_state
         user_bot_state = get_namespaced_bot_state(bot.user_id)
         
         # ✅ BUROCRACIA 6: Processar com contexto isolado

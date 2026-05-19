@@ -1,54 +1,63 @@
 [Unit]
-Description=Grimbots Gunicorn Application Server
-After=network.target postgresql.service redis.service
-Wants=postgresql.service redis.service
-Documentation=https://github.com/your-repo/grimbots
+Description=GrimBots - Sistema de Bots Telegram
+Documentation=https://github.com/grimbots/core
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
 
 [Service]
-Type=notify
-User=grimbots
-Group=grimbots
-WorkingDirectory=/opt/grimbots
+Type=simple
 
-# Environment
-Environment="PATH=/opt/grimbots/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=/opt/grimbots"
-Environment="DATABASE_URL=postgresql://grimbots:YOUR_PASSWORD@localhost:5432/grimbots"
-Environment="REDIS_URL=redis://localhost:6379/0"
-Environment="SECRET_KEY=YOUR_SECRET_KEY"
-Environment="FLASK_ENV=production"
+# ✅ REALIDADE DO SERVIDOR: /root/grimbots
+WorkingDirectory=/root/grimbots
+User=root
+Group=root
 
-# Gunicorn command
-ExecStart=/opt/grimbots/venv/bin/gunicorn \
-    -c /opt/grimbots/gunicorn_config.py \
+# ✅ EnvironmentFile na localização real
+EnvironmentFile=/root/grimbots/.env
+
+# ✅ Criar diretório de logs se não existir
+ExecStartPre=/bin/bash -c 'mkdir -p /root/grimbots/logs && chmod 755 /root/grimbots/logs'
+
+# ✅ Gunicorn com logs configurados em /root/grimbots/logs/
+ExecStart=/root/grimbots/venv/bin/gunicorn \
+    --bind 0.0.0.0:5000 \
+    --workers 4 \
+    --worker-class eventlet \
+    --worker-connections 1000 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --access-logfile /root/grimbots/logs/access.log \
+    --error-logfile /root/grimbots/logs/error.log \
+    --log-level info \
+    --capture-output \
+    --enable-stdio-inheritance \
     wsgi:application
 
-# Reload (graceful restart)
+# ✅ Graceful shutdown
+ExecStop=/bin/kill -s TERM $MAINPID
 ExecReload=/bin/kill -s HUP $MAINPID
 
-# Kill mode
-KillMode=mixed
-KillSignal=SIGTERM
-TimeoutStopSec=30
-
-# Restart policy
+# ✅ Restart automático
 Restart=always
 RestartSec=10
-StartLimitInterval=0
+StartLimitInterval=60s
+StartLimitBurst=3
 
-# Resource limits
-LimitNOFILE=65536
+# ✅ Timeout para startup
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# ✅ Limites de recursos (ajustar conforme VPS)
+LimitNOFILE=65535
 LimitNPROC=4096
 
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=grimbots
-
-# Security (opcional - ajustar conforme necessário)
-NoNewPrivileges=true
-PrivateTmp=true
+# ✅ Isolamento de segurança (permissivo para root em /root)
+PrivateTmp=no
+ProtectSystem=no
+ProtectHome=no
+NoNewPrivileges=no
 
 [Install]
 WantedBy=multi-user.target
-

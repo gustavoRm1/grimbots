@@ -8,7 +8,7 @@ import logging
 import csv
 import random
 from typing import Dict, Any, Optional, List
-from gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 
