@@ -16,8 +16,8 @@ echo "🧹 Passo 2: Removendo arquivos temporários..."
 rm -f gateway_umbrellapag_fixed.py reenqueue_atomopay.py grimbots.pid nohup.out 2>/dev/null || true
 
 echo ""
-echo "🧹 Passo 3: Limpando arquivos não rastreados (exceto logs, .env, venv)..."
-git clean -fd -e logs/ -e .env -e venv/ -e "*.pid" -e nohup.out -e "*.log" -e "*.pyc" -e "__pycache__" 2>/dev/null || true
+echo "🧹 Passo 3: Limpando arquivos não rastreados (exceto logs, .env, venv, .git-pull-vps.sh)..."
+git clean -fd -e logs/ -e .env -e venv/ -e "*.pid" -e nohup.out -e "*.log" -e "*.pyc" -e "__pycache__" -e ".git-pull-vps.sh" 2>/dev/null || true
 
 echo ""
 echo "⬇️  Passo 4: Fazendo pull do repositório..."
