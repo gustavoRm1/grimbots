@@ -683,6 +683,19 @@ def process_payment_confirmation(payment: Payment, gateway_type: str, bot_manage
                     logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
             except Exception as delivery_error:
                 logger.exception(f"❌ Erro ao enviar entregável: {delivery_error}")
+            
+            # ✅ EMITIR WEBSOCKET para atualizar dashboard em tempo real
+            try:
+                if payment.bot and payment.bot.user_id:
+                    socketio.emit('payment_update', {
+                        'payment_id': payment.id,
+                        'status': 'paid',
+                        'amount': float(payment.amount),
+                        'bot_id': payment.bot_id,
+                    }, room=f'user_{payment.bot.user_id}')
+                    logger.info(f"✅ WebSocket emitido para user_{payment.bot.user_id}")
+            except Exception as ws_error:
+                logger.error(f"❌ Erro ao emitir WebSocket: {ws_error}")
         else:
             logger.error(
                 f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -1860,68 +1873,4 @@ def _decide_delivery_link(payment, pixel_config: Dict[str, Any]) -> Optional[str
             # Sem pixel e sem access_link -> sem link
             logger.warning(f"[PIXEL_STICKY] Decisão: source=none, link=none (sem configuração)")
             return None
-
-
-def process_payment_confirmation(payment: Payment, gateway_type: str) -> bool:
-    """
-    Processa a confirmação de pagamento e executa ações pós-venda.
-    
-    Args:
-        payment: Objeto Payment confirmado
-        gateway_type: Tipo do gateway (paradise, syncpay, etc.)
-    
-    Returns:
-        bool: True se processado com sucesso
-    """
-    try:
-        # Enviar entregável (agora retorna dict)
-        delivery_result = send_payment_delivery(payment)
-        
-        # Emitir evento em tempo real
-        try:
-            if payment.bot and payment.bot.user_id:
-                socketio.emit('payment_update', {
-                    'payment_id': payment.id,
-                    'status': 'paid',
-                    'amount': float(payment.amount),
-                    'bot_id': payment.bot_id,
-                    'delivery_method': delivery_result.get('delivery_method', 'none'),
-                }, room=f'user_{payment.bot.user_id}')
-        except Exception as e:
-            logger.error(f"❌ Erro ao emitir WebSocket: {e}")
-        
-        # Processar upsells se configurado
-        if payment.bot and payment.bot.config and payment.bot.config.upsells_enabled:
-            try:
-                upsells = payment.bot.config.get_upsells()
-                if upsells:
-                    matched_upsells = [
-                        u for u in upsells 
-                        if not u.get('trigger_product') or u.get('trigger_product') == payment.product_name
-                    ]
-                    
-                    if matched_upsells:
-                        local_bot_manager = BotManager(
-                            socketio=None, 
-                            scheduler=None, 
-                            user_id=payment.bot.user_id
-                        )
-                        local_bot_manager.schedule_upsells(
-                            bot_id=payment.bot_id,
-                            payment_id=payment.payment_id,
-                            chat_id=int(payment.customer_user_id),
-                            upsells=matched_upsells,
-                            original_price=payment.amount,
-                            original_button_index=-1
-                        )
-                        logger.info(f"📅 Upsells agendados para payment {payment.payment_id}")
-            except Exception as e:
-                logger.error(f"❌ Erro ao processar upsells: {e}", exc_info=True)
-        
-        return delivery_result.get('success', False)
-        
-    except Exception as e:
-        logger.error(f"❌ Erro no processamento de pagamento: {e}", exc_info=True)
-        return False
-
 

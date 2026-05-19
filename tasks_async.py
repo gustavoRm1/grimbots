@@ -973,7 +973,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
     try:
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
-        from gateway_factory import GatewayFactory
+        from gateways.gateway_factory import GatewayFactory
         from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
@@ -1655,7 +1655,7 @@ def generate_pix_async(
         from app import app  # <--- IMPORTAR DE QUEM INSTANCIOU A FACTORY
         from internal_logic.core.extensions import db
         from internal_logic.core.models import Bot, BotConfig, Payment, Gateway
-        from gateway_factory import GatewayFactory
+        from gateways.gateway_factory import GatewayFactory
         from bot_manager import BotManager
         import uuid
         import time

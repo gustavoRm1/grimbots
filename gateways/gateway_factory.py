@@ -272,7 +272,7 @@ class GatewayFactory:
             # ✅ QI 500: Envolver com adapter se solicitado
             if use_adapter:
                 try:
-                    from gateway_adapter import GatewayAdapter
+                    from .gateway_adapter import GatewayAdapter
                     gateway = GatewayAdapter(gateway)
                     logger.info(f"✅ [Factory] Gateway {gateway_type} envolvido com GatewayAdapter")
                 except ImportError as e:
