@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from sqlalchemy import text, extract, func
 from internal_logic.core.extensions import db
-from internal_logic.core.models import Payment, BotUser
+from internal_logic.core.models import Payment, BotUser, get_brazil_time
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,10 @@ class StatsService:
             return datetime.min
         try:
             days = int(period_days)
-            return datetime.utcnow() - timedelta(days=days)
+            # ✅ SENIOR: Usar Horário de Brasília para consistência com o banco
+            return get_brazil_time() - timedelta(days=days)
         except (ValueError, TypeError):
-            return datetime.utcnow() - timedelta(days=30)  # Default: 30 dias
+            return get_brazil_time() - timedelta(days=30)  # Default: 30 dias
     
     @staticmethod
     def get_bot_metrics(bot_id, period_days=30):
@@ -50,7 +51,7 @@ class StatsService:
             sales_query = text("""
                 SELECT COUNT(*) as count 
                 FROM payments 
-                WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
+                WHERE bot_id = :bot_id AND status = 'paid' AND paid_at >= :date_filter
             """)
             total_sales = db.session.execute(sales_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
         else:
@@ -62,7 +63,7 @@ class StatsService:
             revenue_query = text("""
                 SELECT COALESCE(SUM(amount), 0) as revenue 
                 FROM payments 
-                WHERE bot_id = :bot_id AND status = 'paid' AND created_at >= :date_filter
+                WHERE bot_id = :bot_id AND status = 'paid' AND paid_at >= :date_filter
             """)
             total_revenue = db.session.execute(revenue_query, {"bot_id": bot_id, "date_filter": date_filter_str}).scalar()
         else:
@@ -87,22 +88,23 @@ class StatsService:
         # Ticket médio
         avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0.0
         
-        # Métricas de hoje
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        # ✅ SENIOR: Calcular "Hoje" baseado no Horário de Brasília
+        today_now = get_brazil_time()
+        today_start = today_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_str = today_start.strftime('%Y-%m-%d %H:%M:%S')
         today_end_str = (today_start + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
         
         today_sales = db.session.execute(
             text("""SELECT COUNT(*) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
-               AND created_at >= :start_date AND created_at < :end_date"""),
+               AND paid_at >= :start_date AND paid_at < :end_date"""),
             {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
         ).scalar()
         
         today_revenue = db.session.execute(
             text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
-               AND created_at >= :start_date AND created_at < :end_date"""),
+               AND paid_at >= :start_date AND paid_at < :end_date"""),
             {"bot_id": bot_id, "start_date": today_start_str, "end_date": today_end_str}
         ).scalar()
         
@@ -112,14 +114,14 @@ class StatsService:
         yesterday_sales = db.session.execute(
             text("""SELECT COUNT(*) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
-               AND created_at >= :start_date AND created_at < :end_date"""),
+               AND paid_at >= :start_date AND paid_at < :end_date"""),
             {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
         ).scalar()
         
         yesterday_revenue = db.session.execute(
             text("""SELECT COALESCE(SUM(amount), 0) FROM payments 
                WHERE bot_id = :bot_id AND status = 'paid' 
-               AND created_at >= :start_date AND created_at < :end_date"""),
+               AND paid_at >= :start_date AND paid_at < :end_date"""),
             {"bot_id": bot_id, "start_date": yesterday_start_str, "end_date": today_start_str}
         ).scalar()
         
@@ -188,14 +190,14 @@ class StatsService:
             # Query SQL para vendas por dia (via session - compatível SQLAlchemy 2.0)
             chart_query = text("""
                 SELECT 
-                    DATE(created_at) as date,
+                    DATE(paid_at) as date,
                     COUNT(*) as sales,
                     COALESCE(SUM(amount), 0) as revenue
                 FROM payments 
                 WHERE bot_id = :bot_id 
                     AND status = 'paid' 
-                    AND created_at >= :date_filter
-                GROUP BY DATE(created_at)
+                    AND paid_at >= :date_filter
+                GROUP BY DATE(paid_at)
                 ORDER BY date
             """)
             
@@ -207,7 +209,7 @@ class StatsService:
             
             # Preencher todos os dias do período (inclusive sem vendas)
             chart_data = []
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
             
             for i in range(chart_days - 1, -1, -1):  # Do mais antigo para o mais recente
                 day_date = today - timedelta(days=i)

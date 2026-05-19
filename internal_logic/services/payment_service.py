@@ -19,10 +19,11 @@ from gateways.gateway_aguia import AguiaGateway
 from gateways.gateway_bolt import BoltGateway
 from gateways.gateway_syncpay import SyncPayGateway
 from gateways.gateway_wiinpay import WiinPayGateway
-# from gateway_atomopay import AtomoGateway  # Commented out - requires encryption setup
-# from gateway_orionpay import OrionPayGateway  # Commented out - requires encryption setup
-# from gateway_pushyn import PushynGateway  # Commented out - requires encryption setup
-# from gateway_umbrellapag import UmbrellaPagGateway  # Commented out - requires encryption setup
+from gateways.gateway_atomopay import AtomPayGateway
+from gateways.gateway_orionpay import OrionPayGateway
+from gateways.gateway_pushyn import PushynGateway
+from gateways.gateway_umbrellapag import UmbrellaPagGateway
+from gateways.gateway_babylon import BabylonGateway
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class PixPaymentResponse:
     qr_code: Optional[str] = None
     qr_code_url: Optional[str] = None
     transaction_id: Optional[str] = None
+    reference: Optional[str] = None  # ✅ NOVO: Reference oficial do gateway
     status: str = "pending"
     error_message: Optional[str] = None
     raw_response: Optional[Dict] = None
@@ -99,10 +101,11 @@ class GatewayFactory:
         'syncpay': SyncPayGateway,
         'paradise': ParadisePaymentGateway,
         'bolt': BoltGateway,
-        # 'atomo': AtomoGateway,  # Commented out - requires encryption setup
-        # 'orionpay': OrionPayGateway,  # Commented out - requires encryption setup
-        # 'pushyn': PushynGateway,  # Commented out - requires encryption setup
-        # 'umbrellapag': UmbrellaPagGateway,  # Commented out - requires encryption setup
+        'atomopay': AtomPayGateway,  # ✅ Adicionado
+        'orionpay': OrionPayGateway,
+        'pushyn': PushynGateway,
+        'umbrellapag': UmbrellaPagGateway,
+        'babylon': BabylonGateway,
     }
     
     @classmethod
@@ -155,32 +158,38 @@ class GatewayFactory:
             
             # Instanciar gateway baseado no tipo
             if gateway_type == 'syncpay':
-                # ROTA ISOLADA APENAS PARA SYNCPAY
                 gateway_instance = gateway_class(
                     client_id=credentials.get('client_id'),
                     client_secret=credentials.get('client_secret')
                 )
+            elif gateway_type == 'atomopay':
+                gateway_instance = gateway_class(
+                    api_token=credentials.get('api_key'),
+                    product_hash=credentials.get('product_hash')
+                )
+            elif gateway_type == 'babylon':
+                gateway_instance = gateway_class(
+                    api_key=credentials.get('api_key'),
+                    company_id=credentials.get('client_id')
+                )
+            elif gateway_type == 'bolt':
+                gateway_instance = gateway_class(
+                    api_key=credentials.get('api_key'),
+                    company_id=credentials.get('company_id')
+                )
+            elif gateway_type == 'paradise':
+                gateway_instance = gateway_class(credentials)
+            elif gateway_type in ['aguia', 'aguiapags']:
+                gateway_instance = gateway_class(api_key=credentials.get('api_key', ''), sandbox=False)
+            elif gateway_type == 'wiinpay':
+                gateway_instance = gateway_class(
+                    api_key=credentials.get('api_key', ''), 
+                    split_user_id=credentials.get('split_user_id'), 
+                    split_percentage=credentials.get('split_percentage')
+                )
             else:
-                # ROTA LEGADA (INTOCADA) PARA PARADISE, HOOPAY, ETC
-                # Mantém EXATAMENTE o código que já existia
-                if gateway_type == 'paradise':
-                    gateway_instance = gateway_class(credentials)
-                elif gateway_type == 'aguia' or gateway_type == 'aguiapags':
-                    api_key = credentials.get('api_key', '')
-                    gateway_instance = gateway_class(api_key=api_key, sandbox=True)
-                elif gateway_type == 'bolt':
-                    api_key = credentials.get('api_key', '')
-                    company_id = credentials.get('company_id', '')
-                    gateway_instance = gateway_class(api_key=api_key, company_id=company_id)
-                elif gateway_type == 'wiinpay':
-                    api_key = credentials.get('api_key', '')
-                    split_user_id = credentials.get('split_user_id')
-                    split_percentage = credentials.get('split_percentage')
-                    gateway_instance = gateway_class(api_key=api_key, split_user_id=split_user_id, split_percentage=split_percentage)
-                else:
-                    # Para outros gateways, tentar passar apenas api_key
-                    api_key = credentials.get('api_key', '')
-                    gateway_instance = gateway_class(api_key=api_key)
+                # Para outros (OrionPay, Pushyn, UmbrellaPag)
+                gateway_instance = gateway_class(api_key=credentials.get('api_key', ''))
             
             logger.info(f"GatewayFactory: Criado {gateway_class.__name__} para {gateway_type}")
             return gateway_instance
@@ -345,6 +354,7 @@ class PaymentService:
                         qr_code=result.get('pix_code') or result.get('qr_code'),
                         qr_code_url=result.get('qr_code_url'),
                         transaction_id=result.get('transaction_id') or result.get('payment_id'),
+                        reference=result.get('reference') or result.get('external_reference'), # ✅ Capturar reference
                         status="pending",
                         raw_response=result
                     )
@@ -367,13 +377,18 @@ class PaymentService:
             
             # 5. Registrar transação no banco (se sucesso)
             if response.success and self.db:
+                # Priorizar o reference retornado pelo gateway, senão usa o payment_id original
+                final_payment_id = response.reference or payment_id
+                
                 self._register_transaction(
                     bot_id=bot_id,
                     gateway_id=gateway_id,
+                    gateway_type=gateway_config.gateway_type,
+                    payment_id=final_payment_id,
                     transaction_id=response.transaction_id,
                     amount=amount,
                     status=response.status,
-                    customer_user_id=customer_user_id  # <--- PASSAR O ID DO TELEGRAM
+                    customer_user_id=customer_user_id
                 )
             
             return response
@@ -395,6 +410,8 @@ class PaymentService:
         self,
         bot_id: int,
         gateway_id: int,
+        gateway_type: str,
+        payment_id: str,
         transaction_id: Optional[str],
         amount: float,
         status: str,
@@ -404,23 +421,20 @@ class PaymentService:
         try:
             from internal_logic.core.models import Payment
             
-            # Garantir valores para as Constraints do banco
-            safe_payment_id = str(uuid.uuid4())  # Fallback obrigatório
-            safe_gateway_type = "paradise"  # Fallback obrigatório
-            
+            # 🚀 ARQUITETURA SENIOR: Usar dados REAIS do gateway, não fallbacks fixos
             payment = Payment(
                 bot_id=bot_id,
-                payment_id=safe_payment_id,  # RESOLVE A NOT NULL CONSTRAINT
-                gateway_type=safe_gateway_type,  # RESOLVE O GATEWAY TYPE NULO
+                payment_id=payment_id,                # ✅ ID Real (Reference)
+                gateway_type=gateway_type,           # ✅ Tipo Real (atomopay, etc)
                 amount=amount,
                 status=status,
-                gateway_transaction_id=str(transaction_id) if transaction_id else safe_payment_id,
-                customer_user_id=str(customer_user_id) if customer_user_id else None  # <--- CRÍTICO PARA DOWNSSELL
+                gateway_transaction_id=str(transaction_id) if transaction_id else payment_id,
+                customer_user_id=str(customer_user_id) if customer_user_id else None
             )
             self.db.add(payment)
             self.db.commit()
             
-            self.logger.info(f"PaymentService: Transação registrada - ID {payment.id}")
+            self.logger.info(f"PaymentService: Transação registrada - ID {payment.id} | Type: {gateway_type}")
             
         except Exception as e:
             self.logger.error(f"PaymentService: Erro ao registrar transação - {e}")

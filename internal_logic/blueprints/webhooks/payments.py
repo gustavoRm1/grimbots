@@ -186,7 +186,7 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
     elif gateway_type == 'wiinpay':
         dummy_credentials = {'api_key': 'dummy', 'split_user_id': 'dummy'}
     elif gateway_type == 'atomopay':
-        dummy_credentials = {'api_token': 'dummy', 'offer_hash': 'dummy'}
+        dummy_credentials = {'api_key': 'dummy', 'product_hash': 'dummy'}
     elif gateway_type == 'umbrellapag':
         dummy_credentials = {'api_key': 'dummy', 'product_hash': 'dummy'}
     elif gateway_type == 'orionpay':
@@ -239,28 +239,26 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
                 logger.info(f"[AUDIT] Pagamento {payment.id} já estava como PAID.")
                 return True
 
+            # 5. Processar Confirmação via Service (Centralizado)
             try:
-                # Atualização do Banco
-                payment.status = 'paid'
-                payment.paid_at = get_brazil_time()
+                from internal_logic.services.payment_processor import process_payment_confirmation
                 
-                db.session.add(payment)
-                db.session.commit()
-                logger.info(f"[SUCCESS] Pagamento {payment.id} ATUALIZADO para PAID | amount={payment.amount}")
+                # ✅ SENIOR: O processador é quem deve gerenciar o status e o commit
+                # para garantir que estatísticas, comissões e entrega ocorram em uma única transação atômica.
+                result_proc = process_payment_confirmation(payment, gateway_type)
+                
+                if result_proc.get('status') == 'processed':
+                    logger.info(f"✅ [SUCCESS] Pagamento {payment.id} processado com sucesso!")
+                    return True
+                elif result_proc.get('status') == 'already_processed':
+                    logger.info(f"ℹ️ [INFO] Pagamento {payment.id} já havia sido processado.")
+                    return True
+                else:
+                    logger.warning(f"⚠️ [WARN] Processador retornou status inesperado: {result_proc}")
+                    return False
 
-                # 6. Disparar Entrega (Telegram/Bot) + Stats + WebSocket
-                try:
-                    from internal_logic.services.payment_processor import process_payment_confirmation
-                    process_payment_confirmation(payment, gateway_type)
-                    logger.info(f"[SUCCESS] Entrega processada para o bot {payment.bot_id}.")
-                except Exception as delivery_err:
-                    logger.error(f"⚠️ Erro na entrega mas pagamento foi salvo: {delivery_err}", exc_info=True)
-
-                return True
-
-            except Exception as db_err:
-                db.session.rollback()
-                logger.error(f"❌ Erro ao salvar no banco: {db_err}", exc_info=True)
+            except Exception as proc_error:
+                logger.error(f"❌ [ERROR] Erro ao processar confirmação de pagamento: {proc_error}", exc_info=True)
                 return False
     
     logger.warning(f"[AUDIT] Falha: Pagamento {event_ref or event_id} não localizado no banco.")

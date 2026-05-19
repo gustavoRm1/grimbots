@@ -825,7 +825,8 @@ class ParadisePaymentGateway(PaymentGateway):
                 'qr_code_url': qr_code_base64 if qr_code_base64 else f'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={pix_code}',
                 'transaction_id': transaction_id,  # ✅ Convertido de 'id'
                 'transaction_hash': transaction_hash,  # ✅ Hash para consulta de status
-                'payment_id': payment_id
+                'payment_id': payment_id,
+                'reference': safe_reference  # ✅ Retornar a referência real enviada
             }
             
         except requests.Timeout:
@@ -894,7 +895,8 @@ class ParadisePaymentGateway(PaymentGateway):
             
             return {
                 'gateway_transaction_id': transaction_id,
-                'payment_id': external_id,  # Nosso UUID
+                'payment_id': external_id,  # Nosso UUID/Reference
+                'external_reference': external_id, # ✅ Adicionado para compatibilidade com _find_payment_by_webhook
                 'status': mapped_status,
                 'amount': amount
             }
