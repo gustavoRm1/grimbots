@@ -36,7 +36,7 @@ import unicodedata
 import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 from utils.validators import cpf_valido
 
 logger = logging.getLogger(__name__)
@@ -83,17 +83,14 @@ class UmbrellaPagGateway(PaymentGateway):
         return "umbrellapag"
     
     def get_webhook_url(self) -> str:
-        base_url = os.environ.get('WEBHOOK_URL', 'http://localhost:5000')
+        base_url = resolve_public_base_url()
         return f"{base_url}/webhook/payment/umbrellapag"
     
     def _get_dynamic_checkout_url(self, payment_id: str) -> str:
         """
         Gera URL de checkout dinâmica baseada no ambiente
         """
-        base_url = os.environ.get('WEBHOOK_URL', 'http://localhost:5000')
-        # Remove /webhook se presente e adiciona /payment
-        if '/webhook' in base_url:
-            base_url = base_url.replace('/webhook', '')
+        base_url = resolve_public_base_url()
         return f"{base_url}/payment/{payment_id}"
     
     def _validate_phone(self, phone: str) -> Optional[str]:
@@ -1470,4 +1467,3 @@ class UmbrellaPagGateway(PaymentGateway):
         # Se chegou aqui, todas as tentativas falharam
         logger.error(f"❌ [UMBRELLAPAY API] Todas as {max_retries} tentativas falharam para {transaction_id}")
         return None
-

@@ -7,7 +7,7 @@ import os
 import requests
 import logging
 from typing import Dict, Any, Optional
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +109,7 @@ class WiinPayGateway(PaymentGateway):
     
     def get_webhook_url(self) -> str:
         """URL do webhook WiinPay"""
-        webhook_base = os.environ.get('WEBHOOK_URL', 'https://app.grimbots.online')
-        # Garantir que não tem barra dupla
-        if webhook_base.endswith('/'):
-            webhook_base = webhook_base[:-1]
+        webhook_base = resolve_public_base_url()
         return f"{webhook_base}/webhook/payment/wiinpay"
     
     def generate_pix(
@@ -628,4 +625,3 @@ def create_wiinpay_gateway(credentials: Dict[str, Any]) -> Optional[WiinPayGatew
         return None
     
     return WiinPayGateway(api_key=api_key, split_user_id=split_user_id)
-

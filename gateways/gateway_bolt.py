@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List
 
 import requests
 
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,8 @@ class BoltGateway(PaymentGateway):
         return "bolt"
 
     def get_webhook_url(self) -> str:
-        webhook_base = os.environ.get('WEBHOOK_URL', '')
-        if webhook_base:
-            return f"{webhook_base}/webhooks/bolt"
-        return ""
+        webhook_base = resolve_public_base_url()
+        return f"{webhook_base}/webhooks/bolt"
 
     def _build_headers(self) -> Dict[str, str]:
         if not self.secret_key:

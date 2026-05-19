@@ -7,7 +7,7 @@ import os
 import requests
 import logging
 from typing import Dict, Any, Optional, List
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class PushynGateway(PaymentGateway):
     
     def get_webhook_url(self) -> str:
         """URL do webhook Pushyn"""
-        webhook_base = os.environ.get('WEBHOOK_URL', '')
+        webhook_base = resolve_public_base_url()
         return f"{webhook_base}/webhook/payment/pushynpay"
     
     def generate_pix(
@@ -384,5 +384,4 @@ class PushynGateway(PaymentGateway):
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}")
             return None
-
 

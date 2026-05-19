@@ -25,6 +25,7 @@ import random
 import csv
 from typing import Dict, Optional
 from .gateway_interface import PaymentGateway
+from .gateway_interface import resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -184,19 +185,14 @@ class ParadisePaymentGateway(PaymentGateway):
         return "paradise"
     
     def get_webhook_url(self) -> str:
-        from os import environ
-        base_url = environ.get('WEBHOOK_URL', 'http://localhost:5000')
+        base_url = resolve_public_base_url()
         return f"{base_url}/webhook/payment/paradise"
     
     def _get_dynamic_checkout_url(self, payment_id: int) -> str:
         """
         Gera URL de checkout dinâmica baseada no ambiente
         """
-        from os import environ
-        base_url = environ.get('WEBHOOK_URL', 'http://localhost:5000')
-        # Remove /webhook se presente e adiciona /payment
-        if '/webhook' in base_url:
-            base_url = base_url.replace('/webhook', '')
+        base_url = resolve_public_base_url()
         return f"{base_url}/payment/{payment_id}"
     
     def _validate_phone(self, phone: str) -> str:
@@ -1004,5 +1000,4 @@ class ParadisePaymentGateway(PaymentGateway):
             return False
         
         return True
-
 

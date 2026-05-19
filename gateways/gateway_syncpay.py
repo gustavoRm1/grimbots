@@ -7,7 +7,7 @@ import os
 import requests
 import logging
 from typing import Dict, Any, Optional
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class SyncPayGateway(PaymentGateway):
     
     def get_webhook_url(self) -> str:
         """URL do webhook SyncPay"""
-        webhook_base = os.environ.get('WEBHOOK_URL', '')
+        webhook_base = resolve_public_base_url()
         return f"{webhook_base}/webhook/payment/syncpay"
     
     def _generate_bearer_token(self) -> Optional[str]:
@@ -414,5 +414,4 @@ class SyncPayGateway(PaymentGateway):
         """
         logger.warning(f"⚠️ [{self.get_gateway_name()}] Consulta de status não implementada (endpoint não documentado)")
         return None
-
 

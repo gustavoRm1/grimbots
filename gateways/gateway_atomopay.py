@@ -21,7 +21,7 @@ import re
 import unicodedata
 from typing import Dict, Any, Optional
 from datetime import datetime
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 from utils.validators import cpf_valido
 
 logger = logging.getLogger(__name__)
@@ -74,17 +74,14 @@ class AtomPayGateway(PaymentGateway):
         return "atomopay"
     
     def get_webhook_url(self) -> str:
-        base_url = os.environ.get('WEBHOOK_URL', 'http://localhost:5000')
+        base_url = resolve_public_base_url()
         return f"{base_url}/webhook/payment/atomopay"
     
     def _get_dynamic_checkout_url(self, payment_id: str) -> str:
         """
         Gera URL de checkout dinâmica baseada no ambiente (como Paradise)
         """
-        base_url = os.environ.get('WEBHOOK_URL', 'http://localhost:5000')
-        # Remove /webhook se presente e adiciona /payment
-        if '/webhook' in base_url:
-            base_url = base_url.replace('/webhook', '')
+        base_url = resolve_public_base_url()
         return f"{base_url}/payment/{payment_id}"
     
     def _validate_phone(self, phone: str) -> str:

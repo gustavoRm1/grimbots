@@ -8,7 +8,7 @@ import logging
 import csv
 import random
 from typing import Dict, Any, Optional, List
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class BabylonGateway(PaymentGateway):
     
     def get_webhook_url(self) -> str:
         """URL do webhook Babylon"""
-        webhook_base = os.environ.get('WEBHOOK_URL', '')
+        webhook_base = resolve_public_base_url()
         return f"{webhook_base}/webhook/payment/babylon"
     
     def generate_pix(
@@ -730,4 +730,3 @@ class BabylonGateway(PaymentGateway):
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}", exc_info=True)
             return None
-

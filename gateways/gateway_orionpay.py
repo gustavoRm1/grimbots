@@ -19,7 +19,7 @@ import logging
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
-from .gateway_interface import PaymentGateway
+from .gateway_interface import PaymentGateway, resolve_public_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class OrionPayGateway(PaymentGateway):
         return "orionpay"
     
     def get_webhook_url(self) -> str:
-        base_url = os.environ.get('WEBHOOK_URL', 'http://localhost:5000')
+        base_url = resolve_public_base_url()
         return f"{base_url}/webhook/payment/orionpay"
     
     def _make_request(
@@ -775,4 +775,3 @@ class OrionPayGateway(PaymentGateway):
             import traceback
             logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None
-

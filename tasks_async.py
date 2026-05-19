@@ -9,6 +9,7 @@ Tasks Assíncronas QI 200 - Redis Queue (RQ)
 import os
 import logging
 import re
+from datetime import timedelta
 
 # 🚨 CRÍTICO: Carregar .env ANTES de qualquer import local do projeto
 # Workers RQ precisam de ENCRYPTION_KEY e outras variáveis de ambiente
@@ -49,6 +50,42 @@ except Exception as e:
 
 
 _AUX_TABLES_READY = False
+
+
+def _ensure_periodic_reconciliations_scheduled() -> None:
+    if not redis_conn or not gateway_queue:
+        return
+
+    try:
+        from internal_logic.services.payment_processor import reconcile_paradise_payments, reconcile_atomopay_payments
+
+        schedule_specs = [
+            ('reconcile:paradise', reconcile_paradise_payments, 60, 60),
+            ('reconcile:atomopay', reconcile_atomopay_payments, 60, 60),
+        ]
+
+        for key, func, interval_seconds, runs_ahead in schedule_specs:
+            lock_key = f"gb:scheduler:{key}:lock"
+            job_id = f"gb:{key}"
+
+            acquired = redis_conn.set(lock_key, "1", nx=True, ex=max(300, interval_seconds * runs_ahead))
+            if not acquired:
+                continue
+
+            try:
+                for i in range(1, runs_ahead + 1):
+                    gateway_queue.enqueue_in(
+                        timedelta(seconds=i * interval_seconds),
+                        func,
+                        job_id=f"{job_id}:{i}"
+                    )
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+_ensure_periodic_reconciliations_scheduled()
 
 
 def _ensure_aux_tables() -> None:
