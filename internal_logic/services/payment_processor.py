@@ -436,8 +436,13 @@ def process_payment_confirmation(payment: Payment, gateway_type: str, bot_manage
                 resultado = send_payment_delivery(payment, bot_manager, socketio)
                 if resultado:
                     logger.info(f"✅ Entregável reenviado com sucesso (webhook duplicado)")
-            except:
-                pass
+                else:
+                    logger.warning(f"⚠️ Entregável NÃO foi reenviado (webhook duplicado) payment_id={payment.payment_id} payment_db_id={payment.id}")
+            except Exception as delivery_dup_error:
+                logger.error(
+                    f"❌ Erro ao reenviar entregável (webhook duplicado) payment_id={payment.payment_id} payment_db_id={payment.id}: {delivery_dup_error}",
+                    exc_info=True
+                )
         else:
             logger.error(
                 f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
@@ -1733,9 +1738,23 @@ Seu acesso está disponível agora.
             if telegram_sent:
                 logger.info(f"✅ Entregável enviado via Telegram para {payment.customer_user_id} (payment {payment.payment_id})")
             else:
-                logger.warning(f"⚠️ Falha ao enviar entregável via Telegram para {payment.customer_user_id} (payment {payment.payment_id})")
+                last_err = None
+                try:
+                    last_err = getattr(local_bot_manager, 'messenger', None)
+                    last_err = getattr(last_err, 'last_send_error', None)
+                except Exception:
+                    last_err = None
+                logger.warning(
+                    f"⚠️ Falha ao enviar entregável via Telegram "
+                    f"(payment_id={payment.payment_id} payment_db_id={payment.id} bot_id={payment.bot_id} chat_id={payment.customer_user_id}) "
+                    f"last_send_error={last_err}"
+                )
         except Exception as e:
-            logger.warning(f"⚠️ Exceção ao enviar via Telegram para {payment.customer_user_id} (payment {payment.payment_id}): {e}")
+            logger.error(
+                f"❌ Exceção ao enviar via Telegram "
+                f"(payment_id={payment.payment_id} payment_db_id={payment.id} bot_id={payment.bot_id} chat_id={payment.customer_user_id}): {e}",
+                exc_info=True
+            )
 
         if not telegram_sent and enqueue_retry:
             definitive = False
