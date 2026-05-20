@@ -1895,7 +1895,9 @@ def task_process_broadcast_campaign(campaign_id: int):
             audio_enabled = campaign.audio_enabled or False
             audio_url = campaign.audio_url or ''
             buttons = campaign.get_buttons() if hasattr(campaign, 'get_buttons') else (campaign.buttons or [])
-            days_since_last_contact = campaign.days_since_last_contact or 7
+            days_since_last_contact = campaign.days_since_last_contact
+            if days_since_last_contact is None:
+                days_since_last_contact = 7
             audience_segment = campaign.target_audience or 'all_users'
             
             # ✅ CORREÇÃO: Passar audience_segment diretamente (sem mapeamento)
@@ -2001,6 +2003,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             from internal_logic.core.models import BotUser, Payment, RemarketingBlacklist
             from internal_logic.core.models import get_brazil_time
             from datetime import timedelta
+            from sqlalchemy import or_
             
             # Query base: usuários do bot (apenas ativos, não arquivados)
             query = db.session.query(BotUser).filter(
@@ -2009,9 +2012,9 @@ def task_process_broadcast_campaign(campaign_id: int):
             )
             
             # Filtro: último contato há X dias
-            if days_since_last_contact > 0:
+            if days_since_last_contact and days_since_last_contact > 0:
                 contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
-                query = query.filter(BotUser.last_interaction <= contact_limit)
+                query = query.filter(or_(BotUser.last_interaction == None, BotUser.last_interaction <= contact_limit))
             
             # Filtrar blacklist usando subquery (performance em escala)
             blacklist_subquery = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
@@ -2157,8 +2160,8 @@ def task_process_broadcast_campaign(campaign_id: int):
                 BotUser.archived == False
             )
             
-            if days_since_last_contact > 0:
-                q = q.filter(BotUser.last_interaction <= contact_limit)
+            if days_since_last_contact and days_since_last_contact > 0:
+                q = q.filter(or_(BotUser.last_interaction == None, BotUser.last_interaction <= contact_limit))
             
             # Filtrar blacklist usando subquery (performance em escala)
             blacklist_subquery = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
