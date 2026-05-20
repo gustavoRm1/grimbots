@@ -6754,8 +6754,7 @@ Desculpe, não foi possível processar seu pagamento.
                                         
                                         # ✅ ENVIAR ENTREGÁVEL após confirmar pagamento (outros gateways)
                                         try:
-                                            # TODO: Importar send_payment_delivery do local correto
-                                            # from internal_logic.services.payment_processor import send_payment_delivery
+                                            from internal_logic.services.payment_processor import send_payment_delivery
                                             logger.info(f"📦 [VERIFY OTHER] Enviando entregável via send_payment_delivery para {payment.payment_id}")
                                             
                                             db.session.refresh(payment)
@@ -6866,8 +6865,7 @@ Desculpe, não foi possível processar seu pagamento.
                     
                         # ✅ CRÍTICO: Usar send_payment_delivery para garantir validação consistente
                         try:
-                            # TODO: Importar send_payment_delivery do local correto
-                            # from internal_logic.services.payment_processor import send_payment_delivery
+                            from internal_logic.services.payment_processor import send_payment_delivery
                             logger.info(f"📦 [VERIFY] Enviando entregável via send_payment_delivery para {payment.payment_id}")
                             
                             # ✅ CRÍTICO: Refresh antes de chamar send_payment_delivery
