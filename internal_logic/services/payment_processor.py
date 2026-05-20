@@ -1485,8 +1485,54 @@ def check_scheduled_remarketing_campaigns():
     try:
         with current_app.app_context():
             logger.info("🔄 Verificando campanhas de remarketing")
-            # Código implementado aqui
-            pass
+            from internal_logic.core.models import RemarketingCampaign, Bot, get_brazil_time
+            from internal_logic.core.extensions import db
+            from internal_logic.services.remarketing_service import get_remarketing_service
+
+            now = get_brazil_time()
+
+            due_campaigns = (
+                RemarketingCampaign.query
+                .filter(
+                    RemarketingCampaign.status == 'scheduled',
+                    RemarketingCampaign.scheduled_at.isnot(None),
+                    RemarketingCampaign.scheduled_at <= now,
+                )
+                .order_by(RemarketingCampaign.scheduled_at.asc())
+                .limit(50)
+                .all()
+            )
+
+            if not due_campaigns:
+                logger.info("ℹ️ Nenhuma campanha agendada pronta para disparo")
+                return
+
+            service = get_remarketing_service()
+
+            for campaign in due_campaigns:
+                try:
+                    bot = Bot.query.get(campaign.bot_id)
+                    if not bot:
+                        campaign.status = 'failed'
+                        campaign.completed_at = now
+                        db.session.commit()
+                        continue
+
+                    campaign.status = 'queued'
+                    db.session.commit()
+
+                    service.send_campaign_async(campaign.id, bot.user_id)
+                    logger.info(f"✅ Campanha agendada {campaign.id} enfileirada (bot_id={campaign.bot_id}, user_id={bot.user_id})")
+                except Exception as enqueue_error:
+                    try:
+                        db.session.rollback()
+                        campaign.status = 'failed'
+                        campaign.completed_at = now
+                        campaign.total_failed = campaign.total_failed or 0
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                    logger.error(f"❌ Falha ao enfileirar campanha agendada {campaign.id}: {enqueue_error}", exc_info=True)
     except Exception as e:
         logger.error(f"❌ Erro check_scheduled_remarketing_campaigns: {e}")
 

@@ -1864,7 +1864,6 @@ def task_process_broadcast_campaign(campaign_id: int):
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
     from datetime import timedelta
-    from redis_manager import get_redis_connection
     import json
     import time
     import requests
@@ -1878,7 +1877,10 @@ def task_process_broadcast_campaign(campaign_id: int):
                 return
             
             # ✅ ALINHAMENTO STATE MACHINE: Validar status inicial
-            if campaign.status not in ['pending', 'queued', 'created']:
+            if campaign.status == 'scheduled' and campaign.scheduled_at and campaign.scheduled_at > get_brazil_time():
+                logger.info(f"⏳ [MARATHON] Campanha {campaign_id} ainda não chegou no horário (scheduled_at={campaign.scheduled_at})")
+                return
+            if campaign.status not in ['pending', 'queued', 'created', 'scheduled']:
                 logger.warning(f"⚠️ [MARATHON] Campanha {campaign_id} ignorada. Status atual: {campaign.status}")
                 return
             
@@ -1892,7 +1894,7 @@ def task_process_broadcast_campaign(campaign_id: int):
             media_type = campaign.media_type or 'video'
             audio_enabled = campaign.audio_enabled or False
             audio_url = campaign.audio_url or ''
-            buttons = json.loads(campaign.buttons) if campaign.buttons else []
+            buttons = campaign.get_buttons() if hasattr(campaign, 'get_buttons') else (campaign.buttons or [])
             days_since_last_contact = campaign.days_since_last_contact or 7
             audience_segment = campaign.target_audience or 'all_users'
             
