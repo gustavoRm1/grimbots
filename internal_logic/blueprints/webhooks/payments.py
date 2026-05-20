@@ -30,10 +30,16 @@ def _find_payment_by_webhook(gateway_type: str, result: dict, data: dict) -> Opt
     Extraída da lógica do handler assíncrono (tasks_async.py) para unificação.
     """
     # Extrair identificadores do webhook
-    event_id = str(result.get('gateway_transaction_id') or data.get('id') or '').strip()
-    event_tx = str(data.get('transaction_id') or result.get('transaction_id') or '').strip()
+    event_id = str(result.get('gateway_transaction_id') or data.get('transaction_id') or data.get('id') or '').strip()
+    event_tx = str(data.get('transaction_id') or result.get('transaction_id') or result.get('gateway_transaction_id') or '').strip()
     event_hash = str(result.get('gateway_hash') or data.get('transaction_hash') or data.get('hash') or '').strip()
-    event_ref = str(result.get('external_reference') or data.get('reference') or '').strip()
+    event_ref = str(
+        result.get('external_reference')
+        or result.get('payment_id')
+        or data.get('external_id')
+        or data.get('reference')
+        or ''
+    ).strip()
     
     # Construir query base
     payment_query = Payment.query.filter_by(gateway_type=gateway_type)

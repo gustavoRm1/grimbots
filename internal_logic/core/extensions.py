@@ -140,6 +140,12 @@ def create_app():
     # ============================================================================
     from internal_logic.services.webhook_syncer import start_webhook_sync_thread
     start_webhook_sync_thread(app)
+
+    try:
+        from tasks_async import _ensure_periodic_reconciliations_scheduled
+        _ensure_periodic_reconciliations_scheduled()
+    except Exception as e:
+        logger.warning(f"Não foi possível agendar reconciliações periódicas: {e}")
     
     # ============================================================================
     # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS

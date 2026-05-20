@@ -379,6 +379,12 @@ class PaymentService:
             if response.success and self.db:
                 # Priorizar o reference retornado pelo gateway, senão usa o payment_id original
                 final_payment_id = response.reference or payment_id
+                transaction_hash = None
+                try:
+                    if isinstance(response.raw_response, dict):
+                        transaction_hash = response.raw_response.get('transaction_hash') or response.raw_response.get('gateway_transaction_hash')
+                except Exception:
+                    transaction_hash = None
                 
                 self._register_transaction(
                     bot_id=bot_id,
@@ -386,6 +392,7 @@ class PaymentService:
                     gateway_type=gateway_config.gateway_type,
                     payment_id=final_payment_id,
                     transaction_id=response.transaction_id,
+                    transaction_hash=transaction_hash,
                     amount=amount,
                     status=response.status,
                     customer_user_id=customer_user_id
@@ -413,6 +420,7 @@ class PaymentService:
         gateway_type: str,
         payment_id: str,
         transaction_id: Optional[str],
+        transaction_hash: Optional[str],
         amount: float,
         status: str,
         customer_user_id: Optional[str] = None
@@ -425,10 +433,11 @@ class PaymentService:
             payment = Payment(
                 bot_id=bot_id,
                 payment_id=payment_id,                # ✅ ID Real (Reference)
-                gateway_type=gateway_type,           # ✅ Tipo Real (atomopay, etc)
+                gateway_type=(gateway_type or '').strip().lower(),           # ✅ Tipo Real (atomopay, etc)
                 amount=amount,
                 status=status,
                 gateway_transaction_id=str(transaction_id) if transaction_id else payment_id,
+                gateway_transaction_hash=str(transaction_hash) if transaction_hash else None,
                 customer_user_id=str(customer_user_id) if customer_user_id else None
             )
             self.db.add(payment)

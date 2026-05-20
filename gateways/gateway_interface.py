@@ -10,6 +10,7 @@ from datetime import datetime
 
 def resolve_public_base_url() -> str:
     from os import environ
+    from urllib.parse import urlsplit, urlunsplit
 
     base_url = (environ.get('WEBHOOK_URL') or '').strip()
     if not base_url:
@@ -24,9 +25,26 @@ def resolve_public_base_url() -> str:
     if not base_url:
         base_url = 'https://app.grimbots.online'
 
-    base_url = base_url.rstrip('/')
-    if base_url.endswith('/webhook'):
-        base_url = base_url[:-len('/webhook')]
+    base_url = base_url.strip().rstrip('/')
+    try:
+        parts = urlsplit(base_url)
+        if parts.scheme and parts.netloc:
+            path = parts.path or ''
+            cut_at = path.find('/webhook')
+            if cut_at != -1:
+                path = path[:cut_at]
+            base_url = urlunsplit((parts.scheme, parts.netloc, path.rstrip('/'), '', ''))
+        else:
+            cut_at = base_url.find('/webhook')
+            if cut_at != -1:
+                base_url = base_url[:cut_at].rstrip('/')
+    except Exception:
+        cut_at = base_url.find('/webhook')
+        if cut_at != -1:
+            base_url = base_url[:cut_at].rstrip('/')
+
+    if not base_url:
+        base_url = 'https://app.grimbots.online'
 
     return base_url
 
@@ -197,4 +215,3 @@ class PaymentGateway(ABC):
             String formatada (ex: 'R$ 10,50')
         """
         return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
