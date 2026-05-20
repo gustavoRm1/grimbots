@@ -8,47 +8,6 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 
-def resolve_public_base_url() -> str:
-    from os import environ
-    from urllib.parse import urlsplit, urlunsplit
-
-    base_url = (environ.get('WEBHOOK_URL') or '').strip()
-    if not base_url:
-        base_url = (environ.get('PUBLIC_BASE_URL') or '').strip()
-
-    if not base_url:
-        domain = (environ.get('SESSION_COOKIE_DOMAIN') or '').strip()
-        if domain:
-            scheme = (environ.get('PREFERRED_URL_SCHEME') or 'https').strip()
-            base_url = f"{scheme}://{domain}"
-
-    if not base_url:
-        base_url = 'https://app.grimbots.online'
-
-    base_url = base_url.strip().rstrip('/')
-    try:
-        parts = urlsplit(base_url)
-        if parts.scheme and parts.netloc:
-            path = parts.path or ''
-            cut_at = path.find('/webhook')
-            if cut_at != -1:
-                path = path[:cut_at]
-            base_url = urlunsplit((parts.scheme, parts.netloc, path.rstrip('/'), '', ''))
-        else:
-            cut_at = base_url.find('/webhook')
-            if cut_at != -1:
-                base_url = base_url[:cut_at].rstrip('/')
-    except Exception:
-        cut_at = base_url.find('/webhook')
-        if cut_at != -1:
-            base_url = base_url[:cut_at].rstrip('/')
-
-    if not base_url:
-        base_url = 'https://app.grimbots.online'
-
-    return base_url
-
-
 class PaymentGateway(ABC):
     """
     Interface abstrata para todos os gateways de pagamento.

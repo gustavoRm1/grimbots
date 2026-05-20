@@ -2512,7 +2512,14 @@ def send_downsell_async(
     with app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento ainda está pendente
-            payment = Payment.query.filter_by(payment_id=payment_id).first()
+            payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+            payment = None
+            if payment_lookup.isdigit():
+                payment = Payment.query.get(int(payment_lookup))
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
             
             if not payment:
                 logger.warning(f"⚠️ [DOWNSELL JOB] Payment {payment_id} não encontrado - ignorando")
@@ -2529,7 +2536,7 @@ def send_downsell_async(
             # Executar envio do downsell
             result = local_bot_manager._send_downsell(
                 bot_id=bot_id,
-                payment_id=payment_id,
+                payment_id=payment.payment_id,
                 chat_id=chat_id,
                 downsell=downsell,
                 index=index,
@@ -2560,7 +2567,14 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     with app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento está pago
-            payment = Payment.query.filter_by(payment_id=payment_id).first()
+            payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+            payment = None
+            if payment_lookup.isdigit():
+                payment = Payment.query.get(int(payment_lookup))
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
             
             if not payment:
                 logger.warning(f"⚠️ [DOWNSELL JOB] Payment {payment_id} não encontrado - ignorando")
@@ -2577,7 +2591,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
             # Executar envio do downsell
             result = local_bot_manager._send_downsell(
                 bot_id=bot_id,
-                payment_id=payment_id,
+                payment_id=payment.payment_id,
                 chat_id=chat_id,
                 downsell=downsell,
                 index=index,
@@ -2608,7 +2622,14 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     with app.app_context():
         try:
             # ✅ ANTI-DUPLICAÇÃO: Verificar se pagamento está pago
-            payment = Payment.query.filter_by(payment_id=payment_id).first()
+            payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+            payment = None
+            if payment_lookup.isdigit():
+                payment = Payment.query.get(int(payment_lookup))
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+            if not payment and payment_lookup:
+                payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
             
             if not payment:
                 logger.warning(f"⚠️ [UPSELL JOB] Payment {payment_id} não encontrado - ignorando")
@@ -2625,7 +2646,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
             # Executar envio do upsell
             result = local_bot_manager._send_upsell(
                 bot_id=bot_id,
-                payment_id=payment_id,
+                payment_id=payment.payment_id,
                 chat_id=chat_id,
                 upsell=upsell,
                 index=index,

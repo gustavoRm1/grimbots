@@ -6265,7 +6265,14 @@ Desculpe, não foi possível processar seu pagamento.
             
             with current_app.app_context():
                 # Buscar pagamento no banco
-                payment = Payment.query.filter_by(payment_id=payment_id).first()
+                payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+                payment = None
+                if payment_lookup.isdigit():
+                    payment = Payment.query.get(int(payment_lookup))
+                if not payment and payment_lookup:
+                    payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+                if not payment and payment_lookup:
+                    payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
                 
                 if not payment:
                     logger.warning(f"⚠️ Pagamento não encontrado: {payment_id}")
@@ -7944,13 +7951,20 @@ Seu pagamento ainda não foi confirmado.
             
             if response.success:
                 logger.info(f"✅ PIX gerado via PaymentService - Transaction ID: {response.transaction_id}")
+                payment_ref = response.reference or str(customer_user_id)
+                transaction_hash = None
+                try:
+                    if isinstance(response.raw_response, dict):
+                        transaction_hash = response.raw_response.get('transaction_hash') or response.raw_response.get('gateway_transaction_hash')
+                except Exception:
+                    transaction_hash = None
                 return {
                     'pix_code': response.qr_code,
                     'pix_code_base64': None,
                     'qr_code_url': response.qr_code_url,
                     'transaction_id': response.transaction_id,
-                    'transaction_hash': None,
-                    'payment_id': response.transaction_id,
+                    'transaction_hash': transaction_hash,
+                    'payment_id': payment_ref,
                     'expires_at': None,
                     'status': response.status
                 }
@@ -10267,7 +10281,14 @@ Seu pagamento ainda não foi confirmado.
                 from internal_logic.core.extensions import db
                 from internal_logic.core.models import Payment
                 with current_app.app_context():
-                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+                    payment = None
+                    if payment_lookup.isdigit():
+                        payment = Payment.query.get(int(payment_lookup))
+                    if not payment and payment_lookup:
+                        payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+                    if not payment and payment_lookup:
+                        payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
                     if payment:
                         payment_status = payment.status
                         logger.info(f"   Status do pagamento: {payment_status}")
@@ -10653,7 +10674,14 @@ Seu pagamento ainda não foi confirmado.
                 from internal_logic.core.extensions import db
                 from internal_logic.core.models import Payment
                 with current_app.app_context():
-                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+                    payment = None
+                    if payment_lookup.isdigit():
+                        payment = Payment.query.get(int(payment_lookup))
+                    if not payment and payment_lookup:
+                        payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+                    if not payment and payment_lookup:
+                        payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
                     if payment:
                         payment_status = payment.status
                         logger.info(f"✅ Pagamento encontrado: status={payment_status}")
@@ -10914,7 +10942,14 @@ Seu pagamento ainda não foi confirmado.
             from internal_logic.core.models import Payment
             
             with current_app.app_context():
-                payment = Payment.query.filter_by(payment_id=payment_id).first()
+                payment_lookup = str(payment_id).strip() if payment_id is not None else ''
+                payment = None
+                if payment_lookup.isdigit():
+                    payment = Payment.query.get(int(payment_lookup))
+                if not payment and payment_lookup:
+                    payment = Payment.query.filter_by(payment_id=payment_lookup).first()
+                if not payment and payment_lookup:
+                    payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
                 logger.info(f"🔍 DEBUG _is_payment_pending - payment_id: {payment_id}")
                 if payment:
                     logger.info(f"🔍 DEBUG _is_payment_pending - status: {payment.status}")
@@ -12357,5 +12392,3 @@ Seu pagamento ainda não foi confirmado.
                 
         except Exception as e:
             logger.error(f"❌ Erro ao cancelar downsells para pagamento {payment_id}: {e}", exc_info=True)
-
-
