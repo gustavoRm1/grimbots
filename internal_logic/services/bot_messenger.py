@@ -12,6 +12,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import Dict, Any, Optional, List
 import json
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -151,22 +152,74 @@ class BotMessenger:
         if reply_markup:
             payload['reply_markup'] = json.dumps(reply_markup)
         
-        try:
-            with self.telegram_http_semaphore:
-                response = requests.post(url, json=payload, timeout=10)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('ok'):
+        max_attempts = 5
+        attempt = 0
+        last_error = None
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                with self.telegram_http_semaphore:
+                    response = self._telegram_session.post(url, json=payload, timeout=10)
+
+                result = None
+                try:
+                    result = response.json()
+                except Exception:
+                    result = None
+
+                if response.status_code == 200 and isinstance(result, dict) and result.get('ok'):
                     logger.debug(f"✅ Mensagem enviada para chat {chat_id}")
                     return True
-            
-            logger.warning(f"⚠️ Erro ao enviar mensagem: {response.status_code} - {response.text[:200]}")
-            return False
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao enviar mensagem: {e}")
-            return False
+
+                error_code = None
+                retry_after = None
+                if isinstance(result, dict):
+                    error_code = result.get('error_code')
+                    params = result.get('parameters') or {}
+                    if isinstance(params, dict):
+                        retry_after = params.get('retry_after')
+
+                if response.status_code == 429 or error_code == 429:
+                    wait_s = 1
+                    try:
+                        wait_s = int(retry_after) if retry_after is not None else 1
+                    except Exception:
+                        wait_s = 1
+                    wait_s = max(1, min(wait_s, 30))
+                    logger.warning(
+                        f"❌ HTTP 429 ao enviar mensagem para chat {chat_id}: "
+                        f"retry_after={wait_s}s | attempt={attempt}/{max_attempts}"
+                    )
+                    time.sleep(wait_s)
+                    continue
+
+                if response.status_code in (500, 502, 503, 504):
+                    backoff_s = min(2 ** (attempt - 1), 10)
+                    logger.warning(
+                        f"⚠️ Telegram HTTP {response.status_code} para chat {chat_id}: "
+                        f"backoff={backoff_s}s | attempt={attempt}/{max_attempts}"
+                    )
+                    time.sleep(backoff_s)
+                    continue
+
+                preview = ''
+                try:
+                    preview = response.text[:200]
+                except Exception:
+                    preview = ''
+                logger.warning(f"⚠️ Erro ao enviar mensagem: {response.status_code} - {preview}")
+                return False
+
+            except Exception as e:
+                last_error = e
+                backoff_s = min(2 ** (attempt - 1), 10)
+                logger.warning(
+                    f"⚠️ Exceção ao enviar mensagem (attempt={attempt}/{max_attempts}): {e} | backoff={backoff_s}s"
+                )
+                time.sleep(backoff_s)
+
+        logger.error(f"❌ Falha ao enviar mensagem para chat {chat_id} após {max_attempts} tentativas: {last_error}")
+        return False
     
     def send_photo(
         self,

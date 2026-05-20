@@ -1730,9 +1730,12 @@ Seu acesso está disponível agora.
                 chat_id=str(payment.customer_user_id),
                 message=message
             ))
-            logger.info(f" Entregável enviado via Telegram para {payment.customer_user_id}")
+            if telegram_sent:
+                logger.info(f"✅ Entregável enviado via Telegram para {payment.customer_user_id} (payment {payment.payment_id})")
+            else:
+                logger.warning(f"⚠️ Falha ao enviar entregável via Telegram para {payment.customer_user_id} (payment {payment.payment_id})")
         except Exception as e:
-            logger.warning(f" Falha ao enviar via Telegram: {e}")
+            logger.warning(f"⚠️ Exceção ao enviar via Telegram para {payment.customer_user_id} (payment {payment.payment_id}): {e}")
         
         # Se não conseguiu via Telegram, tentar email (se disponível)
         email_sent = False
