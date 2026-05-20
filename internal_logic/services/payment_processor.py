@@ -122,7 +122,7 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
+def _send_payment_delivery_v41_unused(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
     """
     V4.1: Envia mensagem com decisão inteligente do link
     
@@ -205,13 +205,12 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
             )
         
         # Enviar mensagem
-        success = bot_manager.send_message(
-            chat_id=payment.customer_user_id,
-            text=message,
-            parse_mode='Markdown'
+        bot_manager.send_telegram_message(
+            token=payment.bot.token,
+            chat_id=str(payment.customer_user_id),
+            message=message
         )
-        
-        return success
+        return True
         
     except Exception as e:
         logger.error(f"❌ V4.1 - Erro em send_payment_delivery: {e}", exc_info=True)
@@ -1585,7 +1584,7 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None) -> Dict[str, Any]:
+def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
     """
     Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado.
     
@@ -1602,7 +1601,7 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
     try:
         if not payment or not payment.bot:
             logger.error(f"❌ Payment {payment.id if payment else 'None'} não tem bot associado")
-            return {'success': False, 'message': 'Bot não encontrado', 'delivery_method': 'none'}
+            return False
         
         # ✅ CRÍTICO: Não enviar entregável se pagamento não estiver 'paid'
         if payment.status != 'paid':
@@ -1611,20 +1610,20 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
                 f"({payment.status}). Apenas 'paid' é permitido. "
                 f"Payment ID: {payment.payment_id if payment else 'None'}"
             )
-            return {'success': False, 'message': 'Status não é paid', 'delivery_method': 'none'}
+            return False
         
         if not payment.bot.token:
             logger.error(f"❌ Bot {payment.bot_id} não tem token configurado")
-            return {'success': False, 'message': 'Token não configurado', 'delivery_method': 'none'}
+            return False
         
         # ✅ VALIDAÇÃO CRÍTICA: Verificar se customer_user_id é válido
         if not payment.customer_user_id or str(payment.customer_user_id).strip() == '':
             logger.error(f"❌ Payment {payment.id} não tem customer_user_id válido")
-            return {'success': False, 'message': 'Customer ID inválido', 'delivery_method': 'none'}
+            return False
         
         # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
         if bot_manager is None:
-            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=payment.bot.user_id)
+            local_bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
         else:
             local_bot_manager = bot_manager
         
@@ -1652,7 +1651,7 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
         
         if not link_to_send:
             logger.error(f" Bot {payment.bot.id} não tem link de entrega configurado")
-            return {'success': False, 'message': 'Link de entrega não configurado', 'delivery_method': 'none'}
+            return False
         
         # FORMATAÇÃO DA MENSAGEM HTML (IGUAL AO MAPA)
         product_name = payment.product_name or 'Produto'
@@ -1680,12 +1679,11 @@ Seu acesso está disponível agora.
         # DISPARO VIA local_bot_manager
         telegram_sent = False
         try:
-            local_bot_manager.send_telegram_message(
+            telegram_sent = bool(local_bot_manager.send_telegram_message(
                 token=payment.bot.token,
                 chat_id=str(payment.customer_user_id),
                 message=message
-            )
-            telegram_sent = True
+            ))
             logger.info(f" Entregável enviado via Telegram para {payment.customer_user_id}")
         except Exception as e:
             logger.warning(f" Falha ao enviar via Telegram: {e}")
@@ -1729,16 +1727,11 @@ Seu acesso está disponível agora.
                 }, room=f'user_{payment.bot.user_id}')
         except Exception as e:
             logger.error(f"❌ Erro ao emitir WebSocket de entrega: {e}")
-        
-        return {
-            'success': telegram_sent or email_sent,
-            'message': 'Entregável enviado com sucesso' if (telegram_sent or email_sent) else 'Falha ao enviar entregável',
-            'delivery_method': delivery_method
-        }
+        return bool(telegram_sent or email_sent)
         
     except Exception as e:
         logger.error(f"❌ Erro crítico em send_payment_delivery: {e}", exc_info=True)
-        return {'success': False, 'message': f'Erro: {str(e)}', 'delivery_method': 'none'}
+        return False
 
 def _get_pixel_config(payment) -> Dict[str, Any]:
         """
@@ -1873,4 +1866,3 @@ def _decide_delivery_link(payment, pixel_config: Dict[str, Any]) -> Optional[str
             # Sem pixel e sem access_link -> sem link
             logger.warning(f"[PIXEL_STICKY] Decisão: source=none, link=none (sem configuração)")
             return None
-
