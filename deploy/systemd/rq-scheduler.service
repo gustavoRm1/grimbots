@@ -10,6 +10,7 @@ WorkingDirectory=/root/grimbots
 Environment=PYTHONPATH=/root/grimbots
 Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=REDIS_URL=redis://localhost:6379/0
+EnvironmentFile=/root/grimbots/.env
 
 # ✅ Comando NATIVO RQ: Worker com scheduler integrado (RQ 2.7.0+)
 ExecStart=/root/grimbots/venv/bin/rq worker --with-scheduler --queue marathon --name scheduler-manager --url redis://localhost:6379/0

@@ -110,21 +110,22 @@ def _derive_fernet_key(raw_key: str) -> bytes:
     )
 
 
-# Derivar chave compatível
-ENCRYPTION_KEY = _derive_fernet_key(RAW_ENCRYPTION_KEY)
+import logging
+logger = logging.getLogger(__name__)
 
+ENCRYPTION_KEY = None
+fernet = None
 try:
-    # Tentar criar Fernet para validar formato
-    fernet = Fernet(ENCRYPTION_KEY)
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f" Fernet inicializado com sucesso (chave derivada)")
+    if RAW_ENCRYPTION_KEY:
+        ENCRYPTION_KEY = _derive_fernet_key(RAW_ENCRYPTION_KEY)
+        fernet = Fernet(ENCRYPTION_KEY)
+        logger.info(" Fernet inicializado com sucesso (chave derivada)")
+    else:
+        logger.critical(" ENCRYPTION_KEY ausente: criptografia desativada (modo compatibilidade legado)")
 except Exception as e:
-    raise RuntimeError(
-        f"\n ERRO CRÍTICO: Falha ao inicializar Fernet com chave derivada!\n"
-        f"Erro: {e}\n\n"
-        f"Verifique a ENCRYPTION_KEY no .env"
-    )
+    logger.critical(f" Falha ao inicializar Fernet: {e}. Criptografia desativada (modo compatibilidade legado)")
+    ENCRYPTION_KEY = None
+    fernet = None
 
 
 # ============================================================================
@@ -145,6 +146,8 @@ def encrypt(value: str) -> str:
         return None
     
     try:
+        if not fernet:
+            return value
         encrypted_bytes = fernet.encrypt(value.encode('utf-8'))
         return encrypted_bytes.decode('utf-8')
     except Exception as e:
@@ -168,33 +171,18 @@ def decrypt(value: str) -> str:
         return None
     
     try:
+        if not fernet:
+            return value
         decrypted_bytes = fernet.decrypt(value.encode('utf-8'))
         return decrypted_bytes.decode('utf-8')
     except Exception as e:
-        # ✅ CRÍTICO: Tratamento resiliente para InvalidToken
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        # ✅ VERIFICAR TIPO ESPECÍFICO DE ERRO
         error_type = type(e).__name__
-        
         if 'InvalidToken' in error_type or 'cryptography.fernet.InvalidToken' in str(type(e)):
-            # ✅ RESILIÊNCIA: InvalidToken significa ENCRYPTION_KEY mudou
-            # NÃO deve crashar o sistema, apenas retornar None
-            logger.warning(f"⚠️ ERRO DE DESCRIPTOGRAFIA (InvalidToken): ENCRYPTION_KEY foi alterada")
-            logger.warning(f"   Valor (primeiros 50 chars): {value[:50] if value else 'None'}...")
-            logger.warning(f"   SOLUÇÃO: Reconfigure as credenciais do gateway")
-            return None  # ✅ RESILIÊNCIA: Retorna None em vez de crashar
-        
-        # ✅ OUTROS ERROS: Log detalhado para diagnóstico
-        logger.error(f"❌ ERRO AO DESCRIPTOGRAFAR: {error_type}: {e}")
-        logger.error(f"   Valor (primeiros 50 chars): {value[:50] if value else 'None'}...")
-        logger.error(f"   ENCRYPTION_KEY está configurada: {bool(ENCRYPTION_KEY)}")
-        logger.error(f"   ENCRYPTION_KEY (primeiros 20 chars): {ENCRYPTION_KEY[:20] if ENCRYPTION_KEY else 'None'}...")
-        logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após armazenar dados")
-        logger.error(f"   SOLUÇÃO: Restaure a ENCRYPTION_KEY original ou reconfigure os gateways")
-        
-        # ✅ RESILIÊNCIA: Retornar None em vez de crashar
+            if isinstance(value, str) and value.startswith('gAAAA'):
+                logger.warning(" ERRO DE DESCRIPTOGRAFIA (InvalidToken): token parece criptografado (chave divergente)")
+                return None
+            return value
+        logger.error(f" ERRO AO DESCRIPTOGRAFAR: {error_type}: {e}")
         return None
 
 
@@ -226,7 +214,6 @@ if __name__ == '__main__':
     print("⚠️  NUNCA compartilhe esta chave")
     print("⚠️  Se perdê-la, todos os dados criptografados serão irrecuperáveis")
     print("=" * 70)
-
 
 
 

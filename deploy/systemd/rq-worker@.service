@@ -7,6 +7,7 @@ Wants=redis.service
 Type=simple
 User=root
 WorkingDirectory=/root/grimbots
+EnvironmentFile=/root/grimbots/.env
 Environment=PYTHONPATH=/root/grimbots
 Environment=PATH=/root/grimbots/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

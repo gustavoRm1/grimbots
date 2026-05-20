@@ -114,17 +114,10 @@ def get_vapid_public_key() -> str:
     return key
 
 
-def get_encryption_key() -> str:
+def get_encryption_key() -> Optional[str]:
     """Carrega ENCRYPTION_KEY de arquivo ou Base64."""
-    key = SecretsLoader.load_multiline_key(
+    return SecretsLoader.load_multiline_key(
         env_var_path="ENCRYPTION_KEY_PATH",
         env_var_base64="ENCRYPTION_KEY_BASE64",
         env_var_direct="ENCRYPTION_KEY"
     )
-    if not key:
-        raise ValueError(
-            "ENCRYPTION_KEY não configurado. "
-            "Use ENCRYPTION_KEY_PATH=/etc/grpay/secrets/master.key "
-            "ou ENCRYPTION_KEY_BASE64=<base64-encoded>"
-        )
-    return key
