@@ -31,6 +31,7 @@ class BotMessenger:
             max_concurrent: Número máximo de requisições simultâneas
         """
         self.telegram_http_semaphore = threading.BoundedSemaphore(max_concurrent)
+        self.last_send_error = None
         
         # ✅ Session reutilizável + Retry/Backoff para envios pesados
         self._telegram_session = requests.Session()
@@ -152,6 +153,7 @@ class BotMessenger:
         if reply_markup:
             payload['reply_markup'] = json.dumps(reply_markup)
         
+        self.last_send_error = None
         max_attempts = 5
         attempt = 0
         last_error = None
@@ -169,12 +171,15 @@ class BotMessenger:
 
                 if response.status_code == 200 and isinstance(result, dict) and result.get('ok'):
                     logger.debug(f"✅ Mensagem enviada para chat {chat_id}")
+                    self.last_send_error = None
                     return True
 
                 error_code = None
                 retry_after = None
+                description = None
                 if isinstance(result, dict):
                     error_code = result.get('error_code')
+                    description = result.get('description')
                     params = result.get('parameters') or {}
                     if isinstance(params, dict):
                         retry_after = params.get('retry_after')
@@ -186,6 +191,12 @@ class BotMessenger:
                     except Exception:
                         wait_s = 1
                     wait_s = max(1, min(wait_s, 30))
+                    self.last_send_error = {
+                        'status_code': 429,
+                        'error_code': 429,
+                        'description': description or 'Too Many Requests',
+                        'retry_after': wait_s,
+                    }
                     logger.warning(
                         f"❌ HTTP 429 ao enviar mensagem para chat {chat_id}: "
                         f"retry_after={wait_s}s | attempt={attempt}/{max_attempts}"
@@ -195,6 +206,12 @@ class BotMessenger:
 
                 if response.status_code in (500, 502, 503, 504):
                     backoff_s = min(2 ** (attempt - 1), 10)
+                    self.last_send_error = {
+                        'status_code': response.status_code,
+                        'error_code': error_code,
+                        'description': description,
+                        'retry_after': None,
+                    }
                     logger.warning(
                         f"⚠️ Telegram HTTP {response.status_code} para chat {chat_id}: "
                         f"backoff={backoff_s}s | attempt={attempt}/{max_attempts}"
@@ -207,12 +224,24 @@ class BotMessenger:
                     preview = response.text[:200]
                 except Exception:
                     preview = ''
+                self.last_send_error = {
+                    'status_code': response.status_code,
+                    'error_code': error_code,
+                    'description': description or preview,
+                    'retry_after': None,
+                }
                 logger.warning(f"⚠️ Erro ao enviar mensagem: {response.status_code} - {preview}")
                 return False
 
             except Exception as e:
                 last_error = e
                 backoff_s = min(2 ** (attempt - 1), 10)
+                self.last_send_error = {
+                    'status_code': None,
+                    'error_code': None,
+                    'description': str(e),
+                    'retry_after': None,
+                }
                 logger.warning(
                     f"⚠️ Exceção ao enviar mensagem (attempt={attempt}/{max_attempts}): {e} | backoff={backoff_s}s"
                 )

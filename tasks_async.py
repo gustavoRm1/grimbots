@@ -18,7 +18,7 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
 # Agora sim, imports locais (com acesso ao .env já carregado)
-from rq import Queue
+from rq import Queue, Retry
 from redis import Redis
 from typing import Dict, Any, Optional
 from sqlalchemy import or_
@@ -102,6 +102,30 @@ def _ensure_aux_tables() -> None:
         _AUX_TABLES_READY = True
     except Exception as e:
         logger.warning(f"⚠️ Não foi possível garantir tabelas auxiliares de webhook: {e}")
+
+
+def retry_delivery_task(payment_db_id: int) -> bool:
+    try:
+        from internal_logic.core.extensions import create_app
+        app = create_app()
+        with app.app_context():
+            from internal_logic.core.models import Payment
+            from internal_logic.services.payment_processor import send_payment_delivery
+
+            payment = Payment.query.get(int(payment_db_id))
+            if not payment:
+                logger.error(f"❌ [DELIVERY RETRY] Payment {payment_db_id} não encontrado")
+                return False
+
+            db.session.refresh(payment)
+            if payment.status != 'paid':
+                logger.warning(f"⚠️ [DELIVERY RETRY] Payment {payment.id} status={payment.status} (não é 'paid')")
+                return False
+
+            return bool(send_payment_delivery(payment, bot_manager=None, socketio=None, enqueue_retry=False))
+    except Exception as e:
+        logger.error(f"❌ [DELIVERY RETRY] Erro no retry_delivery_task(payment_db_id={payment_db_id}): {e}", exc_info=True)
+        raise
 
 
 def _persist_webhook_event(

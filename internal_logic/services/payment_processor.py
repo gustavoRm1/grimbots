@@ -1630,7 +1630,7 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
+def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None, enqueue_retry: bool = True) -> bool:
     """
     Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado.
     
@@ -1736,23 +1736,58 @@ Seu acesso está disponível agora.
                 logger.warning(f"⚠️ Falha ao enviar entregável via Telegram para {payment.customer_user_id} (payment {payment.payment_id})")
         except Exception as e:
             logger.warning(f"⚠️ Exceção ao enviar via Telegram para {payment.customer_user_id} (payment {payment.payment_id}): {e}")
-        
-        # Se não conseguiu via Telegram, tentar email (se disponível)
-        email_sent = False
-        if not telegram_sent and customer_email:
+
+        if not telegram_sent and enqueue_retry:
+            definitive = False
+            last_err = None
             try:
-                # Aqui seria integração com serviço de email
-                # Por enquanto, apenas logamos
-                logger.info(f"📧 Email seria enviado para {customer_email}")
-                email_sent = True
-            except Exception as e:
-                logger.warning(f"⚠️ Falha ao enviar via Email: {e}")
+                last_err = getattr(local_bot_manager, 'messenger', None)
+                last_err = getattr(last_err, 'last_send_error', None)
+            except Exception:
+                last_err = None
+
+            status_code = None
+            error_code = None
+            description = None
+            if isinstance(last_err, dict):
+                status_code = last_err.get('status_code')
+                error_code = last_err.get('error_code')
+                description = last_err.get('description')
+
+            if status_code in (400, 401, 403) or error_code in (400, 401, 403):
+                definitive = True
+            if isinstance(description, str) and ('bot was blocked by the user' in description or 'Forbidden' in description):
+                definitive = True
+
+            if not definitive:
+                try:
+                    from tasks_async import task_queue, retry_delivery_task
+                    if task_queue:
+                        retry = None
+                        try:
+                            from rq import Retry
+                            retry = Retry(max=3, interval=[60, 300, 900])
+                        except Exception:
+                            retry = None
+
+                        job_id = f"delivery_retry:{payment.id}"
+                        task_queue.enqueue(
+                            retry_delivery_task,
+                            int(payment.id),
+                            job_id=job_id,
+                            retry=retry,
+                            job_timeout=180,
+                        )
+                        logger.info(f"🔁 [DELIVERY RETRY] Enfileirado retry (job_id={job_id}) para payment {payment.id}")
+                    else:
+                        logger.error(f"❌ [DELIVERY RETRY] task_queue indisponível - não foi possível enfileirar retry (payment {payment.id})")
+                except Exception as enqueue_error:
+                    logger.error(f"❌ [DELIVERY RETRY] Erro ao enfileirar retry (payment {payment.id}): {enqueue_error}", exc_info=True)
+            else:
+                logger.warning(f"⛔ [DELIVERY RETRY] Falha definitiva no Telegram (sem retry) payment {payment.id} | status_code={status_code} | error_code={error_code} | desc={description}")
         
-        # Atualizar payment com método de entrega
         if telegram_sent:
             delivery_method = 'telegram'
-        elif email_sent:
-            delivery_method = 'email'
         else:
             delivery_method = 'none'
         
@@ -1776,7 +1811,7 @@ Seu acesso está disponível agora.
                 }, room=f'user_{payment.bot.user_id}')
         except Exception as e:
             logger.error(f"❌ Erro ao emitir WebSocket de entrega: {e}")
-        return bool(telegram_sent or email_sent)
+        return bool(telegram_sent)
         
     except Exception as e:
         logger.error(f"❌ Erro crítico em send_payment_delivery: {e}", exc_info=True)
