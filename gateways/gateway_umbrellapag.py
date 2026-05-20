@@ -36,7 +36,21 @@ import unicodedata
 import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
-from .gateway_interface import PaymentGateway, resolve_public_base_url
+try:
+    from .gateway_interface import PaymentGateway, resolve_public_base_url
+except ImportError:
+    from .gateway_interface import PaymentGateway
+    def resolve_public_base_url() -> str:
+        from os import environ
+        base_url = (environ.get('WEBHOOK_URL') or environ.get('PUBLIC_BASE_URL') or '').strip()
+        if not base_url:
+            domain = (environ.get('SESSION_COOKIE_DOMAIN') or '').strip()
+            if domain:
+                scheme = (environ.get('PREFERRED_URL_SCHEME') or 'https').strip()
+                base_url = f"{scheme}://{domain}"
+        if not base_url:
+            base_url = 'https://app.grimbots.online'
+        return base_url.rstrip('/')
 from utils.validators import cpf_valido
 
 logger = logging.getLogger(__name__)
