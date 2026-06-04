@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import app
+from internal_logic.core.extensions import db
 from sqlalchemy import inspect, text
 from sqlalchemy import create_engine
 
