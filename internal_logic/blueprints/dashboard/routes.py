@@ -989,49 +989,72 @@ def get_chat_conversations(bot_id):
     
     # Buscar conversas
     bot_users = query.order_by(BotUser.last_interaction.desc()).limit(100).all()
-    
+
+    if not bot_users:
+        return jsonify({'success': True, 'conversations': [], 'total': 0})
+
+    telegram_user_id_strs = [str(u.telegram_user_id) for u in bot_users]
+
+    # Batch 1: última mensagem por usuário (via MAX(id) - determinístico)
+    max_msg_subq = db.session.query(
+        BotMessage.telegram_user_id,
+        func.max(BotMessage.id).label('max_id')
+    ).filter(
+        BotMessage.bot_id == bot_id,
+        BotMessage.telegram_user_id.in_(telegram_user_id_strs)
+    ).group_by(BotMessage.telegram_user_id).subquery()
+
+    last_messages = db.session.query(BotMessage).join(
+        max_msg_subq,
+        db.and_(
+            BotMessage.id == max_msg_subq.c.max_id,
+            BotMessage.bot_id == bot_id
+        )
+    ).all()
+    last_msg_map = {str(m.telegram_user_id): m for m in last_messages}
+
+    # Batch 2: contagem de não lidas por usuário
+    unread_counts = dict(
+        db.session.query(
+            BotMessage.telegram_user_id,
+            func.count(BotMessage.id)
+        ).filter(
+            BotMessage.bot_id == bot_id,
+            BotMessage.telegram_user_id.in_(telegram_user_id_strs),
+            BotMessage.direction == 'incoming',
+            BotMessage.is_read == False
+        ).group_by(BotMessage.telegram_user_id).all()
+    )
+
+    # Batch 3: dados de pagamento agregados por usuário
+    all_customer_ids = telegram_user_id_strs + [f'user_{t}' for t in telegram_user_id_strs]
+    payments = db.session.query(
+        Payment.customer_user_id, Payment.status, Payment.amount
+    ).filter(
+        Payment.bot_id == bot_id,
+        Payment.customer_user_id.in_(all_customer_ids)
+    ).all()
+
+    payment_data = {}
+    for p in payments:
+        if not p.customer_user_id:
+            continue
+        key = p.customer_user_id.replace('user_', '') if p.customer_user_id.startswith('user_') else p.customer_user_id
+        if key not in payment_data:
+            payment_data[key] = {'has_paid': False, 'has_pix': False, 'total_spent': 0.0}
+        payment_data[key]['has_pix'] = True
+        if p.status == 'paid':
+            payment_data[key]['has_paid'] = True
+            payment_data[key]['total_spent'] += float(p.amount or 0)
+
     # Enriquecer dados
     conversations = []
     for bot_user in bot_users:
-        last_message = BotMessage.query.filter_by(
-            bot_id=bot_id,
-            telegram_user_id=bot_user.telegram_user_id
-        ).order_by(BotMessage.created_at.desc()).first()
-        
-        unread_count = BotMessage.query.filter_by(
-            bot_id=bot_id,
-            telegram_user_id=bot_user.telegram_user_id,
-            direction='incoming',
-            is_read=False
-        ).count()
-        
-        telegram_id_str = str(bot_user.telegram_user_id)
-        has_paid = Payment.query.filter(
-            Payment.bot_id == bot_id,
-            Payment.status == 'paid',
-            db.or_(
-                Payment.customer_user_id == telegram_id_str,
-                Payment.customer_user_id == f'user_{telegram_id_str}'
-            )
-        ).first() is not None
-        
-        has_pix = Payment.query.filter(
-            Payment.bot_id == bot_id,
-            db.or_(
-                Payment.customer_user_id == telegram_id_str,
-                Payment.customer_user_id == f'user_{telegram_id_str}'
-            )
-        ).first() is not None
-        
-        total_spent = db.session.query(func.sum(Payment.amount)).filter(
-            Payment.bot_id == bot_id,
-            Payment.status == 'paid',
-            db.or_(
-                Payment.customer_user_id == telegram_id_str,
-                Payment.customer_user_id == f'user_{telegram_id_str}'
-            )
-        ).scalar() or 0.0
-        
+        tid = str(bot_user.telegram_user_id)
+        lm = last_msg_map.get(tid)
+        ur = unread_counts.get(tid, 0)
+        pd = payment_data.get(tid, {'has_paid': False, 'has_pix': False, 'total_spent': 0.0})
+
         conversations.append({
             'bot_user_id': bot_user.id,
             'telegram_user_id': bot_user.telegram_user_id,
@@ -1039,17 +1062,17 @@ def get_chat_conversations(bot_id):
             'username': bot_user.username,
             'last_interaction': bot_user.last_interaction.isoformat() if bot_user.last_interaction else None,
             'last_message': {
-                'text': last_message.message_text[:50] + '...' if last_message and last_message.message_text and len(last_message.message_text) > 50 else (last_message.message_text if last_message else None),
-                'created_at': last_message.created_at.isoformat() if last_message else None,
-                'direction': last_message.direction if last_message else None
-            } if last_message else None,
-            'unread_count': unread_count,
-            'has_paid': has_paid,
-            'has_pix': has_pix,
-            'total_spent': float(total_spent),
-            'status': 'paid' if has_paid else 'pix_generated' if has_pix else 'only_entered'
+                'text': lm.message_text[:50] + '...' if lm and lm.message_text and len(lm.message_text) > 50 else (lm.message_text if lm else None),
+                'created_at': lm.created_at.isoformat() if lm else None,
+                'direction': lm.direction if lm else None
+            } if lm else None,
+            'unread_count': ur,
+            'has_paid': pd['has_paid'],
+            'has_pix': pd['has_pix'],
+            'total_spent': pd['total_spent'],
+            'status': 'paid' if pd['has_paid'] else 'pix_generated' if pd['has_pix'] else 'only_entered'
         })
-    
+
     return jsonify({
         'success': True,
         'conversations': conversations,
