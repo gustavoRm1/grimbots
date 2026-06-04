@@ -6,45 +6,26 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Acesso Restrito - GrimBots</title>
     
-    <!-- Favicon GrimBots -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>">
-    
-    <!-- Google Fonts - Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        // PADRÃO REAL DO PROJETO
-                        bg950: '#0d0d0d',
-                        bg900: '#161616',
-                        bg850: '#1e1e1e',
-                        surface800: '#262626',
-                        surface700: '#2d2d2d',
-                        surface600: '#353535',
-                        textPrimary: '#FAFAFA',
-                        textSecondary: '#B8B8B8',
-                        textTertiary: '#8A8A8A',
-                        textDisabled: '#5A5A5A',
-                        accent500: '#FFBA08',
-                        accent600: '#E6A800',
-                        accent400: '#FFD23F',
-                        accent300: '#FFE180',
-                        danger500: '#EF4444',
-                        danger600: '#DC2626',
-                        success500: '#22C55E',
-                        success600: '#16A34A',
-                        warning500: '#F59E0B',
-                        info500: '#60A5FA',
+                        bg950: '#0d0d0d', bg900: '#161616', bg850: '#1e1e1e',
+                        surface800: '#262626', surface700: '#2d2d2d', surface600: '#353535',
+                        textPrimary: '#FAFAFA', textSecondary: '#B8B8B8',
+                        textTertiary: '#8A8A8A', textDisabled: '#5A5A5A',
+                        accent500: '#FFBA08', accent600: '#E6A800',
+                        accent400: '#FFD23F', accent300: '#FFE180',
+                        danger500: '#EF4444', danger600: '#DC2626',
+                        success500: '#22C55E', success600: '#16A34A',
+                        warning500: '#F59E0B', info500: '#60A5FA',
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
@@ -53,30 +34,17 @@
             }
         }
     </script>
-    
     <style>
-        /* PADRÃO REAL DO PROJETO GRIMBOTS */
         :root {
-            --bg-950: #0d0d0d;
-            --bg-900: #161616;
-            --bg-850: #1e1e1e;
-            --surface-800: #262626;
-            --surface-700: #2d2d2d;
-            --surface-600: #353535;
-            --text-primary: #FAFAFA;
-            --text-secondary: #B8B8B8;
-            --text-tertiary: #8A8A8A;
-            --text-disabled: #5A5A5A;
-            --accent-500: #FFBA08;
-            --accent-600: #E6A800;
-            --accent-400: #FFD23F;
-            --accent-300: #FFE180;
-            --danger-500: #EF4444;
-            --danger-600: #DC2626;
-            --success-500: #22C55E;
-            --success-600: #16A34A;
-            --warning-500: #F59E0B;
-            --info-500: #60A5FA;
+            --bg-950: #0d0d0d; --bg-900: #161616; --bg-850: #1e1e1e;
+            --surface-800: #262626; --surface-700: #2d2d2d; --surface-600: #353535;
+            --text-primary: #FAFAFA; --text-secondary: #B8B8B8;
+            --text-tertiary: #8A8A8A; --text-disabled: #5A5A5A;
+            --accent-500: #FFBA08; --accent-600: #E6A800;
+            --accent-400: #FFD23F; --accent-300: #FFE180;
+            --danger-500: #EF4444; --danger-600: #DC2626;
+            --success-500: #22C55E; --success-600: #16A34A;
+            --warning-500: #F59E0B; --info-500: #60A5FA;
             --border-subtle: rgba(255, 255, 255, 0.08);
             --border-default: rgba(255, 255, 255, 0.12);
             --border-strong: rgba(255, 255, 255, 0.18);
@@ -85,318 +53,174 @@
             --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
             --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6);
             --shadow-accent: 0 8px 20px rgba(255, 186, 8, 0.25);
-            --overlay-light: rgba(255, 255, 255, 0.04);
-            --overlay-medium: rgba(255, 255, 255, 0.08);
         }
-        
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: 
-                radial-gradient(circle at 15% 15%, rgba(255,186,8,0.08), transparent 35%),
-                radial-gradient(circle at 85% 85%, rgba(255,186,8,0.05), transparent 35%),
-                linear-gradient(180deg, var(--bg-950), var(--bg-900));
+            background: radial-gradient(circle at 15% 15%, rgba(255,186,8,0.08), transparent 35%),
+                        radial-gradient(circle at 85% 85%, rgba(255,186,8,0.05), transparent 35%),
+                        linear-gradient(180deg, var(--bg-950), var(--bg-900));
             color: var(--text-primary);
             line-height: 1.6;
         }
-        
-        /* Card Principal - Estilo Dashboard */
         .main-card {
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
             border: 1px solid var(--border-subtle);
             border-radius: 16px;
             box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 186, 8, 0.08);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
-        .main-card:hover {
-            border-color: var(--border-accent);
-            box-shadow: var(--shadow-lg), var(--shadow-accent);
-            transform: translateY(-2px);
-        }
-        
-        /* Logo Section - Estilo Login */
-        .logo-container {
-            position: relative;
-        }
-        
-        .logo-glow {
-            position: absolute;
-            inset: -16px;
-            background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
-            border-radius: 50%;
-            opacity: 0.1;
-            filter: blur(32px);
-        }
-        
-        .logo-icon {
-            position: relative;
-            background: var(--surface-800);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid var(--border-accent);
-            box-shadow: var(--shadow-accent);
-        }
-        
-        .logo-icon i {
-            filter: drop-shadow(0 2px 8px rgba(255, 186, 8, 0.4));
-        }
-        
-        /* Brand Name - Estilo Login */
-        .brand-name {
-            font-size: 2.5rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-        
-        .brand-grim {
-            color: var(--accent-500);
-        }
-        
-        .brand-bots {
-            color: var(--text-primary);
-        }
-        
-        /* Protection Box - Estilo Dashboard */
-        .protection-box {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-            border: 1px solid var(--border-subtle);
-            border-left: 3px solid var(--info-500);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-        
-        .protection-box:hover {
-            border-color: var(--border-accent);
-            box-shadow: var(--shadow-md);
-        }
-        
-        /* Marketing Box - Estilo Dashboard */
-        .marketing-box {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+        .disclaimer-box {
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border-subtle);
             border-left: 3px solid var(--accent-500);
             border-radius: 12px;
-            transition: all 0.3s ease;
         }
-        
-        .marketing-box:hover {
-            border-color: var(--border-accent);
-            box-shadow: var(--shadow-md);
-        }
-        
-        /* Stats Cards - Estilo Dashboard */
-        .stat-card {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-        
-        .stat-card:hover {
-            border-color: var(--border-accent);
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-        
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 900;
-            font-variant-numeric: tabular-nums;
-        }
-        
-        .stat-label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-tertiary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        
-        /* CTA Button - Estilo Dashboard */
-        .cta-button {
-            background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
-            color: #000000;
-            font-weight: 700;
-            padding: 12px 24px;
-            border-radius: 12px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: var(--shadow-accent);
-            border: none;
-            cursor: pointer;
-        }
-        
-        .cta-button:hover {
-            background: linear-gradient(135deg, var(--accent-400), var(--accent-500));
-            transform: translateY(-2px);
-            box-shadow: 0 12px 24px rgba(255, 186, 8, 0.4);
-        }
-        
-        .cta-button:active {
-            transform: translateY(0);
-        }
-        
-        /* Feature List - Estilo Dashboard */
-        .feature-list li {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 8px 0;
+        .legal-text {
             color: var(--text-secondary);
             font-size: 0.875rem;
-            font-weight: 500;
+            line-height: 1.7;
         }
-        
-        .feature-list li:before {
-            content: "•";
-            font-size: 1rem;
-            flex-shrink: 0;
-            color: var(--accent-500);
+        .legal-text strong {
+            color: var(--text-primary);
         }
-        
-        /* Footer - Estilo Dashboard */
-        .footer {
-            border-top: 1px solid var(--border-subtle);
-            padding-top: 24px;
+        .report-btn {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger-500);
+            font-weight: 600;
+            padding: 10px 24px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
-        
-        .error-code {
-            font-size: 0.875rem;
+        .report-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: var(--danger-500);
+        }
+        .ref-badge {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.75rem;
             color: var(--text-disabled);
+            font-family: monospace;
         }
-        
-        .powered-by {
-            font-size: 0.875rem;
-            font-weight: 700;
+        .footer-link {
+            color: var(--text-tertiary);
+            font-size: 0.8rem;
+            transition: color 0.2s;
+        }
+        .footer-link:hover {
             color: var(--accent-500);
         }
-        
-        /* Responsive */
+        .logo-container { position: relative; }
+        .logo-glow {
+            position: absolute; inset: -16px;
+            background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
+            border-radius: 50%; opacity: 0.1; filter: blur(32px);
+        }
+        .logo-icon {
+            position: relative; background: var(--surface-800);
+            border-radius: 16px; padding: 20px;
+            border: 1px solid var(--border-accent);
+            box-shadow: var(--shadow-accent);
+        }
+        .brand-name { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em; }
+        .brand-grim { color: var(--accent-500); }
+        .brand-bots { color: var(--text-primary); }
         @media (max-width: 768px) {
-            .brand-name {
-                font-size: 2rem;
-            }
-            
-            .stat-value {
-                font-size: 1.5rem;
-            }
+            .brand-name { font-size: 2rem; }
         }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8">
-    
     <div class="max-w-2xl w-full space-y-8">
         
-        <!-- Hero Section - Estilo Login -->
+        <!-- Header -->
         <div class="text-center">
-            <!-- Logo Estilizado -->
             <div class="logo-container inline-block">
                 <div class="logo-glow"></div>
                 <div class="logo-icon">
                     <i class="fas fa-robot text-5xl text-accent500"></i>
                 </div>
             </div>
-            
-            <!-- Brand Name -->
             <h1 class="brand-name mt-8">
                 <span class="brand-grim">grim</span><span class="brand-bots">bots</span>
             </h1>
-            
-            <!-- Title -->
-            <h2 class="mt-4 text-3xl font-bold text-textPrimary">
-                Acesso Restrito
-            </h2>
-            
-            <!-- Subtitle -->
-            <p class="mt-2 text-lg text-accent500 font-semibold">
-                Proteção AntiClone Ativa
-            </p>
-            
-            <!-- Description -->
-            <p class="mt-4 text-base text-textSecondary">
-                Este link possui proteção de segurança avançada.
-            </p>
+            <h2 class="mt-4 text-3xl font-bold text-textPrimary">Acesso Restrito</h2>
+            <p class="mt-2 text-lg text-accent500 font-semibold">Proteção AntiClone Ativa</p>
+            <p class="mt-4 text-base text-textSecondary">Este link possui proteção de segurança avançada.</p>
         </div>
-        
+
         <!-- Main Card -->
         <div class="main-card p-8 space-y-6">
             
-            <!-- Protection Info -->
-            <div class="protection-box p-6">
-                <h3 class="text-lg font-bold text-textPrimary mb-4 flex items-center gap-2">
-                    <i class="fas fa-brain text-info500"></i>
-                    🔒 Sistema de Inteligência Ativa
+            <!-- Sobre este link -->
+            <div class="disclaimer-box p-6">
+                <h3 class="text-lg font-bold text-textPrimary mb-3 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-accent500"></i>
+                    Sobre este link
                 </h3>
-                <ul class="feature-list">
-                    <li><strong>Acessos não autorizados?</strong> BLOQUEADOS.</li>
-                    <li><strong>Biblioteca de Anúncios?</strong> INVISÍVEL.</li>
-                    <li><strong>Dados da sua campanha?</strong> 100% blindados.</li>
-                    <li><strong>Origem do clique?</strong> Validada com precisão militar.</li>
-                    <li><strong>Meta Pixel?</strong> INTEGRADO e disparando em &lt;1s.</li>
-                </ul>
+                <p class="legal-text mb-4">
+                    Este link foi criado por um <strong>usuário da plataforma GrimBots</strong>.
+                    Este link foi criado utilizando a plataforma GrimBots. 
+                    Caso você tenha chegado aqui através de um anúncio ou publicação em rede social, 
+                    informamos que o <strong>conteúdo veiculado é de inteira responsabilidade do anunciante</strong> que o criou.
+                </p>
             </div>
-            
-            <!-- Marketing Section -->
-            <div class="marketing-box p-6">
-                <h2 class="text-xl font-bold text-textPrimary mb-4">
-                    🎯 Otimização em Nível Cirúrgico
-                </h2>
-                <p class="text-textSecondary mb-4">
-                    Você acaba de testemunhar o <strong>GrimBots</strong> em ação.<br>
-                    Ao clicar, seu Pixel já avisou o Gerenciador em tempo real.<br>
-                    Mesmo quando o Facebook buga os dados,<br>
-                    o GrimBots mostra <strong>QUAL campanha está vendendo AGORA</strong>.
-                </p>
-                
-                
-                <p class="text-textSecondary mb-4">
-                    <strong>O que o UTMfy tenta prometer, o GrimBots entrega.</strong><br><br>
-                    Campanha vendeu? <strong>Você vê.</strong><br>
-                    Campanha travou? <strong>Você descobre na hora.</strong><br>
-                    Quer escalar para a lua? <strong>Você TEM OS DADOS.</strong>
-                </p>
-                
-                <div class="bg-danger500 bg-opacity-10 border border-danger500 border-opacity-30 rounded-lg p-4 mb-4">
-                    <p class="text-textPrimary font-bold text-center">
-                        <strong>Se você ainda opera no escuro...</strong><br>
-                        <span class="text-danger500 text-lg">... você está QUEIMANDO dinheiro com leads que nunca chegaram.</span><br>
-                        <span class="text-textSecondary text-sm mt-2 block">Cada clique sem rastreamento = dinheiro jogado fora.</span>
+
+            <!-- Termo de Responsabilidade -->
+            <div class="disclaimer-box p-6">
+                <h3 class="text-lg font-bold text-textPrimary mb-3 flex items-center gap-2">
+                    <i class="fas fa-shield-alt text-accent500"></i>
+                    TERMO DE RESPONSABILIDADE
+                </h3>
+                <div class="legal-text space-y-3">
+                    <p>
+                        A <strong>GrimBots</strong> é uma plataforma de tecnologia que fornece ferramentas 
+                        de automação para vendas via Telegram. Atuamos exclusivamente como <strong>provedora 
+                        de infraestrutura tecnológica</strong>, nos termos do Marco Civil da Internet 
+                        (Lei 12.965/2014).
+                    </p>
+                    <p>
+                        Não exercemos controle editorial nem assumimos <strong>responsabilidade pelo conteúdo, 
+                        produtos ou anúncios</strong> criados por nossos usuários. Cada usuário é 
+                        inteiramente responsável pelo uso que faz da plataforma, devendo respeitar a 
+                        legislação vigente e nossos Termos de Uso.
+                    </p>
+                    <p>
+                        Encontrou conteúdo irregular? Todas as denúncias são analisadas e as providências 
+                        cabíveis serão tomadas em até <strong>48 horas úteis</strong>.
                     </p>
                 </div>
-                
-                <!-- Stats Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                    <div class="stat-card p-4 text-center">
-                        <div class="stat-value text-success500">60%</div>
-                        <div class="stat-label">Redução CPA</div>
-                    </div>
-                    <div class="stat-card p-4 text-center">
-                        <div class="stat-value text-success500">100%</div>
-                        <div class="stat-label">ROI Rastreável</div>
-                    </div>
-                    <div class="stat-card p-4 text-center">
-                        <div class="stat-value text-accent500">1s</div>
-                        <div class="stat-label">Latência Pixel</div>
-                    </div>
-                </div>
-                
-                <div class="text-center">
-                    <a href="https://grimbots.com" class="cta-button inline-block" target="_blank">
-                        Escale com inteligência
-                    </a>
-                </div>
-                
-                <p class="text-center text-sm text-textTertiary mt-4">
-                    Ative agora o <strong>Cloaker + AntiClone GrimBots</strong>.<br>
-                    Faça o Meta trabalhar pra você — e não contra.
-                </p>
             </div>
-            
+
+            <!-- Denunciar -->
+            <div class="text-center">
+                <a href="mailto:report@grimbots.com.br" class="report-btn inline-flex items-center gap-2 no-underline">
+                    <i class="fas fa-flag"></i>
+                    Denunciar conteúdo
+                </a>
+            </div>
+
+            <!-- Referência -->
+            <div class="flex flex-wrap items-center justify-center gap-4 text-center">
+                <span class="ref-badge">REF-532322</span>
+                <span class="ref-badge">04/06/2026 20:35</span>
+            </div>
+
+            <!-- Link para Termos de Uso -->
+            <div class="text-center">
+                <a href="/termos-de-uso" class="footer-link underline hover:text-accent500">
+                    <i class="fas fa-file-contract mr-1"></i>
+                    Termos de Uso
+                </a>
+            </div>
+
             <!-- Footer -->
-            <div class="footer text-center">
-                <div class="error-code mb-2">Código de Erro: 403 - Acesso Negado</div>
-                <div class="powered-by">Powered by GrimBots</div>
+            <div class="text-center pt-4 border-t border-white/10">
+                <span class="text-sm font-bold text-accent500">Powered by GrimBots</span>
             </div>
-            
         </div>
     </div>
 </body>
