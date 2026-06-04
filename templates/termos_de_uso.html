@@ -3,8 +3,6 @@
 
 {% block extra_head %}
 <style>
-/* Bot Config V2.0 - Design System (IDÊNTICO) */
-
 .config-section {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -12,7 +10,6 @@
     padding: 24px;
     margin-bottom: 24px;
 }
-
 .config-section-header {
     display: flex;
     align-items: center;
@@ -21,118 +18,52 @@
     padding-bottom: 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-
 .config-section-title {
     font-size: 1.25rem;
     font-weight: 700;
     color: #FFFFFF;
 }
-
 .config-section-description {
     font-size: 0.875rem;
     color: #9CA3AF;
     margin-top: 4px;
 }
-
-.legal-section {
-    scroll-margin-top: 100px;
-}
-
+.legal-section { scroll-margin-top: 100px; }
 .section-number {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 8px;
     background: linear-gradient(135deg, #FFB800, #FFC933);
-    font-weight: 700;
-    font-size: 1.125rem;
-    color: #111827;
+    font-weight: 700; font-size: 1.125rem; color: #111827;
 }
-
 .highlight-box {
-    padding: 16px;
-    background: rgba(255, 184, 0, 0.08);
-    border-left: 4px solid #FFB800;
-    border-radius: 0 8px 8px 0;
-    margin-top: 12px;
+    padding: 16px; background: rgba(255, 184, 0, 0.08);
+    border-left: 4px solid #FFB800; border-radius: 0 8px 8px 0; margin-top: 12px;
 }
-
 .warning-box {
-    padding: 16px;
-    background: rgba(239, 68, 68, 0.08);
-    border-left: 4px solid #EF4444;
-    border-radius: 0 8px 8px 0;
-    margin-top: 12px;
+    padding: 16px; background: rgba(239, 68, 68, 0.08);
+    border-left: 4px solid #EF4444; border-radius: 0 8px 8px 0; margin-top: 12px;
 }
-
-.success-box {
-    padding: 16px;
-    background: rgba(16, 185, 129, 0.08);
-    border-left: 4px solid #10B981;
-    border-radius: 0 8px 8px 0;
-    margin-top: 12px;
-}
-
 .toc-link {
-    display: block;
-    padding: 8px 12px;
-    color: #FFB800;
-    text-decoration: none;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    font-size: 0.875rem;
+    display: block; padding: 8px 12px; color: #FFB800;
+    text-decoration: none; border-radius: 6px;
+    transition: all 0.2s ease; font-size: 0.875rem;
 }
-
 .toc-link:hover {
-    background: rgba(255, 184, 0, 0.1);
-    transform: translateX(4px);
+    background: rgba(255, 184, 0, 0.1); transform: translateX(4px);
 }
-
-.content-text {
-    color: #E5E7EB;
-    line-height: 1.8;
-}
-
-.content-subtitle {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: #FFB800;
-    margin-bottom: 12px;
-}
-
-.content-list {
-    list-style: disc;
-    padding-left: 24px;
-    color: #E5E7EB;
-    line-height: 1.8;
-}
-
-.content-list li {
-    margin-bottom: 8px;
-}
-
+.content-text { color: #E5E7EB; line-height: 1.8; }
+.content-subtitle { font-size: 1.125rem; font-weight: 700; color: #FFB800; margin-bottom: 12px; }
+.content-list { list-style: disc; padding-left: 24px; color: #E5E7EB; line-height: 1.8; }
+.content-list li { margin-bottom: 8px; }
 .back-to-top {
-    position: fixed;
-    bottom: 32px;
-    right: 32px;
-    width: 56px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #FFB800, #FFC933);
-    border-radius: 50%;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 999;
+    position: fixed; bottom: 32px; right: 32px;
+    width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #FFB800, #FFC933); border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); cursor: pointer;
+    transition: all 0.3s ease; z-index: 999;
 }
-
 .back-to-top:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 32px rgba(255, 184, 0, 0.4);
+    transform: translateY(-4px); box-shadow: 0 12px 32px rgba(255, 184, 0, 0.4);
 }
 </style>
 {% endblock %}
@@ -140,18 +71,16 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     
-    <!-- Header -->
     <div class="mb-8">
         <h1 class="text-4xl font-black text-white mb-2 flex items-center gap-3">
             <i class="fas fa-file-contract" style="color: #FFB800;"></i>
             Termos de Uso
         </h1>
         <p class="text-lg text-gray-400">
-            Última atualização: 13 de outubro de 2025
+            Última atualização: 15 de fevereiro de 2026
         </p>
     </div>
 
-    <!-- Índice -->
     <div class="config-section mb-8">
         <div class="config-section-header">
             <i class="fas fa-list text-2xl" style="color: #FFB800;"></i>
@@ -160,252 +89,364 @@
                 <div class="config-section-description">Navegue pelos tópicos</div>
             </div>
         </div>
-
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <a href="#secao1" class="toc-link">1. Sobre o grimbots</a>
-            <a href="#secao2" class="toc-link">2. Aceitação dos Termos</a>
-            <a href="#secao3" class="toc-link">3. Cadastro e Responsabilidades</a>
-            <a href="#secao4" class="toc-link">4. Uso dos Serviços e Restrições</a>
-            <a href="#secao5" class="toc-link">5. Custos e Taxas</a>
-            <a href="#secao6" class="toc-link">6. Limitação de Responsabilidade</a>
-            <a href="#secao7" class="toc-link">7. Propriedade Intelectual</a>
-            <a href="#secao8" class="toc-link">8. Encerramento de Conta</a>
-            <a href="#secao9" class="toc-link">9. Modificações dos Termos</a>
-            <a href="#secao10" class="toc-link">10. Disposições Gerais</a>
-            <a href="#secao11" class="toc-link">11. Contato e Suporte</a>
+            <a href="#secao1" class="toc-link">1. Natureza da Plataforma</a>
+            <a href="#secao2" class="toc-link">2. Responsabilidade do Usuário</a>
+            <a href="#secao3" class="toc-link">3. Relação com a Plataforma</a>
+            <a href="#secao4" class="toc-link">4. Condutas Proibidas</a>
+            <a href="#secao5" class="toc-link">5. Suspensão e Encerramento de Conta</a>
+            <a href="#secao6" class="toc-link">6. Cooperação com Autoridades</a>
+            <a href="#secao7" class="toc-link">7. Canal de Denúncias</a>
+            <a href="#secao8" class="toc-link">8. Limitação de Responsabilidade</a>
+            <a href="#secao9" class="toc-link">9. Pagamentos e Taxas</a>
+            <a href="#secao10" class="toc-link">10. Direito de Arrependimento e Reembolso</a>
+            <a href="#secao11" class="toc-link">11. Propriedade Intelectual</a>
+            <a href="#secao12" class="toc-link">12. Aceitação dos Termos</a>
+            <a href="#secao13" class="toc-link">13. Disposições Gerais</a>
+            <a href="#secao14" class="toc-link">14. Legislação Aplicável e Foro</a>
+            <a href="#secao15" class="toc-link">15. Contato</a>
         </div>
     </div>
 
-    <!-- Seção 1: Sobre o grimbots -->
     <section id="secao1" class="config-section legal-section">
         <div class="config-section-header">
             <div class="section-number">1</div>
             <div>
-                <div class="config-section-title">Sobre o grimbots</div>
-                <div class="config-section-description">Plataforma SaaS de automação de bots</div>
+                <div class="config-section-title">Natureza da Plataforma</div>
+                <div class="config-section-description">Sobre a GrimBots</div>
             </div>
         </div>
-
         <div class="space-y-4 content-text">
-            <p>O <strong style="color: #FFB800;">grimbots</strong> é uma plataforma de Software como Serviço (SaaS) especializada em gerenciamento, automação e controle de bots no Telegram. A plataforma permite que criadores de conteúdo, administradores de canais e gestores de comunidades criem, administrem e monitorem bots de assinatura, automatizando cobranças, entregas de acesso e controle de assinantes.</p>
-            
-            <p class="content-subtitle">O sistema oferece:</p>
-            <ul class="content-list">
-                <li>Painel web de controle de bots com dashboard em tempo real via WebSocket</li>
-                <li>Integração com gateways de pagamento (SyncPay, PushynPay, Paradise e outros)</li>
-                <li>Geração de PIX via API oficial dos gateways integrados</li>
-                <li>Automação de entrada e saída de assinantes em grupos e canais do Telegram</li>
-                <li>Order Bumps personalizados - ofertas adicionais durante a compra</li>
-                <li>Downsells agendados - ofertas alternativas enviadas automaticamente</li>
-                <li>Sistema de Remarketing completo com segmentação de leads e blacklist automática</li>
-                <li>Gamificação e Ranking público com 29 badges (conquistas) e sistema de pontos</li>
-                <li>Relatórios de performance com analytics avançado e gráficos em tempo real</li>
-                <li>Split Payment automático - sistema de comissões transparente</li>
-                <li>Painel administrativo para gestão de usuários e auditoria</li>
-                <li>Suporte via painel de tickets e comunicação direta</li>
-            </ul>
-            
+            <p>A <strong style="color: #FFB800;">GrimBots</strong> ("Plataforma", "nós" ou "empresa") é um provedor de infraestrutura tecnológica que oferece ferramentas de automação para vendas via Telegram. A Plataforma atua exclusivamente como intermediária tecnológica, fornecendo recursos de automação, processamento de pagamentos e gestão de leads.</p>
+            <p>Nos termos do <strong>Marco Civil da Internet (Lei 12.965/2014)</strong> e da <strong>Lei Geral de Proteção de Dados (Lei 13.709/2018)</strong>, a GrimBots é uma provedora de aplicação de internet que disponibiliza infraestrutura tecnológica para seus usuários, não sendo responsável pelo conteúdo gerado, publicado ou distribuído por terceiros que utilizam a Plataforma.</p>
             <div class="highlight-box">
                 <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
                     <i class="fas fa-exclamation-triangle"></i>
                     IMPORTANTE:
                 </p>
-                <p style="color: #E5E7EB;">O grimbots fornece apenas a tecnologia e infraestrutura para gestão e automação de bots. O usuário é o único e exclusivo responsável pelo conteúdo comercializado, mensagens enviadas, uso dos bots e conformidade com as leis aplicáveis.</p>
+                <p style="color: #E5E7EB;">A Plataforma não possui controle editorial sobre os conteúdos, produtos, serviços ou materiais criados, publicados ou comercializados pelos usuários. Cada usuário é o único e exclusivo responsável por todo conteúdo que produz, distribui ou comercializa através da Plataforma.</p>
             </div>
         </div>
     </section>
 
-    <!-- Seção 2: Aceitação dos Termos -->
     <section id="secao2" class="config-section legal-section">
         <div class="config-section-header">
             <div class="section-number">2</div>
             <div>
-                <div class="config-section-title">Aceitação dos Termos</div>
-                <div class="config-section-description">Ao usar a plataforma, você concorda com:</div>
+                <div class="config-section-title">Responsabilidade do Usuário</div>
+                <div class="config-section-description">Suas obrigações ao usar a Plataforma</div>
             </div>
         </div>
-
         <div class="space-y-4 content-text">
-            <p>Ao se cadastrar, acessar ou utilizar os serviços do grimbots, você declara que:</p>
+            <p>Ao utilizar a GrimBots, o usuário declara e garante que:</p>
             <ul class="content-list">
-                <li>Leu, compreendeu e concorda integralmente com estes Termos de Uso e com a Política de Privacidade</li>
-                <li>Possui capacidade jurídica plena para aceitar estes termos</li>
-                <li>É maior de 18 anos</li>
-                <li>Utilizará a plataforma de acordo com as leis aplicáveis e com estes termos</li>
-                <li>Não utilizará a plataforma para fins ilegais, fraudulentos ou que violem direitos de terceiros</li>
+                <li>É maior de 18 anos e possui plena capacidade civil para contratar</li>
+                <li>Todas as informações cadastrais fornecidas são verdadeiras, completas e atualizadas</li>
+                <li>É o único responsável por todo conteúdo que produz, publica, distribui ou comercializa através da Plataforma</li>
+                <li>Possui todos os direitos necessários sobre os conteúdos e produtos que comercializa</li>
+                <li>Cumpre integralmente a legislação brasileira vigente, incluindo mas não se limitando ao <strong>Código de Defesa do Consumidor</strong>, <strong>Código Penal</strong>, <strong>Estatuto da Criança e do Adolescente</strong> e <strong>Marco Civil da Internet</strong></li>
+                <li>É responsável pelo recolhimento de todos os tributos incidentes sobre suas operações comerciais</li>
+                <li>Manterá seus dados de acesso em sigilo, sendo responsável por qualquer atividade realizada em sua conta</li>
             </ul>
-            
             <div class="warning-box">
-                <p class="font-bold" style="color: #EF4444;">Caso não concorde com qualquer cláusula destes termos, você não deve utilizar a plataforma.</p>
+                <p class="font-bold" style="color: #EF4444;">O usuário é integralmente responsável por quaisquer danos, prejuízos, reclamações ou demandas judiciais ou extrajudiciais decorrentes do uso indevido da Plataforma, isentando a GrimBots de qualquer responsabilidade nesse sentido.</p>
             </div>
         </div>
     </section>
 
-    <!-- Seção 3: Cadastro e Responsabilidades -->
     <section id="secao3" class="config-section legal-section">
         <div class="config-section-header">
             <div class="section-number">3</div>
             <div>
-                <div class="config-section-title">Cadastro e Responsabilidades do Usuário</div>
-                <div class="config-section-description">Suas obrigações ao usar a plataforma</div>
+                <div class="config-section-title">Relação com a Plataforma</div>
+                <div class="config-section-description">Vínculo entre usuário e GrimBots</div>
             </div>
         </div>
-
-        <div class="space-y-6 content-text">
-            <div>
-                <h3 class="content-subtitle">3.1 Cadastro</h3>
-                <p class="mb-2">Para utilizar o grimbots, você deve:</p>
-                <ul class="content-list">
-                    <li>Fornecer informações verdadeiras, precisas e atualizadas durante o cadastro</li>
-                    <li>Manter suas credenciais de acesso (e-mail e senha) em sigilo</li>
-                    <li>Notificar imediatamente a plataforma em caso de uso não autorizado de sua conta</li>
-                    <li>Ser responsável por todas as atividades realizadas através de sua conta</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="content-subtitle">3.2 Responsabilidades do Usuário</h3>
-                <p class="mb-2">Você é integralmente responsável por:</p>
-                <ul class="content-list">
-                    <li><strong style="color: #FFB800;">Conteúdo:</strong> Todo conteúdo comercializado, distribuído ou transmitido através dos bots criados</li>
-                    <li><strong style="color: #FFB800;">Mensagens:</strong> Todas as mensagens automáticas, campanhas de marketing, remarketing e comunicações enviadas</li>
-                    <li><strong style="color: #FFB800;">Order Bumps e Downsells:</strong> Ofertas adicionais configuradas em seus bots</li>
-                    <li><strong style="color: #FFB800;">Legalidade:</strong> Garantir que seu uso da plataforma e seu modelo de negócio estejam em conformidade com as leis brasileiras e internacionais aplicáveis</li>
-                    <li><strong style="color: #FFB800;">Dados de Terceiros:</strong> Tratamento adequado de dados pessoais de seus assinantes, em conformidade com a LGPD</li>
-                    <li><strong style="color: #FFB800;">Impostos:</strong> Pagamento de tributos devidos sobre suas vendas e receitas</li>
-                    <li><strong style="color: #FFB800;">Termos do Telegram:</strong> Cumprimento dos Termos de Serviço do Telegram e políticas de uso da API</li>
-                    <li><strong style="color: #FFB800;">Tokens e Credenciais:</strong> Manter em sigilo os tokens de bots e credenciais de gateways de pagamento configurados</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="content-subtitle">3.3 Proibições</h3>
-                <div class="warning-box">
-                    <p class="font-bold flex items-center gap-2 mb-2" style="color: #EF4444;">
-                        <i class="fas fa-ban"></i>
-                        É expressamente proibido utilizar a plataforma para:
-                    </p>
-                </div>
-                <ul class="content-list mt-3">
-                    <li>Comercializar conteúdo ilegal, pirata, pornográfico infantil, ou que viole direitos autorais</li>
-                    <li>Praticar ou promover atividades criminosas, fraudes, golpes ou esquemas de pirâmide</li>
-                    <li>Enviar spam, mensagens não solicitadas ou práticas abusivas de marketing</li>
-                    <li>Realizar ataques, invasões, ou comprometer a segurança da plataforma ou de terceiros</li>
-                    <li>Violar direitos de propriedade intelectual, privacidade ou outros direitos de terceiros</li>
-                    <li>Criar bots que simulem identidades falsas ou pratiquem engano</li>
-                    <li>Revender, sublicenciar ou transferir seu acesso à plataforma sem autorização</li>
-                    <li>Realizar engenharia reversa, descompilar ou tentar extrair o código-fonte da plataforma</li>
-                </ul>
-                <p class="mt-3 font-bold" style="color: #EF4444;">O descumprimento destas proibições resultará em suspensão imediata da conta, sem direito a reembolso.</p>
+        <div class="space-y-4 content-text">
+            <p>Ao utilizar a GrimBots, o usuário é um contratante dos serviços da Plataforma. O uso da Plataforma não cria qualquer vínculo empregatício, societário, associativo, de representação ou de agência entre o usuário e a GrimBots.</p>
+            <p>O usuário não pode se apresentar como funcionário, sócio, agente ou representante da GrimBots perante terceiros. O usuário atua exclusivamente em seu próprio nome e em seu próprio benefício, com total liberdade e discricionariedade para conduzir suas atividades comerciais.</p>
+            <div class="highlight-box">
+                <p style="color: #E5E7EB;">A GrimBots não promete nem garante que o usuário atingirá qualquer desempenho, ganho ou resultado financeiro com o uso da Plataforma. Nenhum usuário pode prometer resultados financeiros inalcançáveis em nome da Plataforma ou utilizando-a como referência.</p>
             </div>
         </div>
     </section>
 
-    <!-- Seção 5: Custos e Taxas (Destaque) -->
-    <section id="secao5" class="config-section legal-section" style="border: 2px solid rgba(255, 184, 0, 0.3);">
+    <section id="secao4" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">4</div>
+            <div>
+                <div class="config-section-title">Condutas Proibidas</div>
+                <div class="config-section-description">O que não é permitido na Plataforma</div>
+            </div>
+        </div>
+        <div class="space-y-6 content-text">
+            <p>É expressamente proibido utilizar a Plataforma para:</p>
+
+            <div>
+                <h3 class="content-subtitle">4.1 Conteúdo Ilegal</h3>
+                <ul class="content-list">
+                    <li>Comercializar, distribuir ou promover qualquer tipo de conteúdo ilegal</li>
+                    <li>Pornografia infantil ou qualquer material que envolva menores de idade (crime previsto no ECA - Lei 8.069/1990)</li>
+                    <li>Material que incite violência, terrorismo, discriminação racial, étnica, religiosa ou de gênero</li>
+                    <li>Conteúdo que viole direitos autorais, marcas registradas ou propriedade intelectual de terceiros</li>
+                    <li>Comercialização de drogas ilícitas, armas, medicamentos sem prescrição ou qualquer produto proibido por lei</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="content-subtitle">4.2 Práticas Fraudulentas</h3>
+                <ul class="content-list">
+                    <li>Golpes financeiros, esquemas de pirâmide, fraudes ou estelionato</li>
+                    <li>Phishing, roubo de identidade ou engenharia social</li>
+                    <li>Publicidade enganosa ou práticas comerciais abusivas</li>
+                    <li>Manipulação de métricas, estatísticas ou dados da Plataforma</li>
+                    <li>Uso de informações falsas ou enganosas em campanhas de marketing</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="content-subtitle">4.3 Uso Técnico Indevido</h3>
+                <ul class="content-list">
+                    <li>Tentativas de acesso não autorizado a sistemas, contas ou dados de terceiros</li>
+                    <li>Engenharia reversa, descompilação ou tentativa de extrair o código-fonte da Plataforma</li>
+                    <li>Uso de bots, scrapers ou ferramentas automatizadas para coletar dados da Plataforma</li>
+                    <li>Sobrecarga intencional dos servidores ou infraestrutura da Plataforma</li>
+                    <li>Compartilhamento ou revenda de credenciais de acesso</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="secao5" class="config-section legal-section">
         <div class="config-section-header">
             <div class="section-number">5</div>
             <div>
-                <div class="config-section-title" style="color: #FFB800;">Custos e Taxas</div>
-                <div class="config-section-description">Modelo de precificação transparente</div>
+                <div class="config-section-title">Suspensão e Encerramento de Conta</div>
+                <div class="config-section-description">Quando e como podemos suspender ou encerrar</div>
             </div>
         </div>
-
-        <div class="space-y-6 content-text">
-            <div>
-                <h3 class="content-subtitle">5.1 Modelo de Negócio</h3>
-                <div class="success-box">
-                    <p class="font-bold mb-3 flex items-center gap-2" style="color: #10B981;">
-                        <i class="fas fa-coins"></i>
-                        O grimbots opera sob o seguinte modelo:
-                    </p>
-                    <ul class="list-none space-y-2">
-                        <li class="flex items-center gap-2"><i class="fas fa-check-circle" style="color: #6EE7B7;"></i> <strong>Cadastro e criação de bots:</strong> Gratuito</li>
-                        <li class="flex items-center gap-2"><i class="fas fa-check-circle" style="color: #6EE7B7;"></i> <strong>Taxa por transação:</strong> 2% por venda/assinatura processada</li>
-                        <li class="flex items-center gap-2"><i class="fas fa-check-circle" style="color: #6EE7B7;"></i> <strong>Sem mensalidades obrigatórias:</strong> Você paga apenas quando vende</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div>
-                <h3 class="content-subtitle">5.2 Faturamento</h3>
-                <ul class="content-list">
-                    <li>As taxas são cobradas automaticamente via <strong style="color: #FFB800;">Split Payment</strong> no momento da transação</li>
-                    <li>O valor da taxa é deduzido do pagamento recebido antes do repasse ao usuário</li>
-                    <li>Não há cobrança de setup, cancelamento ou manutenção de conta</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="content-subtitle">5.3 Reembolsos</h3>
-                <ul class="content-list">
-                    <li>Não há reembolso das taxas de serviço cobradas por transações processadas</li>
-                    <li>Em caso de chargeback ou cancelamento de venda pelo cliente final, a taxa de serviço não será devolvida</li>
-                    <li>O usuário é responsável por gerenciar suas próprias políticas de reembolso com seus clientes</li>
-                </ul>
-            </div>
-
-            <div>
-                <h3 class="content-subtitle">5.4 Alterações de Preço</h3>
-                <p class="mb-2">O grimbots reserva-se o direito de alterar os valores das taxas mediante:</p>
-                <ul class="content-list">
-                    <li>Notificação prévia de 30 (trinta) dias por e-mail</li>
-                    <li>Publicação das novas condições nesta página</li>
-                    <li>Usuários ativos no momento da mudança poderão optar por cancelar sua conta antes da vigência dos novos valores</li>
-                </ul>
-            </div>
+        <div class="space-y-4 content-text">
+            <p>A GrimBots reserva-se o direito de, a seu exclusivo critério e sem aviso prévio:</p>
+            <ul class="content-list">
+                <li>Suspender temporariamente contas sob investigação por suspeita de violação destes Termos</li>
+                <li>Encerrar permanentemente contas que comprovadamente violem estes Termos, a legislação vigente ou as políticas da Plataforma</li>
+                <li>Bloquear o acesso a funcionalidades específicas em caso de uso indevido</li>
+                <li>Reter valores pendentes de saque quando houver suspeita de fraude ou atividade ilícita, até que a situação seja esclarecida</li>
+            </ul>
+            <p>Em caso de suspensão ou encerramento por violação destes Termos, o usuário não terá direito a reembolso de valores pagos pela utilização da Plataforma. Valores de clientes finais (compradores) serão tratados conforme a legislação vigente e o Código de Defesa do Consumidor.</p>
+            <p>A GrimBots poderá, ainda, adotar medidas técnicas preventivas, como monitoramento automatizado de atividades suspeitas, para garantir a integridade da Plataforma e a segurança de todos os usuários.</p>
         </div>
     </section>
 
-    <!-- Seção 11: Contato e Suporte -->
+    <section id="secao6" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">6</div>
+            <div>
+                <div class="config-section-title">Cooperação com Autoridades</div>
+                <div class="config-section-description">Compromisso com a lei e a justiça</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>A GrimBots coopera integralmente com autoridades policiais, judiciais e administrativas brasileiras. Nos termos do Marco Civil da Internet (Lei 12.965/2014), a Plataforma:</p>
+            <ul class="content-list">
+                <li>Mantém registros de acesso à aplicação (logs) pelo período mínimo de 6 meses, conforme exigido por lei</li>
+                <li>Fornece dados cadastrais de usuários mediante solicitação de autoridades competentes, conforme previsto em lei</li>
+                <li>Disponibiliza registros de acesso e conteúdo armazenado mediante ordem judicial</li>
+                <li>Comunica as autoridades competentes qualquer atividade que configure crime, especialmente crimes contra menores</li>
+                <li>Preserva registros e evidências quando solicitado por autoridades ou mediante ordem judicial</li>
+            </ul>
+            <p>Os dados fornecidos às autoridades podem incluir, mas não se limitam a: dados cadastrais, endereços IP de acesso, histórico de transações, conteúdos armazenados e quaisquer outros dados necessários para a investigação.</p>
+        </div>
+    </section>
+
+    <section id="secao7" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">7</div>
+            <div>
+                <div class="config-section-title">Canal de Denúncias</div>
+                <div class="config-section-description">Reporte conteúdo irregular</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>A GrimBots disponibiliza canais para denúncia de conteúdo irregular, ilegal ou que viole estes Termos de Uso. Qualquer pessoa pode reportar conteúdo suspeito:</p>
+            <div class="highlight-box">
+                <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                    <i class="fas fa-envelope"></i>
+                    Canal de Denúncias:
+                </p>
+                <p style="color: #E5E7EB;">E-mail: <strong>report@grimbots.com.br</strong></p>
+            </div>
+            <p>As denúncias serão analisadas em até <strong>48 horas úteis</strong>. Mediante confirmação de violação, a Plataforma tomará as medidas cabíveis, incluindo:</p>
+            <ul class="content-list">
+                <li>Remoção imediata do conteúdo infrator</li>
+                <li>Suspensão ou encerramento da conta do usuário infrator</li>
+                <li>Comunicação às autoridades competentes, quando aplicável</li>
+                <li>Preservação de evidências para fins de investigação</li>
+            </ul>
+        </div>
+    </section>
+
+    <section id="secao8" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">8</div>
+            <div>
+                <div class="config-section-title">Limitação de Responsabilidade</div>
+                <div class="config-section-description">Até onde vai nossa responsabilidade</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>A GrimBots, na qualidade de provedora de infraestrutura tecnológica:</p>
+            <ul class="content-list">
+                <li>Não se responsabiliza pelo conteúdo criado, publicado ou distribuído por seus usuários</li>
+                <li>Não se responsabiliza pela qualidade, legalidade ou veracidade dos produtos e serviços comercializados pelos usuários</li>
+                <li>Não se responsabiliza por campanhas publicitárias veiculadas pelos usuários em plataformas de terceiros (Meta Ads, Google Ads, TikTok Ads, etc.)</li>
+                <li>Não se responsabiliza por perdas financeiras decorrentes de indisponibilidade temporária dos serviços, falhas em gateways de pagamento de terceiros ou problemas na rede Telegram</li>
+                <li>Não garante resultados financeiros, volume de vendas ou retorno sobre investimento</li>
+            </ul>
+            <div class="highlight-box">
+                <p style="color: #E5E7EB;">A responsabilidade da GrimBots limita-se ao correto funcionamento da infraestrutura tecnológica fornecida, nos termos do serviço contratado. Eventuais falhas técnicas serão corrigidas no menor tempo possível, sem que isso gere direito a indenização além do período de indisponibilidade.</p>
+            </div>
+            <p>Nos termos do <strong>art. 19 do Marco Civil da Internet</strong>, a GrimBots somente poderá ser responsabilizada por conteúdo gerado por terceiros se, após ordem judicial específica, não tomar as providências para tornar indisponível o conteúdo apontado como infringente.</p>
+        </div>
+    </section>
+
+    <section id="secao9" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">9</div>
+            <div>
+                <div class="config-section-title">Pagamentos e Taxas</div>
+                <div class="config-section-description">Modelo de precificação</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>Ao utilizar os serviços de processamento de pagamento da Plataforma, o usuário concorda que:</p>
+            <ul class="content-list">
+                <li>A GrimBots cobra uma taxa de serviço sobre cada transação processada, conforme tabela vigente</li>
+                <li>Os valores são processados por gateways de pagamento de terceiros, sujeitos aos termos e condições desses provedores</li>
+                <li>Chargebacks, contestações e estornos são de responsabilidade do usuário vendedor</li>
+                <li>A Plataforma poderá reter valores em caso de suspeita de fraude ou atividade irregular</li>
+                <li>Os prazos de liberação de valores seguem as políticas do gateway de pagamento utilizado</li>
+            </ul>
+        </div>
+    </section>
+
+    <section id="secao10" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">10</div>
+            <div>
+                <div class="config-section-title">Direito de Arrependimento e Reembolso</div>
+                <div class="config-section-description">Política de reembolso para compradores</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>Em conformidade com o <strong>Código de Defesa do Consumidor (Lei 8.078/1990, art. 49)</strong>, o comprador de produtos ou serviços adquiridos através da Plataforma poderá exercer o direito de arrependimento no prazo de <strong>7 (sete) dias corridos</strong>, contados a partir da data de recebimento do produto ou da contratação do serviço, sem necessidade de justificativa.</p>
+            <p>Para exercer o direito de arrependimento, o comprador deverá entrar em contato diretamente com o <strong>vendedor responsável</strong> pelo produto. A GrimBots, na qualidade de intermediadora tecnológica, poderá auxiliar na mediação do reembolso quando solicitado.</p>
+            <p>O reembolso será processado pelo mesmo meio de pagamento utilizado na compra original. O prazo para efetivação do estorno depende das políticas do gateway de pagamento utilizado, podendo variar entre 1 e 30 dias úteis.</p>
+            <p>Além da hipótese de arrependimento, o comprador poderá solicitar reembolso em caso de vícios de qualidade que tornem o produto ou serviço impróprio ou inadequado ao consumo, ou que apresentem disparidade com as informações divulgadas pelo vendedor, conforme previsto no Código de Defesa do Consumidor.</p>
+        </div>
+    </section>
+
     <section id="secao11" class="config-section legal-section">
         <div class="config-section-header">
             <div class="section-number">11</div>
             <div>
-                <div class="config-section-title">Contato e Suporte</div>
-                <div class="config-section-description">Canais de atendimento</div>
+                <div class="config-section-title">Propriedade Intelectual</div>
+                <div class="config-section-description">Direitos sobre a Plataforma</div>
             </div>
         </div>
-
         <div class="space-y-4 content-text">
-            <p>Para dúvidas, suporte ou solicitações relacionadas a estes Termos de Uso, entre em contato:</p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div class="p-5 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
-                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
-                        <i class="fas fa-envelope"></i>
-                        E-mail de Suporte
-                    </p>
-                    <p style="color: #E5E7EB;">suporte@grimbots.com</p>
-                </div>
-                <div class="p-5 rounded-lg" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
-                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #60A5FA;">
-                        <i class="fab fa-telegram"></i>
-                        Telegram
-                    </p>
-                    <p style="color: #E5E7EB;">@GrimbotsSupport</p>
-                </div>
-                <div class="p-5 rounded-lg" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
-                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #6EE7B7;">
-                        <i class="fas fa-ticket-alt"></i>
-                        Painel de Tickets
-                    </p>
-                    <p style="color: #E5E7EB;">Disponível após login</p>
-                </div>
-                <div class="p-5 rounded-lg" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
-                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #C4B5FD;">
-                        <i class="fas fa-book"></i>
-                        Documentação
-                    </p>
-                    <p style="color: #E5E7EB;">https://grimbots.com/docs</p>
-                </div>
-            </div>
-
-            <p class="mt-4"><strong style="color: #FFB800;">Horário de Atendimento:</strong> Segunda a sexta, das 9h às 18h (horário de Brasília)</p>
+            <p>Todo o conteúdo da Plataforma, incluindo mas não se limitando a software, design, logotipos, marcas, textos e documentação, é de propriedade exclusiva da <strong>GrimBots</strong> ou de seus licenciadores, protegido pela legislação brasileira de propriedade intelectual.</p>
+            <p>O usuário não adquire qualquer direito de propriedade intelectual sobre a Plataforma pelo simples uso dos serviços. É proibida a reprodução, distribuição, modificação ou uso comercial de qualquer elemento da Plataforma sem autorização expressa e por escrito da GrimBots.</p>
         </div>
     </section>
 
-    <!-- Footer da Página -->
+    <section id="secao12" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">12</div>
+            <div>
+                <div class="config-section-title">Aceitação dos Termos</div>
+                <div class="config-section-description">Como você concorda com estes termos</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>Ao criar uma conta na GrimBots, o usuário declara que leu, compreendeu e concorda integralmente com estes Termos de Uso. O uso continuado da Plataforma após eventuais atualizações constitui aceitação tácita dos novos termos.</p>
+            <p>A GrimBots poderá atualizar estes Termos de Uso a qualquer momento, notificando os usuários por e-mail ou através de aviso na Plataforma. Em caso de alterações substanciais, será concedido um prazo razoável para que o usuário tome conhecimento das mudanças.</p>
+            <p>Caso o usuário não concorde com os termos atualizados, deverá cessar imediatamente o uso da Plataforma e solicitar o encerramento de sua conta.</p>
+        </div>
+    </section>
+
+    <section id="secao13" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">13</div>
+            <div>
+                <div class="config-section-title">Disposições Gerais</div>
+                <div class="config-section-description">Cláusulas gerais</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <div>
+                <h3 class="content-subtitle">13.1 Não Renúncia</h3>
+                <p>O não exercício ou o atraso no exercício de qualquer direito previsto nestes Termos pela GrimBots não constituirá renúncia a tal direito. A GrimBots poderá exercer seus direitos a qualquer momento, a seu critério. A renúncia ao exercício de um direito em determinada situação não implicará na renúncia ao exercício desse ou de qualquer outro direito em situações futuras.</p>
+            </div>
+            <div>
+                <h3 class="content-subtitle">13.2 Independência das Cláusulas</h3>
+                <p>Se qualquer disposição destes Termos for considerada inválida ou inexequível, as demais disposições permanecerão em pleno vigor e efeito.</p>
+            </div>
+            <div>
+                <h3 class="content-subtitle">13.3 Cessão</h3>
+                <p>O usuário não poderá ceder, transferir ou sublicenciar seus direitos ou obrigações decorrentes destes Termos sem o consentimento prévio e por escrito da GrimBots. A GrimBots poderá ceder seus direitos e obrigações a terceiros, inclusive em caso de fusão, aquisição ou venda de ativos.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="secao14" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">14</div>
+            <div>
+                <div class="config-section-title">Legislação Aplicável e Foro</div>
+                <div class="config-section-description">Lei que rege estes termos</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>Estes Termos de Uso são regidos pela <strong>legislação brasileira</strong>. Fica eleito o foro da comarca da sede da empresa para dirimir quaisquer controvérsias decorrentes destes Termos, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</p>
+            <p>Antes de recorrer ao Judiciário, as partes se comprometem a tentar a resolução amigável do conflito, por meio de negociação direta ou mediação.</p>
+        </div>
+    </section>
+
+    <section id="secao15" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">15</div>
+            <div>
+                <div class="config-section-title">Contato</div>
+                <div class="config-section-description">Canais de atendimento</div>
+            </div>
+        </div>
+        <div class="space-y-4 content-text">
+            <p>Para dúvidas, sugestões ou solicitações relacionadas a estes Termos de Uso:</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="p-5 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                        <i class="fas fa-envelope"></i> E-mail Geral
+                    </p>
+                    <p style="color: #E5E7EB;">contato@grimbots.com.br</p>
+                </div>
+                <div class="p-5 rounded-lg" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #EF4444;">
+                        <i class="fas fa-flag"></i> Denúncias
+                    </p>
+                    <p style="color: #E5E7EB;">report@grimbots.com.br</p>
+                </div>
+            </div>
+            <p class="mt-4" style="color: #FFB800;">
+                <i class="fas fa-globe mr-1"></i>
+                Website: <a href="https://grimbots.com.br" style="color: #FFB800; text-decoration: underline;">https://grimbots.com.br</a>
+            </p>
+            <div class="highlight-box">
+                <p style="color: #E5E7EB;">Ao utilizar nossos serviços, você declara que leu e concorda integralmente com estes Termos de Uso e com nossa Política de Privacidade.</p>
+            </div>
+        </div>
+    </section>
+
     <div class="config-section mt-8">
         <div class="text-center py-6">
             <div class="flex items-center justify-center gap-3 mb-3">
@@ -419,7 +460,6 @@
 
 </div>
 
-<!-- Back to Top Button -->
 <div class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
     <svg class="w-6 h-6" fill="none" stroke="#111827" viewBox="0 0 24 24" stroke-width="3">
         <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
