@@ -518,7 +518,7 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                                         db.session.refresh(payment)
                                         
                                         if payment.status == 'paid':
-                                            resultado = send_payment_delivery(payment, self)
+                                            resultado = send_payment_delivery(payment, bot_manager)
                                             if resultado:
                                                 logger.info(f"✅ [VERIFY OTHER] Entregável enviado com sucesso via send_payment_delivery")
                                             else:
@@ -631,7 +631,7 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                         
                         # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                         if payment.status == 'paid':
-                            resultado = send_payment_delivery(payment, self)
+                            resultado = send_payment_delivery(payment, bot_manager)
                             if resultado:
                                 logger.info(f"✅ [VERIFY] Entregável enviado com sucesso via send_payment_delivery")
                                 

@@ -218,7 +218,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             payment_id = callback_data.replace('verify_', '')
             logger.info(f"🔍 Verificando pagamento: {payment_id}")
             
-            self._handle_verify_payment(bot_id, token, chat_id, payment_id, user_info)
+            bot_manager._handle_verify_payment(bot_id, token, chat_id, payment_id, user_info)
         
         # ✅ NOVO: Botão de REMARKETING (formato simplificado)
         elif callback_data.startswith('rmkt_'):
