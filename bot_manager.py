@@ -8564,101 +8564,21 @@ Seu pagamento ainda não foi confirmado.
         }
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
-        """
-        # ✅ MIGRAÇÃO RQ: Agenda downsells usando RQ (Redis Queue) em vez de APScheduler
-        
-        Args:
-            bot_id: ID do bot
-            payment_id: ID do pagamento
-            chat_id: ID do chat
-            downsells: Lista de downsells configurados
-            original_price: Preço do botão original (para cálculo percentual)
-            original_button_index: Índice do botão original clicado
-        """
-        from datetime import timedelta
-        
-        logger.info(f"🚨 ===== SCHEDULE_DOWNSELLS (RQ) =====")
-        logger.info(f"   bot_id: {bot_id}")
-        logger.info(f"   payment_id: {payment_id}")
-        logger.info(f"   chat_id: {chat_id}")
-        logger.info(f"   downsells count: {len(downsells) if downsells else 0}")
-        
-        try:
-            if not downsells:
-                logger.warning(f"⚠️ Lista de downsells está vazia!")
-                return
-            
-            # ✅ Importar fila RQ e função de job
-            from tasks_async import marathon_queue, send_downsell_job
-            
-            if not marathon_queue:
-                logger.error(f"❌ CRÍTICO: Fila RQ 'marathon' não disponível!")
-                return
-            
-            logger.info(f"📅 Agendando {len(downsells)} downsell(s) via RQ para payment {payment_id}")
-            
-            jobs_agendados = []
-            for i, downsell in enumerate(downsells):
-                delay_minutes = int(downsell.get('delay_minutes', 5))
-                
-                logger.info(f"📅 Downsell {i+1}: delay={delay_minutes}min")
-                
-                try:
-                    # ✅ ISOLAMENTO: Agendar downsell com user_id no payload
-                    from tasks_async import marathon_queue, send_downsell_async
-                    
-                    if marathon_queue and self.user_id:
-                        # ✅ CORREÇÃO: Enfileirar com delay (respeita delay_minutes da config)
-                        job = marathon_queue.enqueue_in(
-                            timedelta(minutes=delay_minutes),
-                            send_downsell_async,
-                            self.user_id,  # user_id como primeiro arg
-                            bot_id,
-                            payment_id,
-                            chat_id,
-                            downsell,
-                            i,
-                            original_price,
-                            original_button_index,
-                            job_id=f"downsell_{bot_id}_{payment_id}_{i}",
-                            job_timeout=300
-                        )
-                    elif marathon_queue:
-                        # Fallback legacy
-                        job = marathon_queue.enqueue_in(
-                            timedelta(minutes=delay_minutes),
-                            send_downsell_job,
-                            bot_id=bot_id,
-                            payment_id=payment_id,
-                            chat_id=chat_id,
-                            downsell=downsell,
-                            index=i,
-                            original_price=original_price,
-                            original_button_index=original_button_index,
-                            job_id=f"downsell_{bot_id}_{payment_id}_{i}",
-                            job_timeout=300
-                        )
-                    
-                    logger.info(f"✅ Downsell {i+1} AGENDADO via RQ: job_id={job.id if job else 'N/A'}")
-                    if job:
-                        jobs_agendados.append(job.id)
-                        try:
-                            from internal_logic.core.redis_manager import get_redis_connection
-                            r = get_redis_connection()
-                            r.sadd(f"gb:downsell:jobs:{payment_id}", job.id)
-                            r.expire(f"gb:downsell:jobs:{payment_id}", 86400)
-                        except Exception:
-                            pass
-                    
-                except Exception as e:
-                    logger.error(f"❌ Erro ao agendar downsell {i+1} no RQ: {e}", exc_info=True)
-            
-            logger.info(f"✅ Total de {len(jobs_agendados)} downsell(s) agendado(s) via RQ")
-            logger.info(f"🚨 ===== FIM SCHEDULE_DOWNSELLS (RQ) =====")
-                
-        except Exception as e:
-            logger.error(f"❌ Erro ao agendar downsells via RQ: {e}", exc_info=True)
-    
+        """Agenda downsells via RQ (delega para offer_sender)"""
+        from internal_logic.services.offer_sender import schedule_offers
+        from tasks_async import marathon_queue
+        return schedule_offers(
+            mode='downsell',
+            marathon_queue=marathon_queue,
+            bot_id=bot_id,
+            payment_id=payment_id,
+            chat_id=chat_id,
+            offers=downsells,
+            original_price=original_price,
+            original_button_index=original_button_index,
+            user_id=self.user_id,
+        )
+
     def _send_downsell(self, bot_id: int, payment_id: str, chat_id: int, downsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
         """Envia downsell agendado (delega para offer_sender)"""
         from internal_logic.services.offer_sender import send_offer
@@ -8674,90 +8594,22 @@ Seu pagamento ainda não foi confirmado.
             original_price=original_price,
             original_button_index=original_button_index,
         )
-    
+
     def schedule_upsells(self, bot_id: int, payment_id: str, chat_id: int, upsells: list, original_price: float = 0, original_button_index: int = -1):
-        """
-        Agenda upsells para um pagamento aprovado
-        
-        # ✅ DIFERENÇA CRÍTICA vs downsells:
-        - Upsells são enviados quando payment.status == 'paid'
-        - Downsells são enviados quando payment.status == 'pending'
-        
-        Args:
-            bot_id: ID do bot
-            payment_id: ID do pagamento
-            chat_id: ID do chat
-            upsells: Lista de upsells configurados
-            original_price: Preço do botão original (para cálculo percentual)
-            original_button_index: Índice do botão original clicado
-        """
-        logger.info(f"🚨 ===== SCHEDULE_UPSELLS CHAMADO =====")
-        logger.info(f"   bot_id: {bot_id}")
-        logger.info(f"   payment_id: {payment_id}")
-        logger.info(f"   chat_id: {chat_id}")
-        logger.info(f"   original_price: {original_price}")
-        logger.info(f"   original_button_index: {original_button_index}")
-        logger.info(f"   upsells count: {len(upsells) if upsells else 0}")
-        
-        try:
-            # ✅ DIAGNÓSTICO CRÍTICO: Verificar scheduler
-            if not self.scheduler:
-                logger.error(f"❌ CRÍTICO: Scheduler não está disponível no bot_manager!")
-                logger.error(f"   Isso significa que upsells NÃO serão agendados!")
-                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                logger.error(f"   Payment ID: {payment_id} | Bot ID: {bot_id}")
-                # ✅ CORREÇÃO CRÍTICA QI 500: Tentar recuperar scheduler do app
-                # TODO: Implementar importação alternativa para o scheduler
-                logger.warning(f"⚠️ Scheduler não disponível no bot_manager...")
-                return
-            
-            if not upsells:
-                logger.warning(f"⚠️ Lista de upsells está vazia!")
-                return
-            
-            # ✅ Importar fila RQ e função de job
-            from tasks_async import marathon_queue, send_upsell_job
-            
-            if not marathon_queue:
-                logger.error(f"❌ CRÍTICO: Fila RQ 'marathon' não disponível!")
-                return
-            
-            logger.info(f"📅 Agendando {len(upsells)} upsell(s) via RQ para payment {payment_id}")
-            
-            jobs_agendados = []
-            for i, upsell in enumerate(upsells):
-                delay_minutes = int(upsell.get('delay_minutes', 5))
-                
-                logger.info(f"📅 Upsell {i+1}: delay={delay_minutes}min")
-                
-                try:
-                    # ✅ AGENDAR VIA RQ: enqueue_in() agenda para executar após o delay
-                    job = marathon_queue.enqueue_in(
-                        timedelta(minutes=delay_minutes),
-                        send_upsell_job,
-                        bot_id=bot_id,
-                        payment_id=payment_id,
-                        chat_id=chat_id,
-                        upsell=upsell,
-                        index=i,
-                        original_price=original_price,
-                        original_button_index=original_button_index,
-                        job_id=f"upsell_{bot_id}_{payment_id}_{i}",  # ID único para anti-duplicação
-                        job_timeout=300  # 5 minutos timeout
-                    )
-                    
-                    logger.info(f"✅ Upsell {i+1} AGENDADO via RQ: job_id={job.id}")
-                    jobs_agendados.append(job.id)
-                    
-                except Exception as e:
-                    logger.error(f"❌ Erro ao agendar upsell {i+1}: {e}", exc_info=True)
-            
-            logger.info(f"✅ Total de {len(jobs_agendados)} upsell(s) agendado(s) com sucesso")
-            logger.info(f"🚨 ===== FIM SCHEDULE_UPSELLS =====")
-                
-        except Exception as e:
-            logger.error(f"❌ Erro ao agendar upsells: {e}", exc_info=True)
-    
+        """Agenda upsells via RQ (delega para offer_sender)"""
+        from internal_logic.services.offer_sender import schedule_offers
+        from tasks_async import marathon_queue
+        return schedule_offers(
+            mode='upsell',
+            marathon_queue=marathon_queue,
+            bot_id=bot_id,
+            payment_id=payment_id,
+            chat_id=chat_id,
+            offers=upsells,
+            original_price=original_price,
+            original_button_index=original_button_index,
+        )
+
     def _send_upsell(self, bot_id: int, payment_id: str, chat_id: int, upsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
         """Envia upsell agendado (delega para offer_sender)"""
         from internal_logic.services.offer_sender import send_offer
@@ -8773,43 +8625,7 @@ Seu pagamento ainda não foi confirmado.
             original_price=original_price,
             original_button_index=original_button_index,
         )
-    
-    def _is_payment_pending(self, payment_id: str) -> bool:
-        """
-        Verifica se pagamento ainda está pendente
-        
-        Args:
-            payment_id: ID do pagamento
-            
-        Returns:
-            True se ainda está pendente
-        """
-        try:
-            from flask import current_app
-            from internal_logic.core.extensions import db
-            from internal_logic.core.models import Payment
-            
-            with current_app.app_context():
-                payment_lookup = str(payment_id).strip() if payment_id is not None else ''
-                payment = None
-                if payment_lookup.isdigit():
-                    payment = Payment.query.get(int(payment_lookup))
-                if not payment and payment_lookup:
-                    payment = Payment.query.filter_by(payment_id=payment_lookup).first()
-                if not payment and payment_lookup:
-                    payment = Payment.query.filter_by(gateway_transaction_id=payment_lookup).first()
-                logger.info(f"🔍 DEBUG _is_payment_pending - payment_id: {payment_id}")
-                if payment:
-                    logger.info(f"🔍 DEBUG _is_payment_pending - status: {payment.status}")
-                    return payment.status == 'pending'
-                else:
-                    logger.warning(f"⚠️ Pagamento {payment_id} não encontrado no banco!")
-                    return False
-                
-        except Exception as e:
-            logger.error(f"❌ Erro ao verificar status do pagamento {payment_id}: {e}")
-            return False
-    
+
     def count_eligible_leads(self, bot_id: int, target_audience: str = 'non_buyers', 
                             days_since_last_contact: int = 3, exclude_buyers: bool = True,
                             audience_segment: str = None) -> int:

@@ -12,7 +12,7 @@ Modos:
 import logging
 import traceback
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Callable
 
 logger = logging.getLogger(__name__)
@@ -334,3 +334,132 @@ def _build_offer_buttons(
 
     # Um botao por linha para ofertas (texto longo fica ileivel lado a lado)
     return [[b] for b in buttons]
+
+
+def schedule_offers(
+    mode: str,
+    marathon_queue,
+    bot_id: int,
+    payment_id: str,
+    chat_id: int,
+    offers: list,
+    original_price: float = 0,
+    original_button_index: int = -1,
+    user_id: Optional[int] = None,
+) -> list:
+    """Agenda ofertas (downsell/upsell) via RQ (Redis Queue)
+
+    Args:
+        mode: 'downsell' ou 'upsell'
+        marathon_queue: Fila RQ para agendamento
+        bot_id: ID do bot
+        payment_id: ID do pagamento
+        chat_id: ID do chat
+        offers: Lista de ofertas configuradas
+        original_price: Preco do botao original
+        original_button_index: Indice do botao original clicado
+        user_id: ID do usuario (necessario para send_downsell_async)
+
+    Returns:
+        Lista de job_ids agendados
+    """
+    if mode not in ('downsell', 'upsell'):
+        logger.error(f"Modo invalido: {mode}")
+        return []
+
+    is_downsell = mode == 'downsell'
+    mode_label = 'downsell' if is_downsell else 'upsell'
+    job_prefix = mode_label
+
+    logger.info(f"🚨 ===== SCHEDULE_{mode_label.upper()}S (RQ) =====")
+    logger.info(f"   bot_id: {bot_id}")
+    logger.info(f"   payment_id: {payment_id}")
+    logger.info(f"   chat_id: {chat_id}")
+    logger.info(f"   {mode_label}s count: {len(offers) if offers else 0}")
+
+    try:
+        if not offers:
+            logger.warning(f"⚠️ Lista de {mode_label}s esta vazia!")
+            return []
+
+        if not marathon_queue:
+            logger.error(f"❌ CRITICO: Fila RQ 'marathon' nao disponivel!")
+            return []
+
+        logger.info(f"📅 Agendando {len(offers)} {mode_label}(s) via RQ para payment {payment_id}")
+
+        jobs_agendados = []
+        for i, offer in enumerate(offers):
+            delay_minutes = int(offer.get('delay_minutes', 5))
+            logger.info(f"📅 {mode_label.capitalize()} {i+1}: delay={delay_minutes}min")
+
+            try:
+                if is_downsell and user_id:
+                    from tasks_async import send_downsell_async
+                    job = marathon_queue.enqueue_in(
+                        timedelta(minutes=delay_minutes),
+                        send_downsell_async,
+                        user_id,
+                        bot_id,
+                        payment_id,
+                        chat_id,
+                        offer,
+                        i,
+                        original_price,
+                        original_button_index,
+                        job_id=f"{job_prefix}_{bot_id}_{payment_id}_{i}",
+                        job_timeout=300,
+                    )
+                elif is_downsell:
+                    from tasks_async import send_downsell_job
+                    job = marathon_queue.enqueue_in(
+                        timedelta(minutes=delay_minutes),
+                        send_downsell_job,
+                        bot_id=bot_id,
+                        payment_id=payment_id,
+                        chat_id=chat_id,
+                        downsell=offer,
+                        index=i,
+                        original_price=original_price,
+                        original_button_index=original_button_index,
+                        job_id=f"{job_prefix}_{bot_id}_{payment_id}_{i}",
+                        job_timeout=300,
+                    )
+                else:
+                    from tasks_async import send_upsell_job
+                    job = marathon_queue.enqueue_in(
+                        timedelta(minutes=delay_minutes),
+                        send_upsell_job,
+                        bot_id=bot_id,
+                        payment_id=payment_id,
+                        chat_id=chat_id,
+                        upsell=offer,
+                        index=i,
+                        original_price=original_price,
+                        original_button_index=original_button_index,
+                        job_id=f"{job_prefix}_{bot_id}_{payment_id}_{i}",
+                        job_timeout=300,
+                    )
+
+                logger.info(f"✅ {mode_label.capitalize()} {i+1} AGENDADO via RQ: job_id={job.id if job else 'N/A'}")
+                if job:
+                    jobs_agendados.append(job.id)
+                    if is_downsell:
+                        try:
+                            from internal_logic.core.redis_manager import get_redis_connection
+                            r = get_redis_connection()
+                            r.sadd(f"gb:downsell:jobs:{payment_id}", job.id)
+                            r.expire(f"gb:downsell:jobs:{payment_id}", 86400)
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao agendar {mode_label} {i+1} no RQ: {e}", exc_info=True)
+
+        logger.info(f"✅ Total de {len(jobs_agendados)} {mode_label}(s) agendado(s) via RQ")
+        logger.info(f"🚨 ===== FIM SCHEDULE_{mode_label.upper()}S (RQ) =====")
+        return jobs_agendados
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao agendar {mode_label}s via RQ: {e}", exc_info=True)
+        return []
