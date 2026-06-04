@@ -26,9 +26,13 @@ limiter = Limiter(
 )
 
 
-def create_app():
+def create_app(skip_sync_thread: bool = False):
     """
     Application Factory Pattern — Cria e configura a aplicação Flask
+    
+    Args:
+        skip_sync_thread: Se True, pula a thread de sincronização de webhooks
+                          e o agendamento de reconciliações (útil para workers RQ)
     """
     # Mapeamento absoluto da raiz do projeto (dois níveis acima de 'core')
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -138,14 +142,16 @@ def create_app():
     # NÃO bloqueia o Gunicorn - roda em background (daemon thread).
     # Garante que todos os bots ativos estejam sempre conectados ao Telegram.
     # ============================================================================
-    from internal_logic.services.webhook_syncer import start_webhook_sync_thread
-    start_webhook_sync_thread(app)
+    if not skip_sync_thread:
+        from internal_logic.services.webhook_syncer import start_webhook_sync_thread
+        start_webhook_sync_thread(app)
 
-    try:
-        from tasks_async import _ensure_periodic_reconciliations_scheduled
-        _ensure_periodic_reconciliations_scheduled()
-    except Exception as e:
-        logger.warning(f"Não foi possível agendar reconciliações periódicas: {e}")
+    if not skip_sync_thread:
+        try:
+            from tasks_async import _ensure_periodic_reconciliations_scheduled
+            _ensure_periodic_reconciliations_scheduled()
+        except Exception as e:
+            logger.warning(f"Não foi possível agendar reconciliações periódicas: {e}")
     
     # ============================================================================
     # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS

@@ -28,6 +28,18 @@ from internal_logic.core.extensions import db
 
 logger = logging.getLogger(__name__)
 
+# ✅ LAZY SINGLETON: App Flask compartilhada entre jobs do mesmo worker RQ
+# Cria a app uma vez por processo worker, eliminando overhead de ~200ms por job
+_rq_app = None
+
+def _get_rq_app():
+    global _rq_app
+    if _rq_app is None:
+        from internal_logic.core.extensions import create_app
+        _rq_app = create_app(skip_sync_thread=True)
+        logger.info("✅ App Flask inicializada para workers RQ (skip_sync_thread=True)")
+    return _rq_app
+
 # Conectar ao Redis
 try:
     # ✅ QI 500: Usar connection pool para RQ (decode_responses=False para bytes)
@@ -107,7 +119,7 @@ def _ensure_aux_tables() -> None:
 def retry_delivery_task(payment_db_id: int) -> bool:
     try:
         from internal_logic.core.extensions import create_app
-        app = create_app()
+        app = _get_rq_app()
         with app.app_context():
             from internal_logic.core.models import Payment
             from internal_logic.services.payment_processor import send_payment_delivery
@@ -311,7 +323,7 @@ def process_start_async(
     try:
         # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
         from internal_logic.core.extensions import create_app
-        app = create_app()
+        app = _get_rq_app()
         
         from internal_logic.core.models import BotUser, Bot, get_brazil_time
         from bot_manager import send_meta_pixel_viewcontent_event
@@ -906,7 +918,7 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
     
     # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
     from internal_logic.core.extensions import create_app
-    app = create_app()
+    app = _get_rq_app()
     
     job_id = f"{bot_id}_{datetime.utcnow().timestamp()}"
     logger.critical(f"?? [WORKER ENTRY] process_telegram_message_async iniciado | Job: {job_id} | Bot: {bot_id}")
@@ -997,8 +1009,16 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
             # PROCESSAMENTO DA MENSAGEM (após garantir que BotUser existe)
             # ============================================================================
             try:
-                bot_manager = BotManager(socketio=None, scheduler=None)
-                bot_manager._process_telegram_update(bot_id, None, update_data)
+                # ✅ ISOLAMENTO: Resolver user_id do dono do bot para namespace correto
+                try:
+                    bot_obj = Bot.query.get(bot_id)
+                    resolved_user_id = bot_obj.user_id if bot_obj else 1
+                except Exception:
+                    resolved_user_id = 1
+                    logger.warning(f"⚠️ Não foi possível resolver user_id para bot {bot_id}, usando fallback=1")
+
+                bot_manager = BotManager(socketio=None, scheduler=None, user_id=resolved_user_id)
+                bot_manager._process_telegram_update(bot_id, resolved_user_id, update_data)
                 logger.critical(f"✅ [MESSAGE PROCESSED] Job: {job_id} | Bot: {bot_id}")
             except Exception as e:
                 logger.critical(f"❌ [MESSAGE FAILED] Erro no processamento: {e}", exc_info=True)
@@ -1040,7 +1060,7 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
         # Não usar bot_manager global - criar instância com user_id
-        app = create_app()
+        app = _get_rq_app()
         
         with app.app_context():
             logger.critical(f"🔍 [WEBHOOK WORKER] App context criado | Job: {job_id}")
@@ -1654,7 +1674,7 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     _ensure_aux_tables()
 
-    app = create_app()
+    app = _get_rq_app()
 
     with app.app_context():
         pendings = (
@@ -1886,7 +1906,7 @@ def task_process_broadcast_campaign(campaign_id: int):
         campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
     from internal_logic.core.extensions import create_app
-    app = create_app()
+    app = _get_rq_app()
     from internal_logic.core.extensions import db
     from internal_logic.core.models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
     from bot_manager import BotManager
@@ -2539,7 +2559,7 @@ def send_downsell_async(
     
     # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
     from internal_logic.core.extensions import create_app
-    app = create_app()
+    app = _get_rq_app()
     
     with app.app_context():
         try:
@@ -2594,7 +2614,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
     
     # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
     from internal_logic.core.extensions import create_app
-    app = create_app()
+    app = _get_rq_app()
     
     with app.app_context():
         try:
@@ -2649,7 +2669,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
     
     # CRIAR INSTÂNCIA LOCAL DA APP USANDO FACTORY FUNCTION
     from internal_logic.core.extensions import create_app
-    app = create_app()
+    app = _get_rq_app()
     
     with app.app_context():
         try:
