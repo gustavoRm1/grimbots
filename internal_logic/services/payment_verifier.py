@@ -243,10 +243,6 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                             if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                                 logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                 try:
-                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                    from internal_logic.core.models import Payment as PaymentModel
-                                    payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
-                                    
                                     # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
                                     if not bot_manager.scheduler:
                                         logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
@@ -429,10 +425,6 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                                     if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                                         logger.info(f"✅ [UPSELLS VERIFY OTHER] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                         try:
-                                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                            from internal_logic.core.models import Payment as PaymentModel
-                                            payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
-                                            
                                             # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
                                             if not bot_manager.scheduler:
                                                 logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
@@ -564,7 +556,7 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                         if isinstance(flow_steps_raw, str):
                             try:
                                 flow_steps = json.loads(flow_steps_raw)
-                            except:
+                            except Exception:
                                 flow_steps = []
                         else:
                             flow_steps = flow_steps_raw if isinstance(flow_steps_raw, list) else []
@@ -644,10 +636,6 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                                 if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                                     logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                                     try:
-                                        # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                        from internal_logic.core.models import Payment as PaymentModel
-                                        payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
-                                        
                                         # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
                                         if not bot_manager.scheduler:
                                             logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
@@ -795,7 +783,7 @@ def verify_payment(bot_manager, bot_id: int, token: str, chat_id: int,
                         if isinstance(flow_steps_raw, str):
                             try:
                                 flow_steps = json.loads(flow_steps_raw)
-                            except:
+                            except Exception:
                                 flow_steps = []
                         else:
                             flow_steps = flow_steps_raw if isinstance(flow_steps_raw, list) else []
@@ -977,7 +965,7 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"⏳ Cliente avisado que pagamento ainda está pendente")
     
     except Exception as e:
-        logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
+        logger.error(f"❌ Erro ao verificar pagamento: {e}")
         import traceback
         traceback.print_exc()
 

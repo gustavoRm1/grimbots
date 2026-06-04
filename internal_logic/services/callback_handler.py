@@ -254,6 +254,9 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                         btn = buttons_list[btn_idx]
                         price = float(btn.get('price', 0))
                         description = btn.get('description', 'Produto Remarketing')
+                    else:
+                        price = 0
+                        description = 'Produto Remarketing'
                 else:
                     price = 0
                     description = 'Produto Remarketing'
@@ -1271,6 +1274,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             else:
                 price = 0
                 description = 'Produto'
+                button_data = None
             
             logger.info(f"💰 Produto: {description} | Valor: R$ {price:.2f} | Botão: {button_index}")
             

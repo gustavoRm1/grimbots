@@ -6,6 +6,7 @@ Extraido do BotManager (Fase 9).
 """
 
 import logging
+from datetime import datetime
 from typing import Dict, Any
 
 from internal_logic.core.redis_manager import get_redis_connection

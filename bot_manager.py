@@ -1060,7 +1060,7 @@ class BotManager:
                         for update in updates:
                             if update.get('update_id', 0) > max_update_id:
                                 max_update_id = update['update_id']
-                            self._process_telegram_update(bot_id, update)
+                            self._process_telegram_update(bot_id, None, update)
                         
                         # ✅ OTIMIZAÇÃO: Atualizar offset uma única vez após processar todos
                         if max_update_id > offset:
@@ -1121,7 +1121,7 @@ class BotManager:
                                 offset = update['update_id'] + 1
                                 logger.info(f"🔍 Processando update {update['update_id']}")
                                 # Processar update
-                                self._process_telegram_update(bot_id, update)
+                                self._process_telegram_update(bot_id, None, update)
                     else:
                         logger.error(f"❌ Resposta não OK do Telegram: {data}")
                 else:
