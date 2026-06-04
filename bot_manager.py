@@ -1291,11 +1291,35 @@ class BotManager:
                 text = message.get('text', '')
                 user = message.get('from', {})
                 telegram_user_id = str(user.get('id', ''))
+
+                # Detectar mídia na mensagem (foto, vídeo, documento, áudio)
+                media_type = 'text'
+                media_url = None
+                caption = ''
+                if 'photo' in message:
+                    media_type = 'photo'
+                    photos = message['photo']
+                    media_url = photos[-1]['file_id']
+                    caption = message.get('caption', '') or ''
+                elif 'video' in message:
+                    media_type = 'video'
+                    media_url = message['video']['file_id']
+                    caption = message.get('caption', '') or ''
+                elif 'document' in message:
+                    media_type = 'document'
+                    media_url = message['document']['file_id']
+                    caption = message.get('caption', '') or ''
+                elif 'audio' in message:
+                    media_type = 'audio'
+                    media_url = message['audio']['file_id']
+                    caption = message.get('caption', '') or ''
+                if not text:
+                    text = caption
                 
-                logger.info(f"💬 De: {user.get('first_name', 'Usuário')} | Mensagem: '{text}'")
+                logger.info(f"💬 De: {user.get('first_name', 'Usuário')} | Tipo: {media_type} | Texto: '{text[:50] if text else '(vazio)'}'")
                 
                 # ✅ CHAT: Salvar mensagem recebida no banco (SEMPRE, independente do comando)
-                if text and text.strip():  # Apenas mensagens de texto não vazias
+                if text and text.strip() or media_type != 'text':
                     try:
                         from flask import current_app
                         from internal_logic.core.extensions import db
@@ -1408,11 +1432,12 @@ class BotManager:
                                         bot_user_id=bot_user.id,
                                         telegram_user_id=telegram_user_id,
                                         message_id=telegram_msg_id_str,
-                                        message_text=text,
-                                        message_type='text',
+                                        message_text=text or caption,
+                                        message_type=media_type,
                                         direction='incoming',
-                                        is_read=False,  # Será marcada como lida quando visualizada no chat
-                                        raw_data=json.dumps(message)  # Salvar dados completos para debug
+                                        is_read=False,
+                                        media_url=media_url,
+                                        raw_data=json.dumps(message)
                                     )
                                     db.session.add(bot_message)
                                     

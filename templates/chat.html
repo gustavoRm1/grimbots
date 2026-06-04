@@ -82,28 +82,28 @@
                 <!-- Filter Tabs -->
                 <div class="flex gap-2 overflow-x-auto">
                     <button 
-                        @click="filterType = 'all'; loadConversations()"
+                        @click="filterType = 'all'; conversationOffset = 0; loadConversations()"
                         class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
                         :class="filterType === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
                     >
                         Todos
                     </button>
                     <button 
-                        @click="filterType = 'paid'; loadConversations()"
+                        @click="filterType = 'paid'; conversationOffset = 0; loadConversations()"
                         class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
                         :class="filterType === 'paid' ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
                     >
                         <i class="fas fa-check-circle mr-1"></i> Pagou
                     </button>
                     <button 
-                        @click="filterType = 'pix_generated'; loadConversations()"
+                        @click="filterType = 'pix_generated'; conversationOffset = 0; loadConversations()"
                         class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
                         :class="filterType === 'pix_generated' ? 'bg-yellow-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
                     >
                         <i class="fas fa-qrcode mr-1"></i> Gerou PIX
                     </button>
                     <button 
-                        @click="filterType = 'only_entered'; loadConversations()"
+                        @click="filterType = 'only_entered'; conversationOffset = 0; loadConversations()"
                         class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
                         :class="filterType === 'only_entered' ? 'bg-gray-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
                     >
@@ -176,6 +176,24 @@
                             </div>
                         </template>
                     </div>
+                    <!-- Carregar mais -->
+                    <template x-if="hasMore && !loading">
+                        <div class="p-4 text-center">
+                            <button 
+                                @click="loadMoreConversations()"
+                                :disabled="loadingMore"
+                                class="px-6 py-2 rounded-lg text-sm font-semibold transition-all"
+                                style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);"
+                            >
+                                <template x-if="!loadingMore">
+                                    <span><i class="fas fa-chevron-down mr-2"></i>Carregar mais</span>
+                                </template>
+                                <template x-if="loadingMore">
+                                    <span><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</span>
+                                </template>
+                            </button>
+                        </div>
+                    </template>
                 </template>
             </div>
         </div>
@@ -237,8 +255,8 @@
                             <div class="max-w-[70%]" :class="msg.direction === 'outgoing' ? 'flex flex-col items-end' : ''">
                                 <div class="rounded-2xl px-4 py-3"
                                      :style="msg.direction === 'outgoing' ? 'background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;' : 'background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);'">
-                                    <!-- Mídia (foto/vídeo) -->
-                                    <template x-if="msg.media_url && (msg.message_type === 'photo' || msg.message_type === 'video')">
+                                    <!-- Mídia (foto/vídeo/documento) -->
+                                    <template x-if="msg.media_url && (msg.message_type === 'photo' || msg.message_type === 'video' || msg.message_type === 'document')">
                                         <div class="mb-2">
                                             <template x-if="msg.message_type === 'photo'">
                                                 <img 
@@ -259,6 +277,17 @@
                                                 >
                                                     Seu navegador não suporta vídeo.
                                                 </video>
+                                            </template>
+                                            <template x-if="msg.message_type === 'document'">
+                                                <a 
+                                                    :href="`/api/chat/media/${selectedBot.id}/${msg.media_url}`" 
+                                                    target="_blank"
+                                                    class="flex items-center gap-2 p-3 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors text-sm"
+                                                >
+                                                    <i class="fas fa-file text-blue-400"></i>
+                                                    <span x-text="msg.message_text || 'Documento'"></span>
+                                                    <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"></i>
+                                                </a>
                                             </template>
                                         </div>
                                     </template>
@@ -380,6 +409,8 @@ function chatApp() {
         filterType: 'all',
         searchQuery: '',
         loading: false,
+        loadingMore: false,
+        hasMore: false,
         loadingMessages: false,
         messageInput: '',
         sendingMessage: false,
@@ -387,6 +418,8 @@ function chatApp() {
         selectedFile: null,
         filePreview: null,
         fileInput: null,
+        conversationOffset: 0,
+        conversationLimit: 50,
 
         init() {
             // Auto-selecionar primeiro bot se houver
@@ -508,27 +541,47 @@ function chatApp() {
             this.loadConversations();
         },
 
-        async loadConversations() {
+        async loadConversations(append = false) {
             if (!this.selectedBot) return;
             
-            this.loading = true;
+            if (append) {
+                this.loadingMore = true;
+            } else {
+                this.loading = true;
+                this.conversationOffset = 0;
+            }
+            
             try {
                 const params = new URLSearchParams({
                     filter: this.filterType,
-                    search: this.searchQuery
+                    search: this.searchQuery,
+                    offset: this.conversationOffset,
+                    limit: this.conversationLimit
                 });
                 
                 const response = await fetch(`/api/chat/conversations/${this.selectedBot.id}?${params}`);
                 const data = await response.json();
                 
                 if (data.success) {
-                    this.conversations = data.conversations;
+                    if (append) {
+                        this.conversations.push(...data.conversations);
+                    } else {
+                        this.conversations = data.conversations;
+                    }
+                    this.hasMore = data.has_more || false;
                 }
             } catch (error) {
                 console.error('Erro ao carregar conversas:', error);
             } finally {
                 this.loading = false;
+                this.loadingMore = false;
             }
+        },
+
+        async loadMoreConversations() {
+            if (!this.hasMore || this.loadingMore) return;
+            this.conversationOffset = this.conversations.length;
+            await this.loadConversations(true);
         },
 
         async selectConversation(conv) {
@@ -649,11 +702,19 @@ function chatApp() {
             const diff = now - date;
             
             if (diff < 60000) return 'Agora';
-            if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
-            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
-            if (diff < 604800000) return Math.floor(diff / 86400000) + 'd';
             
-            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const dia = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const hora = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            if (diff < 86400000) return `Hoje ${hora}`;
+            if (diff < 172800000) return `Ontem ${hora}`;
+            
+            const ano = date.getFullYear();
+            const anoAtual = now.getFullYear();
+            if (ano !== anoAtual) {
+                return `${dia}/${ano.toString().slice(-2)} ${hora}`;
+            }
+            return `${dia} ${hora}`;
         },
 
         formatMoney(value) {

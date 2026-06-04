@@ -17,7 +17,7 @@ from datetime import datetime
 from flask import url_for, current_app
 from internal_logic.core.extensions import db, socketio
 # Import lazy dentro das funcoes para quebrar dependencia circular
-from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway, User, RemarketingCampaign
+from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway, User, RemarketingCampaign, BotMessage
 from gateways import GatewayFactory
 
 logger = logging.getLogger(__name__)
@@ -1811,6 +1811,28 @@ Seu acesso está disponível agora.
         
         if telegram_sent:
             delivery_method = 'telegram'
+            # Salvar mensagem de entrega no chat do lead
+            try:
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    telegram_user_id=str(payment.customer_user_id)
+                ).first()
+                if bot_user:
+                    delivery_msg = BotMessage(
+                        bot_id=payment.bot_id,
+                        bot_user_id=bot_user.id,
+                        telegram_user_id=str(payment.customer_user_id),
+                        message_id=str(uuid.uuid4().hex),
+                        message_text=message,
+                        message_type='text',
+                        direction='outgoing',
+                        is_read=True
+                    )
+                    db.session.add(delivery_msg)
+                    db.session.commit()
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível salvar mensagem de entrega no chat: {e}")
+                db.session.rollback()
         else:
             delivery_method = 'none'
         

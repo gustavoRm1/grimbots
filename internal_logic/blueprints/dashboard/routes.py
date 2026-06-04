@@ -940,9 +940,12 @@ def get_chat_conversations(bot_id):
     # Verificar se bot pertence ao usuário
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
-    # Parâmetros de filtro
+    # Parâmetros de filtro e paginação
     filter_type = request.args.get('filter', 'all')
     search_query = request.args.get('search', '').strip()
+    offset = request.args.get('offset', 0, type=int)
+    limit = request.args.get('limit', 50, type=int)
+    limit = min(limit, 200)
     
     # Query base: BotUsers do bot
     query = BotUser.query.filter_by(bot_id=bot_id, archived=False)
@@ -957,51 +960,46 @@ def get_chat_conversations(bot_id):
             )
         )
     
+    # Query auxiliar para IDs de pagamento (reutilizada nos filtros)
+    def _get_payment_user_ids(bot_id, status_filter=None):
+        """Retorna lista de customer_user_id sem prefixo user_ para um bot."""
+        q = db.session.query(Payment.customer_user_id).filter(Payment.bot_id == bot_id)
+        if status_filter:
+            q = q.filter(Payment.status == status_filter)
+        rows = q.distinct().all()
+        result = []
+        for row in rows:
+            if row[0]:
+                uid = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
+                result.append(uid)
+        return result
+    
     # Aplicar filtro de tipo
     if filter_type == 'paid':
-        paid_user_ids = db.session.query(Payment.customer_user_id).filter(
-            Payment.bot_id == bot_id,
-            Payment.status == 'paid'
-        ).distinct().all()
-        paid_ids_list = []
-        for row in paid_user_ids:
-            if row[0]:
-                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
-                paid_ids_list.append(user_id)
-        if paid_ids_list:
-            query = query.filter(BotUser.telegram_user_id.in_(paid_ids_list))
+        paid_ids = _get_payment_user_ids(bot_id, status_filter='paid')
+        if paid_ids:
+            query = query.filter(BotUser.telegram_user_id.in_(paid_ids))
         else:
             query = query.filter(BotUser.id == -1)
     elif filter_type == 'pix_generated':
-        pix_user_ids = db.session.query(Payment.customer_user_id).filter(
-            Payment.bot_id == bot_id
-        ).distinct().all()
-        pix_ids_list = []
-        for row in pix_user_ids:
-            if row[0]:
-                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
-                pix_ids_list.append(user_id)
-        if pix_ids_list:
-            query = query.filter(BotUser.telegram_user_id.in_(pix_ids_list))
+        pix_ids = _get_payment_user_ids(bot_id)
+        if pix_ids:
+            query = query.filter(BotUser.telegram_user_id.in_(pix_ids))
         else:
             query = query.filter(BotUser.id == -1)
     elif filter_type == 'only_entered':
-        all_payment_user_ids = db.session.query(Payment.customer_user_id).filter(
-            Payment.bot_id == bot_id
-        ).distinct().all()
-        payment_ids_list = []
-        for row in all_payment_user_ids:
-            if row[0]:
-                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
-                payment_ids_list.append(user_id)
-        if payment_ids_list:
-            query = query.filter(~BotUser.telegram_user_id.in_(payment_ids_list))
+        payment_ids = _get_payment_user_ids(bot_id)
+        if payment_ids:
+            query = query.filter(~BotUser.telegram_user_id.in_(payment_ids))
     
-    # Buscar conversas
-    bot_users = query.order_by(BotUser.last_interaction.desc()).limit(100).all()
+    # Contar total (para paginação)
+    total_count = query.count()
+    
+    # Buscar conversas com paginação
+    bot_users = query.order_by(BotUser.last_interaction.desc()).offset(offset).limit(limit).all()
 
     if not bot_users:
-        return jsonify({'success': True, 'conversations': [], 'total': 0})
+        return jsonify({'success': True, 'conversations': [], 'total': 0, 'total_count': 0})
 
     telegram_user_id_strs = [str(u.telegram_user_id) for u in bot_users]
 
@@ -1086,7 +1084,9 @@ def get_chat_conversations(bot_id):
     return jsonify({
         'success': True,
         'conversations': conversations,
-        'total': len(conversations)
+        'total': len(conversations),
+        'total_count': total_count,
+        'has_more': (offset + limit) < total_count
     })
 
 
