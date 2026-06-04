@@ -2150,7 +2150,8 @@ class BotManager:
                                    media_url: str = None,
                                    media_type: str = None,
                                    buttons: list = None,
-                                   delay_between: float = 0.2):
+                                   delay_between: float = 0.2,
+                                   bot_id: Optional[int] = None):
         """
         # ✅ QI 500: Envia step do funil SEQUENCIALMENTE (garante ordem)
         
@@ -2177,12 +2178,22 @@ class BotManager:
             media_type: Tipo da mídia (photo, video, audio)
             buttons: Lista de botões
             delay_between: Delay em segundos entre envios (padrão 0.2s)
+            bot_id: ID do bot (se None, resolvido do token)
         
         Returns:
             bool: True se todos os envios foram bem-sucedidos
         """
         import time
         import hashlib
+        
+        if not bot_id:
+            try:
+                from internal_logic.core.models import Bot
+                bot = Bot.query.filter_by(token=token).first()
+                if bot:
+                    bot_id = bot.id
+            except Exception:
+                pass
         
         # ============================================================================
         # ✅ QI 10000: ANTI-DUPLICAÇÃO ROBUSTA - Lock único sincronizado para mídia + texto
@@ -2235,6 +2246,13 @@ class BotManager:
                 response = requests.post(url, json=payload, timeout=10)
                 if response.status_code == 200 and response.json().get('ok'):
                     logger.info(f"✅ Texto enviado")
+                    if bot_id:
+                        result_data = response.json()
+                        msg_id = str(result_data.get('result', {}).get('message_id', ''))
+                        self._save_outgoing_message(
+                            bot_id=bot_id, chat_id=chat_id, message_text=text,
+                            message_type='text', message_id=msg_id
+                        )
                 else:
                     logger.error(f"❌ Falha ao enviar texto: {response.text}")
                     all_success = False
@@ -2327,6 +2345,16 @@ class BotManager:
                         response = requests.post(url, json=payload, timeout=10)
                     if response.status_code == 200 and response.json().get('ok'):
                         logger.info(f"✅ Mídia enviada{' com caption' if caption_text else ' sem caption'} {'e botões' if inline_keyboard and not text_sent_separately else ''}")
+                        if bot_id:
+                            result_data = response.json()
+                            msg_id = str(result_data.get('result', {}).get('message_id', ''))
+                            self._save_outgoing_message(
+                                bot_id=bot_id, chat_id=chat_id,
+                                message_text=caption_text or None,
+                                message_type=media_type or 'photo',
+                                media_url=media_url,
+                                message_id=msg_id
+                            )
                     else:
                         logger.error(f"❌ Falha ao enviar mídia: {response.text}")
                         all_success = False
@@ -2493,6 +2521,14 @@ class BotManager:
                 response = requests.post(url, json=payload, timeout=10)
                 if response.status_code == 200 and response.json().get('ok'):
                     logger.info(f"✅ Botões enviados")
+                    if bot_id:
+                        result_data = response.json()
+                        msg_id = str(result_data.get('result', {}).get('message_id', ''))
+                        self._save_outgoing_message(
+                            bot_id=bot_id, chat_id=chat_id,
+                            message_text=text[:100] if text else "Escolha uma opção",
+                            message_type='text', message_id=msg_id
+                        )
                 else:
                     logger.error(f"❌ Falha ao enviar botões: {response.text}")
                     all_success = False
@@ -3040,7 +3076,7 @@ class BotManager:
         
         return buttons
     
-    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
+    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None, bot_id: Optional[int] = None):
         """
         # ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
         """
@@ -3083,7 +3119,9 @@ class BotManager:
                     self.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
-                        message="⚠️ Esta etapa não tem conteúdo configurado. Entre em contato com o suporte."
+                        message="⚠️ Esta etapa não tem conteúdo configurado. Entre em contato com o suporte.",
+                        bot_id=bot_id,
+                        save_message=True
                     )
                     return  # Não continuar se não tem conteúdo
                 
@@ -3094,7 +3132,8 @@ class BotManager:
                     media_url=media_url,
                     media_type=media_type,
                     buttons=buttons,
-                    delay_between=delay
+                    delay_between=delay,
+                    bot_id=bot_id
                 )
                 
                 if result:
@@ -3112,7 +3151,9 @@ class BotManager:
                     self.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
-                        message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte."
+                        message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte.",
+                        bot_id=bot_id,
+                        save_message=True
                     )
                     return  # Não continuar se não tem mensagem
                 
@@ -3123,7 +3164,9 @@ class BotManager:
                     token=token,
                     chat_id=str(chat_id),
                     message=message_text,
-                    buttons=buttons if buttons else None
+                    buttons=buttons if buttons else None,
+                    bot_id=bot_id,
+                    save_message=True
                 )
                 
                 if result:
@@ -3140,7 +3183,9 @@ class BotManager:
                     message='',
                     media_url=step_config.get('audio_url'),
                     media_type='audio',
-                    buttons=buttons if buttons else None
+                    buttons=buttons if buttons else None,
+                    bot_id=bot_id,
+                    save_message=True
                 )
             elif step_type == 'video':
                 # ✅ Processar botões (customizados + cadastrados)
@@ -3152,7 +3197,9 @@ class BotManager:
                     message=step_config.get('message', ''),
                     media_url=step_config.get('media_url'),
                     media_type='video',
-                    buttons=buttons
+                    buttons=buttons,
+                    bot_id=bot_id,
+                    save_message=True
                 )
             elif step_type == 'buttons':
                 # ✅ NOVO: Verificar se usa botões contextuais ou globais
@@ -3812,14 +3859,16 @@ class BotManager:
                         self.send_telegram_message(
                             token=token,
                             chat_id=str(chat_id),
-                            message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte."
+                            message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte.",
+                            bot_id=bot_id,
+                            save_message=True
                         )
                     except Exception as e:
                         logger.error(f"❌ Erro ao enviar mensagem de aviso: {e}")
                 
                 # 🔥 V8 ULTRA: Executar step com tratamento de erro robusto
                 try:
-                    self._execute_step(step, token, chat_id, delay, config=config)
+                    self._execute_step(step, token, chat_id, delay, config=config, bot_id=bot_id)
                     logger.info(f"✅ Step {step_id} executado com sucesso")
                 except Exception as e:
                     logger.error(f"❌ Erro ao executar step {step_id}: {e}", exc_info=True)
@@ -3828,7 +3877,9 @@ class BotManager:
                         self.send_telegram_message(
                             token=token,
                             chat_id=str(chat_id),
-                            message="⚠️ Erro ao processar esta etapa. Tente novamente ou entre em contato com o suporte."
+                            message="⚠️ Erro ao processar esta etapa. Tente novamente ou entre em contato com o suporte.",
+                            bot_id=bot_id,
+                            save_message=True
                         )
                     except Exception as e2:
                         logger.error(f"❌ Erro ao enviar mensagem de erro: {e2}")
@@ -5080,11 +5131,49 @@ class BotManager:
         # Não faz nada - as colunas não existem no banco legado
         return 
 
+    def _save_outgoing_message(self, bot_id: int, chat_id: str, message_text: str = None,
+                                message_type: str = 'text', media_url: str = None,
+                                message_id: str = None):
+        """Salva registro de mensagem outgoing no banco para aparecer no chat"""
+        try:
+            from flask import current_app
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import BotUser, BotMessage
+            import uuid
+
+            with current_app.app_context():
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=str(chat_id),
+                    archived=False
+                ).first()
+                if not bot_user:
+                    return
+
+                msg_id = message_id or str(uuid.uuid4().hex)
+                bot_message = BotMessage(
+                    bot_id=bot_id,
+                    bot_user_id=bot_user.id,
+                    telegram_user_id=str(chat_id),
+                    message_id=msg_id,
+                    message_text=message_text,
+                    message_type=message_type,
+                    direction='outgoing',
+                    media_url=media_url,
+                    is_read=True,
+                )
+                db.session.add(bot_message)
+                db.session.commit()
+        except Exception as e:
+            logger.error(f"❌ Erro ao salvar mensagem outgoing: {e}")
+
     def send_telegram_message(self, token: str, chat_id: str, message: str, 
                              media_url: Optional[str] = None, 
                              media_type: str = 'video',
                              audio_url: Optional[str] = None,
-                             buttons: Optional[list] = None):
+                             buttons: Optional[list] = None,
+                             bot_id: Optional[int] = None,
+                             save_message: bool = False):
         """
         Envia mensagem pelo Telegram (delegado ao BotMessenger)
         
@@ -5096,13 +5185,14 @@ class BotManager:
             media_type: Tipo da mídia (video, photo ou audio)
             audio_url: URL do áudio (opcional)
             buttons: Lista de botões inline
+            bot_id: ID do bot (necessário se save_message=True)
+            save_message: Se True, salva BotMessage no banco
             
         Returns:
             bool: True se enviado com sucesso
         """
         try:
-            # ✅ DELEGAÇÃO: Usar BotMessenger para envio
-            return self.messenger.send_message_with_media(
+            result = self.messenger.send_message_with_media(
                 token=token,
                 chat_id=chat_id,
                 message=message,
@@ -5111,6 +5201,26 @@ class BotManager:
                 audio_url=audio_url,
                 reply_markup=self.messenger.build_keyboard(buttons) if buttons else None
             )
+
+            if result and save_message:
+                resolved_bot_id = bot_id
+                if not resolved_bot_id:
+                    from internal_logic.core.models import Bot
+                    bot = Bot.query.filter_by(token=token).first()
+                    if bot:
+                        resolved_bot_id = bot.id
+
+                if resolved_bot_id:
+                    actual_type = media_type if media_url else 'text'
+                    self._save_outgoing_message(
+                        bot_id=resolved_bot_id,
+                        chat_id=chat_id,
+                        message_text=message,
+                        message_type=actual_type,
+                        media_url=media_url,
+                    )
+
+            return result
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem: {e}")
             return False

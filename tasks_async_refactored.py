@@ -338,7 +338,9 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                             message=personalized_message,
                                             media_url=media_url,
                                             media_type=media_type if media_url else None,
-                                            buttons=remarketing_buttons if remarketing_buttons else None
+                                            buttons=remarketing_buttons if remarketing_buttons else None,
+                                            bot_id=bot_id,
+                                            save_message=True
                                         )
                                         
                                         # 🚨 VALIDAÇÃO STRICT

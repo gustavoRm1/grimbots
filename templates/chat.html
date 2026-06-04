@@ -289,6 +289,17 @@
                                                     <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"></i>
                                                 </a>
                                             </template>
+                                            <template x-if="msg.message_type === 'audio'">
+                                                <audio 
+                                                    :src="`/api/chat/media/${selectedBot.id}/${msg.media_url}`" 
+                                                    controls
+                                                    class="rounded-lg max-w-full"
+                                                    preload="metadata"
+                                                    style="height: 40px;"
+                                                >
+                                                    Seu navegador não suporta áudio.
+                                                </audio>
+                                            </template>
                                         </div>
                                     </template>
                                     <!-- Texto da mensagem -->
@@ -658,9 +669,11 @@ function chatApp() {
                     
                     this.scrollToBottom();
                     
-                    // ✅ CRÍTICO: Verificar novas mensagens após enviar (caso haja resposta imediata)
+                    // ✅ CRÍTICO: Verificar novas mensagens após enviar (capturar referência no envio, não no fire)
+                    const convAtSend = this.selectedConversation;
+                    const botAtSend = this.selectedBot;
                     setTimeout(() => {
-                        if (this.selectedConversation && this.selectedBot) {
+                        if (convAtSend === this.selectedConversation && botAtSend === this.selectedBot) {
                             this.checkNewMessages();
                         }
                     }, 500); // Aguardar 500ms para dar tempo da mensagem ser salva no banco
@@ -784,9 +797,11 @@ function chatApp() {
                     // Scroll para última mensagem
                     this.scrollToBottom();
                     
-                    // Verificar novas mensagens após enviar
+                    // Verificar novas mensagens após enviar (capturar referência no envio, não no fire)
+                    const convAtSendMedia = this.selectedConversation;
+                    const botAtSendMedia = this.selectedBot;
                     setTimeout(() => {
-                        if (this.selectedConversation && this.selectedBot) {
+                        if (convAtSendMedia === this.selectedConversation && botAtSendMedia === this.selectedBot) {
                             this.checkNewMessages();
                         }
                     }, 500);

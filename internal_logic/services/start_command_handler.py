@@ -332,7 +332,8 @@ def handle_start_command(bot_manager, bot_id: int, token: str, config: Dict[str,
                 media_url=welcome_media_url if valid_media else None,
                 media_type=welcome_media_type if valid_media else None,
                 buttons=buttons,
-                delay_between=0.2  # ✅ QI 500: Delay de 0.2s entre envios
+                delay_between=0.2,  # ✅ QI 500: Delay de 0.2s entre envios
+                bot_id=bot_id
             )
             
             if result:
