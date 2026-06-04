@@ -45,8 +45,8 @@ def dashboard():
     all_bots = Bot.query.filter_by(user_id=current_user.id).all()
     bot_ids = [b.id for b in all_bots] if all_bots else []
     
-    # Buscar APENAS bots ativos (para exibição na interface)
-    active_bots_only = Bot.query.filter_by(user_id=current_user.id, is_active=True).all()
+    # Derivar ativos da lista já carregada (evita query extra)
+    active_bots_only = [b for b in all_bots if b.is_active]
     
     # Períodos de tempo - TIMEZONE CORRIGIDO
     import pytz
@@ -145,9 +145,8 @@ def dashboard():
         agora_br = datetime.now(brasilia_tz)
         inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
         
-        # 2. EXTRAÇÃO DE BOT_IDS (À prova de falha de JOIN)
-        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
-        bot_ids = [bot.id for bot in user_bots]
+        # 2. REUSAR BOT_IDS da lista já carregada (evita query extra)
+        bot_ids = [b.id for b in all_bots]
 
         # 3. CÁLCULO BLINDADO DE HOJE
         today_users = today_sales = today_pending_sales = 0
@@ -238,46 +237,47 @@ def dashboard():
     else:
         recent_payments = []
     
-    # Mapear bots ATIVOS para dict serializável - V2: Stats On-Demand via SQL
+    # Mapear bots ATIVOS para dict serializável - V3: Batch GROUP BY
+    # ✅ PERFORMANCE: 2 queries batch em vez de 4 queries por bot
+    active_bot_ids = [b.id for b in active_bots_only]
+    if active_bot_ids:
+        # Batch 1: leads por bot (1 query)
+        user_count_rows = db.session.query(
+            BotUser.bot_id,
+            func.count(func.distinct(BotUser.telegram_user_id)).label('total_users')
+        ).filter(
+            BotUser.bot_id.in_(active_bot_ids),
+            BotUser.archived == False
+        ).group_by(BotUser.bot_id).all()
+        user_count_map = {row.bot_id: row.total_users for row in user_count_rows}
+
+        # Batch 2: stats de pagamento por bot (1 query)
+        payment_stats_rows = db.session.query(
+            Payment.bot_id,
+            func.count(Payment.id).filter(Payment.status == 'paid').label('total_sales'),
+            func.coalesce(func.sum(Payment.amount).filter(Payment.status == 'paid'), 0).label('total_revenue'),
+            func.count(Payment.id).filter(Payment.status == 'pending').label('pending_sales')
+        ).filter(
+            Payment.bot_id.in_(active_bot_ids)
+        ).group_by(Payment.bot_id).all()
+        pay_stats_map = {row.bot_id: row for row in payment_stats_rows}
+    else:
+        user_count_map = {}
+        pay_stats_map = {}
+
     bots_list = []
     for b in active_bots_only:
-        # ============================================================================
-        # ✅ ARQUITETURA LEGADA RESTAURADA: Stats On-Demand por Bot via SQL
-        # As colunas total_sales/total_revenue NUNCA existiram no schema Bot.
-        # Calculamos em tempo real via COUNT/SUM para cada bot individualmente.
-        # ============================================================================
-        
-        # Contagem de leads para este bot
-        bot_total_users = BotUser.query.filter_by(bot_id=b.id, archived=False).count()
-        
-        # Vendas pagas para este bot
-        bot_total_sales = Payment.query.filter(
-            Payment.bot_id == b.id,
-            Payment.status == 'paid'
-        ).count()
-        
-        # Receita total para este bot
-        bot_total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-            Payment.bot_id == b.id,
-            Payment.status == 'paid'
-        ).scalar() or 0.0
-        
-        # Vendas pendentes para este bot
-        bot_pending_sales = Payment.query.filter(
-            Payment.bot_id == b.id,
-            Payment.status == 'pending'
-        ).count()
-        
+        s = pay_stats_map.get(b.id)
         bots_list.append({
             'id': b.id,
             'name': b.name,
             'username': getattr(b, 'username', ''),
             'is_running': getattr(b, 'is_running', False),
             'is_active': getattr(b, 'is_active', True),
-            'total_users': bot_total_users,       # ✅ Calculado via SQL On-Demand
-            'total_sales': bot_total_sales,       # ✅ Calculado via SQL On-Demand
-            'total_revenue': float(bot_total_revenue),  # ✅ Calculado via SQL On-Demand
-            'pending_sales': bot_pending_sales,   # ✅ Calculado via SQL On-Demand
+            'total_users': user_count_map.get(b.id, 0),
+            'total_sales': s.total_sales if s else 0,
+            'total_revenue': float(s.total_revenue) if s else 0.0,
+            'pending_sales': s.pending_sales if s else 0,
             'created_at': b.created_at.isoformat() if b.created_at else None
         })
     
@@ -2029,54 +2029,49 @@ def update_meta_pixel_config(bot_id):
 @dashboard_bp.route('/api/bots', methods=['GET'])
 @login_required
 def api_get_bots():
-    """Retorna lista de bots do usuário (JSON) - V2: Stats On-Demand via SQL"""
+    """Retorna lista de bots do usuário (JSON) - V3: Batch GROUP BY"""
     from sqlalchemy import func
     from internal_logic.core.models import BotUser, Payment
     
     bots = Bot.query.filter_by(user_id=current_user.id).all()
+    bot_ids = [b.id for b in bots]
+    
+    # Batch 1: leads por bot
+    user_count_rows = db.session.query(
+        BotUser.bot_id,
+        func.count(func.distinct(BotUser.telegram_user_id)).label('total_users')
+    ).filter(
+        BotUser.bot_id.in_(bot_ids),
+        BotUser.archived == False
+    ).group_by(BotUser.bot_id).all()
+    user_count_map = {row.bot_id: row.total_users for row in user_count_rows}
+    
+    # Batch 2: stats de pagamento por bot
+    payment_stats_rows = db.session.query(
+        Payment.bot_id,
+        func.count(Payment.id).filter(Payment.status == 'paid').label('total_sales'),
+        func.coalesce(func.sum(Payment.amount).filter(Payment.status == 'paid'), 0).label('total_revenue'),
+        func.count(Payment.id).filter(Payment.status == 'pending').label('pending_sales')
+    ).filter(
+        Payment.bot_id.in_(bot_ids)
+    ).group_by(Payment.bot_id).all()
+    pay_stats_map = {row.bot_id: row for row in payment_stats_rows}
     
     bots_list = []
     for bot in bots:
-        # ============================================================================
-        # ✅ ARQUITETURA LEGADA RESTAURADA: Stats On-Demand via SQL
-        # As colunas total_sales/total_revenue NUNCA existiram no schema.
-        # Calculamos em tempo real via COUNT/SUM que é stateless e funciona
-        # perfeitamente em multi-worker sem race conditions.
-        # ============================================================================
-        
-        # Contagem de leads (total_users)
-        total_users = BotUser.query.filter_by(bot_id=bot.id, archived=False).count()
-        
-        # Vendas pagas (total_sales)
-        total_sales = Payment.query.filter(
-            Payment.bot_id == bot.id,
-            Payment.status == 'paid'
-        ).count()
-        
-        # Receita total (total_revenue)
-        total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-            Payment.bot_id == bot.id,
-            Payment.status == 'paid'
-        ).scalar() or 0.0
-        
-        # Vendas pendentes
-        pending_sales = Payment.query.filter(
-            Payment.bot_id == bot.id,
-            Payment.status == 'pending'
-        ).count()
-        
+        s = pay_stats_map.get(bot.id)
         bots_list.append({
             'id': bot.id,
             'name': bot.name,
             'username': getattr(bot, 'username', ''),
             'is_running': getattr(bot, 'is_running', False),
             'is_active': getattr(bot, 'is_active', True),
-            'total_users': total_users,       # ✅ Calculado via SQL On-Demand
-            'total_sales': total_sales,       # ✅ Calculado via SQL On-Demand  
-            'total_revenue': float(total_revenue),  # ✅ Calculado via SQL On-Demand
-            'pending_sales': pending_sales,   # ✅ Calculado via SQL On-Demand
+            'total_users': user_count_map.get(bot.id, 0),
+            'total_sales': s.total_sales if s else 0,
+            'total_revenue': float(s.total_revenue) if s else 0.0,
+            'pending_sales': s.pending_sales if s else 0,
             'created_at': bot.created_at.isoformat() if bot.created_at else None,
-            'token': bot.token[:10] + '...' if bot.token else None  # Parcial por segurança
+            'token': bot.token[:10] + '...' if bot.token else None
         })
     
     return jsonify(bots_list)

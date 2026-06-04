@@ -1032,13 +1032,15 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
     logger.critical(f"🚀 [WEBHOOK WORKER ENTRY] process_webhook_async iniciado | Job: {job_id} | Gateway: {gateway_type} | User: {user_id}")
     
     try:
-        from internal_logic.core.extensions import db
+        from internal_logic.core.extensions import db, create_app
         from internal_logic.core.models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateways.gateway_factory import GatewayFactory
+        from internal_logic.services.payment_processor import send_payment_delivery
         from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
         
         # ✅ ISOLAMENTO: Criar BotManager isolado para este usuário (se necessário)
         # Não usar bot_manager global - criar instância com user_id
+        app = create_app()
         
         with app.app_context():
             logger.critical(f"🔍 [WEBHOOK WORKER] App context criado | Job: {job_id}")
@@ -1648,11 +1650,14 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     Retorna quantidade processada com sucesso.
     """
+    from internal_logic.core.extensions import create_app
     from internal_logic.core.models import WebhookPendingMatch, get_brazil_time
 
     processed = 0
 
     _ensure_aux_tables()
+
+    app = create_app()
 
     with app.app_context():
         pendings = (
@@ -1670,7 +1675,8 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
                 pending.last_attempt_at = get_brazil_time()
                 db.session.commit()
 
-                result = process_webhook_async(pending.gateway_type, payload)
+                user_id = payload.get('user_id', 0)
+                result = process_webhook_async(user_id, pending.gateway_type, payload)
                 status = (result or {}).get('status')
 
                 if status in {'success', 'already_processed'}:

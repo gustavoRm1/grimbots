@@ -129,7 +129,7 @@ def _fetch_atomopay_status(gateway_instance, payment: Payment):
     return None
 
 
-def _queue_webhook(payload: dict, payment_id: int) -> None:
+def _queue_webhook(payload: dict, payment_id: int, user_id: int) -> None:
     """
     Processa o payload usando a mesma função oficial dos webhooks.
     Por padrão, executa inline (síncrono) para garantir reconciliação imediata.
@@ -149,12 +149,13 @@ def _queue_webhook(payload: dict, payment_id: int) -> None:
             return
         webhook_queue.enqueue(
             process_webhook_async,
+            user_id,
             "atomopay",
             payload,
         )
         return
 
-    result = process_webhook_async("atomopay", payload)
+    result = process_webhook_async(user_id, "atomopay", payload)
 
     payment = Payment.query.get(payment_id)
     if payment and payment.status == "paid":
@@ -292,7 +293,7 @@ def main():
                 if status != "paid":
                     continue  # ainda aguardando pagamento
 
-                _queue_webhook(api_payload, payment.id)
+                _queue_webhook(api_payload, payment.id, payment.user_id)
                 print(
                     f"✅ Payment {payment.payment_id} ({payment.id}) reconciliação enfileirada."
                 )
