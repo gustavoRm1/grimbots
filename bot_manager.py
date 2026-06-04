@@ -3840,7 +3840,7 @@ class BotManager:
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
-                            current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                            current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                             redis_conn.delete(current_step_key)
                             logger.info(f"✅ [FLOW V∞] Estado do fluxo limpo do Redis (fluxo finalizado)")
                     except Exception as e:
@@ -3865,7 +3865,7 @@ class BotManager:
             try:
                 redis_conn = get_redis_connection()
                 if redis_conn:
-                    current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                    current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                     redis_conn.setex(current_step_key, 86400, step_id)  # 24h
                     logger.debug(f"✅ [FLOW V∞] Estado salvo no Redis: {step_id} (TTL: 24h)")
             except Exception as e:

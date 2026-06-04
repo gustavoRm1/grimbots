@@ -77,7 +77,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
-                            current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                            current_step_key = f"gb:{bot_manager.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                             redis_conn.delete(current_step_key)
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao limpar step atual do Redis: {e}")
@@ -141,7 +141,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 if conditions and len(conditions) > 0:
                     try:
                         redis_conn = get_redis_connection()
-                        current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                        current_step_key = f"gb:{bot_manager.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                         
                         # Avaliar condições com parâmetros completos
                         next_step_id = bot_manager._evaluate_conditions(
@@ -186,7 +186,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                         try:
                             redis_conn = get_redis_connection()
                             if redis_conn:
-                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                current_step_key = f"gb:{bot_manager.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                                 redis_conn.delete(current_step_key)
                         except:
                             pass

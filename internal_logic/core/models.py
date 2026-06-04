@@ -1250,9 +1250,11 @@ class BotUser(db.Model):
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
     last_interaction = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
     
-    # Índice único
+    # Índices
     __table_args__ = (
         db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_bot_user'),
+        db.Index('idx_bot_users_last_interaction', 'last_interaction'),
+        db.Index('idx_bot_users_archived', 'archived'),
     )
     
     def to_dict(self):
@@ -1293,6 +1295,11 @@ class BotMessage(db.Model):
     
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+    
+    # Índices
+    __table_args__ = (
+        db.Index('idx_bot_messages_bot_user_created', 'bot_id', 'bot_user_id', 'created_at'),
+    )
     
     # Relacionamentos
     bot = db.relationship('Bot', backref='messages')
