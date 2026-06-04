@@ -16,7 +16,7 @@ from datetime import datetime
 
 from flask import url_for, current_app
 from internal_logic.core.extensions import db, socketio
-from bot_manager import BotManager
+# Import lazy dentro das funcoes para quebrar dependencia circular
 from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway, User, RemarketingCampaign
 from gateways import GatewayFactory
 
@@ -122,7 +122,7 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def _send_payment_delivery_v41_unused(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
+def _send_payment_delivery_v41_unused(payment: Payment, bot_manager=None, socketio=None) -> bool:
     """
     V4.1: Envia mensagem com decisão inteligente do link
     
@@ -187,6 +187,7 @@ def _send_payment_delivery_v41_unused(payment: Payment, bot_manager: Optional[Bo
         
         # 7.5 - V4.1: Enviar mensagem via Telegram
         if not bot_manager:
+            from bot_manager import BotManager
             bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
         
         if link_to_send:
@@ -217,7 +218,7 @@ def _send_payment_delivery_v41_unused(payment: Payment, bot_manager: Optional[Bo
         return False
 
 
-def send_payment_delivery_legacy(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None) -> bool:
+def send_payment_delivery_legacy(payment: Payment, bot_manager=None, socketio=None) -> bool:
     """
     Versão legada mantida para compatibilidade
     """
@@ -227,6 +228,7 @@ def send_payment_delivery_legacy(payment: Payment, bot_manager: Optional[BotMana
             return False
         
         # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
+        from bot_manager import BotManager
         local_bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
         
         # ✅ CRÍTICO: Não enviar entregável se pagamento não estiver 'paid'
@@ -387,6 +389,7 @@ def process_payment_confirmation(payment: Payment, gateway_type: str, bot_manage
         dict: Status do processamento
     """
     from internal_logic.core.models import get_brazil_time, Gateway, Commission, Subscription, User, RemarketingCampaign
+    from bot_manager import BotManager
     
     status = 'paid'  # Webhook sempre confirma como 'paid'
     
@@ -1635,7 +1638,7 @@ def get_delivery_link(payment: Payment, pixel_id_to_use: Optional[str]) -> Optio
             return None
 
 
-def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = None, socketio=None, enqueue_retry: bool = True) -> bool:
+def send_payment_delivery(payment: Payment, bot_manager=None, socketio=None, enqueue_retry: bool = True) -> bool:
     """
     Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado.
     
@@ -1674,6 +1677,7 @@ def send_payment_delivery(payment: Payment, bot_manager: Optional[BotManager] = 
         
         # ✅ ISOLAMENTO: Criar BotManager localmente com user_id do payment
         if bot_manager is None:
+            from bot_manager import BotManager
             local_bot_manager = BotManager(socketio=socketio, scheduler=None, user_id=payment.bot.user_id)
         else:
             local_bot_manager = bot_manager

@@ -2762,21 +2762,12 @@ def api_create_gateway():
         db.session.add(gateway)
         db.session.commit()
         
-        # ✅ REGRA 2: TESTE REAL DA API via bot_manager
-        from bot_manager import BotManager
-        bot_manager = BotManager()
+        # ✅ REGRA 2: TESTE REAL DA API via gateway service
+        from internal_logic.services.payment_gateway import verify_gateway
         
         # ✅ FIX: GRAVAR DADOS NOVOS NO BANCO ANTES DE TESTAR (evita persistir dados corrompidos antigos)
-        if 'api_key' in data and data['api_key']: gateway.api_key = data['api_key']
-        if 'client_id' in data and data['client_id']: gateway.client_id = data['client_id']
-        if 'client_secret' in data and data['client_secret']: gateway.client_secret = data['client_secret']
-        if 'product_hash' in data and data['product_hash']: gateway.product_hash = data['product_hash']
-        if 'offer_hash' in data and data['offer_hash']: gateway.offer_hash = data['offer_hash']
-        if 'store_id' in data and data['store_id']: gateway.store_id = data['store_id']
-        
-        # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
-            'api_key': data.get('api_key', gateway.api_key),
+            'client_id': data.get('client_id', gateway.client_id),
             'client_secret': data.get('client_secret', gateway.client_secret),
             'product_hash': data.get('product_hash', gateway.product_hash),
             'offer_hash': data.get('offer_hash', gateway.offer_hash),
@@ -2786,7 +2777,7 @@ def api_create_gateway():
             'split_user_id': data.get('split_user_id', gateway.split_user_id)
         }
         
-        is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
+        is_valid = verify_gateway(gateway.gateway_type, credentials)
         gateway.is_verified = is_valid
         gateway.is_active = is_valid
         gateway.last_error = None if is_valid else 'Credenciais inválidas na verificação oficial'
@@ -2886,17 +2877,8 @@ def api_update_gateway(gateway_id):
             Gateway.id != gateway_id
         ).update({'is_active': False})
         
-        # ✅ REGRA 2: TESTE REAL DA API via bot_manager
-        from bot_manager import BotManager
-        bot_manager = BotManager()
-        
-        # ✅ FIX: GRAVAR DADOS NOVOS NO BANCO ANTES DE TESTAR (evita persistir dados corrompidos antigos)
-        if 'api_key' in data and data['api_key']: gateway.api_key = data['api_key']
-        if 'client_id' in data and data['client_id']: gateway.client_id = data['client_id']
-        if 'client_secret' in data and data['client_secret']: gateway.client_secret = data['client_secret']
-        if 'product_hash' in data and data['product_hash']: gateway.product_hash = data['product_hash']
-        if 'offer_hash' in data and data['offer_hash']: gateway.offer_hash = data['offer_hash']
-        if 'store_id' in data and data['store_id']: gateway.store_id = data['store_id']
+        # ✅ REGRA 2: TESTE REAL DA API via gateway service
+        from internal_logic.services.payment_gateway import verify_gateway
         
         # ✅ FIX: Usar valores do payload primeiro (evita descriptografia de dados antigos corrompidos)
         credentials = {
@@ -2910,7 +2892,7 @@ def api_update_gateway(gateway_id):
             'split_user_id': data.get('split_user_id', gateway.split_user_id)
         }
         
-        is_valid = bot_manager.verify_gateway(gateway.gateway_type, credentials)
+        is_valid = verify_gateway(gateway.gateway_type, credentials)
         gateway.is_verified = is_valid
         gateway.is_active = is_valid
         gateway.last_error = None if is_valid else 'Credenciais inválidas na verificação oficial'

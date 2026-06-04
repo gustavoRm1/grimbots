@@ -1098,11 +1098,8 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                 
                 result = gateway_instance.process_webhook(data)
             else:
-                # 🛑 BLINDAGEM: Não usar bot_manager global
-                # Criar instância isolada do BotManager para este usuário
-                from bot_manager import BotManager
-                user_bot_manager = BotManager(None, None, user_id=user_id)
-                result = user_bot_manager.process_payment_webhook(gateway_type, data)
+                from internal_logic.services.payment_gateway import process_payment_webhook
+                result = process_payment_webhook(gateway_type, data)
             
             if result:
                 gateway_transaction_id = result.get('gateway_transaction_id')
