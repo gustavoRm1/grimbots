@@ -74,6 +74,11 @@ class BotMessenger:
         if not buttons:
             return None
         
+        # Se botoes ja vieram pre-agrupados em linhas (lista de listas),
+        # usar diretamente sem reagrupamento
+        if buttons and isinstance(buttons[0], list):
+            return {'inline_keyboard': buttons}
+        
         # Verificar se é inline keyboard (tem callback_data ou url)
         is_inline = any('callback_data' in btn or 'url' in btn for btn in buttons)
         

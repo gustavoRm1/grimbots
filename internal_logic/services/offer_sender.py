@@ -332,4 +332,5 @@ def _build_offer_buttons(
             'callback_data': f'{callback_prefix}{index}_{int(price * 100)}_{original_button_index if original_button_index >= 0 else 0}',
         }]
 
-    return buttons
+    # Um botao por linha para ofertas (texto longo fica ileivel lado a lado)
+    return [[b] for b in buttons]
