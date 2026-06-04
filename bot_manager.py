@@ -8819,8 +8819,9 @@ Seu pagamento ainda não foi confirmado.
                     from tasks_async import marathon_queue, send_downsell_async
                     
                     if marathon_queue and self.user_id:
-                        # ✅ CORREÇÃO: Enfileirar diretamente sem wrapper (evita pickle error)
-                        job = marathon_queue.enqueue(
+                        # ✅ CORREÇÃO: Enfileirar com delay (respeita delay_minutes da config)
+                        job = marathon_queue.enqueue_in(
+                            timedelta(minutes=delay_minutes),
                             send_downsell_async,
                             self.user_id,  # user_id como primeiro arg
                             bot_id,
@@ -8852,6 +8853,13 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"✅ Downsell {i+1} AGENDADO via RQ: job_id={job.id if job else 'N/A'}")
                     if job:
                         jobs_agendados.append(job.id)
+                        try:
+                            from internal_logic.core.redis_manager import get_redis_connection
+                            r = get_redis_connection()
+                            r.sadd(f"gb:downsell:jobs:{payment_id}", job.id)
+                            r.expire(f"gb:downsell:jobs:{payment_id}", 86400)
+                        except Exception:
+                            pass
                     
                 except Exception as e:
                     logger.error(f"❌ Erro ao agendar downsell {i+1} no RQ: {e}", exc_info=True)
@@ -10968,46 +10976,48 @@ Seu pagamento ainda não foi confirmado.
     
     def cancel_downsells(self, payment_id: str):
         """
-        Cancela downsells agendados para um pagamento
-        
-        Args:
-            payment_id: ID do pagamento
+        Cancela downsells RQ agendados para um pagamento
+        Usa Redis SET + scan na fila RQ para garantir cancelamento
         """
-        logger.info(f"🚫 ===== CANCEL_DOWNSELLS CHAMADO =====")
+        logger.info(f"🚫 ===== CANCEL_DOWNSELLS =====")
         logger.info(f"   payment_id: {payment_id}")
-        
+
         try:
-            if not self.scheduler:
-                logger.warning(f"⚠️ Scheduler não disponível - não é possível cancelar downsells")
+            from tasks_async import marathon_queue
+            from rq.job import Job
+            from internal_logic.core.redis_manager import get_redis_connection
+
+            if not marathon_queue:
+                logger.warning(f"⚠️ marathon_queue não disponível")
                 return
-            
-            # Encontrar e remover jobs de downsell para este pagamento
-            jobs_to_remove = []
-            try:
-                all_jobs = self.scheduler.get_jobs()
-                logger.info(f"🔍 Total de jobs no scheduler: {len(all_jobs)}")
-                
-                for job in all_jobs:
-                    if job.id.startswith(f"downsell_") and payment_id in job.id:
-                        jobs_to_remove.append(job.id)
-                        logger.info(f"   - Job encontrado: {job.id} (próxima execução: {job.next_run_time})")
-            except Exception as e:
-                logger.error(f"❌ Erro ao listar jobs: {e}")
-                return
-            
-            if not jobs_to_remove:
-                logger.info(f"ℹ️ Nenhum downsell agendado encontrado para payment {payment_id}")
-                return
-            
-            logger.info(f"🚫 Cancelando {len(jobs_to_remove)} downsell(s)...")
-            for job_id in jobs_to_remove:
-                try:
-                    self.scheduler.remove_job(job_id)
-                    logger.info(f"✅ Downsell cancelado: {job_id}")
-                except Exception as e:
-                    logger.error(f"❌ Erro ao cancelar job {job_id}: {e}")
-            
-            logger.info(f"🚫 ===== FIM CANCEL_DOWNSELLS =====")
-                
+
+            redis_conn = get_redis_connection()
+            conn = marathon_queue.connection
+            cancelled = 0
+
+            # 1. Buscar job_ids do Redis SET (salvo por schedule_downsells)
+            jobs_key = f"gb:downsell:jobs:{payment_id}"
+            job_ids = redis_conn.smembers(jobs_key)
+
+            if job_ids:
+                for job_id in job_ids:
+                    try:
+                        job = Job.fetch(job_id, connection=conn)
+                        job.cancel()
+                        cancelled += 1
+                    except Exception:
+                        pass
+                redis_conn.delete(jobs_key)
+
+            # 2. Fallback: scan na fila RQ (caso SET tenha expirado)
+            for job_id in marathon_queue.get_job_ids():
+                if payment_id in job_id:
+                    try:
+                        Job.fetch(job_id, connection=conn).cancel()
+                        cancelled += 1
+                    except:
+                        pass
+
+            logger.info(f"✅ Cancelados {cancelled} downsells RQ para payment {payment_id}")
         except Exception as e:
-            logger.error(f"❌ Erro ao cancelar downsells para pagamento {payment_id}: {e}", exc_info=True)
+            logger.error(f"❌ Erro cancel_downsells: {e}")
