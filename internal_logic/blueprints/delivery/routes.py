@@ -188,8 +188,12 @@ def delivery_page(token):
                 logger.warning(f" Delivery - Usando primeiro pool do bot (pool_id não encontrado no tracking_data): pool_id={pool_bot.pool_id}")
         
         if not pool_bot:
-            logger.error(f" Payment {payment.id}: Bot não está associado a nenhum pool")
-            return render_template('delivery_error.html', error="Configuração inválida"), 500
+            logger.warning(f" Payment {payment.id}: Bot sem pool — usando payment.bot como fallback")
+            pool_bot = type('_PoolFallback', (), {
+                'bot': payment.bot,
+                'pool': None,
+                'pool_id': None,
+            })()
         
         pool = pool_bot.pool
         # Inicialização defensiva para evitar UnboundLocalError em caminhos de retorno antecipado
@@ -213,12 +217,12 @@ def delivery_page(token):
         fbc = getattr(bot_user, 'fbc', None) if bot_user else None
         fbclid = getattr(bot_user, 'fbclid', None) if bot_user else None
         
-        # B. Fallback Inteligente: se BotUser não tiver campaign_code, buscar do Pool/Bot
+        # B. Fallback Inteligente: se BotUser não tiver campaign_code, buscar do Pool ou Payment
+        pixel_source = 'BotUser'
         if not pixel_id:
-            pixel_id = pool.meta_pixel_id if pool else None
-            logger.info(f"[FILO_INVISIVEL] Pixel fallback do Pool: {pixel_id}")
-        else:
-            logger.info(f"[FILO_INVISIVEL] Pixel do BotUser: {pixel_id}")
+            pixel_id = pool.meta_pixel_id if pool else payment.meta_pixel_id if payment else None
+            pixel_source = 'Pool' if pool else 'Payment'
+        logger.info(f"[FILO_INVISIVEL] Pixel: {pixel_id}, source: {pixel_source}")
         
         # C. Validação de pixel_id
         has_meta_pixel = bool(pixel_id)
