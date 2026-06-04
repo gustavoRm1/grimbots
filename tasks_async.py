@@ -2615,7 +2615,7 @@ def send_downsell_job(bot_id: int, payment_id: str, chat_id: int, downsell: dict
                 logger.warning(f"⚠️ [DOWNSELL JOB] Payment {payment_id} não encontrado - ignorando")
                 return False
             
-            if payment.status != 'paid':
+            if payment.status != 'pending':
                 logger.info(f"ℹ️ [DOWNSELL JOB] Payment {payment_id} status='{payment.status}' - downsell cancelado")
                 return False
             
