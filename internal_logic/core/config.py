@@ -42,9 +42,9 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_size': 10,
-        'max_overflow': 5,
-        'pool_timeout': 5,
+        'pool_size': 20,
+        'max_overflow': 10,
+        'pool_timeout': 10,
     }
     
     # Configurações de Cookies/Sessão

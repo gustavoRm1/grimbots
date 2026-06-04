@@ -4,7 +4,7 @@ Dashboard Blueprint - Rotas do Painel Principal
 Dashboard e APIs de analytics
 """
 
-from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash, abort, session, make_response, send_file
+from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash, abort, session, make_response, send_file, current_app
 from flask_login import login_required, current_user
 from internal_logic.core.extensions import db, csrf, limiter
 from internal_logic.core.models import (
@@ -16,12 +16,22 @@ from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 import logging
 import os
+import time
 import requests
 
 logger = logging.getLogger(__name__)
 
 # Criar Blueprint
 dashboard_bp = Blueprint('dashboard', __name__)
+
+# Cache de BotManager por user_id (evita criar BotManager + threads a cada envio de mensagem)
+_bot_manager_cache: dict = {}
+def _get_bot_manager(user_id: int):
+    """Retorna BotManager cacheado para o user_id (lazy singleton por worker)."""
+    if user_id not in _bot_manager_cache:
+        from bot_manager import BotManager
+        _bot_manager_cache[user_id] = BotManager(socketio=None, scheduler=None, user_id=user_id)
+    return _bot_manager_cache[user_id]
 
 
 def get_brazil_time():
@@ -1174,7 +1184,6 @@ def get_chat_messages(bot_id, telegram_user_id):
 def send_chat_message(bot_id, telegram_user_id):
     """Envia mensagem para um lead via Telegram"""
     from internal_logic.core.models import BotUser, BotMessage
-    from bot_manager import BotManager
     import uuid
     
     # Verificar se bot pertence ao usuário
@@ -1198,8 +1207,8 @@ def send_chat_message(bot_id, telegram_user_id):
         return jsonify({'success': False, 'error': 'Mensagem não pode estar vazia'}), 400
     
     try:
-        # Criar BotManager local com user_id
-        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=current_user.id)
+        # BotManager cacheado por user_id (evita overhead de criação)
+        local_bot_manager = _get_bot_manager(current_user.id)
         
         # Enviar mensagem via Telegram API
         result = local_bot_manager.send_telegram_message(
@@ -1259,7 +1268,6 @@ def send_chat_message(bot_id, telegram_user_id):
 def send_chat_media(bot_id, telegram_user_id):
     """Envia foto/vídeo para um lead via Telegram"""
     from internal_logic.core.models import BotUser, BotMessage
-    from bot_manager import BotManager
     import uuid
     import tempfile
     
@@ -1309,7 +1317,7 @@ def send_chat_media(bot_id, telegram_user_id):
             file.save(temp_file.name)
             temp_file_path = temp_file.name
         
-        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=current_user.id)
+        local_bot_manager = _get_bot_manager(current_user.id)
         
         result = local_bot_manager.send_telegram_file(
             token=bot.token,
@@ -1352,18 +1360,34 @@ def send_chat_media(bot_id, telegram_user_id):
 @dashboard_bp.route('/api/chat/media/<int:bot_id>/<file_id>')
 @login_required
 def get_chat_media(bot_id, file_id):
-    """Proxy para exibir mídia do Telegram"""
+    """Proxy para exibir mídia do Telegram com cache local"""
     import requests
     from flask import Response
+    import hashlib
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
+    if not bot.token:
+        return jsonify({'error': 'Token não encontrado'}), 400
+    
+    # Cache local: mesmo file_id retorna sempre o mesmo arquivo
+    cache_key = hashlib.md5(f"{bot_id}:{file_id}".encode()).hexdigest()
+    cache_dir = os.path.join(current_app.instance_path, 'media_cache')
+    cache_path = os.path.join(cache_dir, cache_key)
+    
+    # Verificar cache local (válido por 1 hora)
+    if os.path.exists(cache_path):
+        mtime = os.path.getmtime(cache_path)
+        if time.time() - mtime < 3600:
+            content_type = open(cache_path + '.mime', 'r').read() if os.path.exists(cache_path + '.mime') else 'application/octet-stream'
+            return Response(
+                open(cache_path, 'rb'),
+                mimetype=content_type,
+                headers={'Cache-Control': 'public, max-age=3600'}
+            )
+    
     try:
-        token = bot.token
-        if not token:
-            return jsonify({'error': 'Token não encontrado'}), 400
-        
-        get_file_url = f"https://api.telegram.org/bot{token}/getFile"
+        get_file_url = f"https://api.telegram.org/bot{bot.token}/getFile"
         response = requests.get(get_file_url, params={'file_id': file_id}, timeout=10)
         
         if response.status_code != 200:
@@ -1377,17 +1401,29 @@ def get_chat_media(bot_id, file_id):
         if not file_path:
             return jsonify({'error': 'File path não encontrado'}), 404
         
-        file_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+        file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
         file_response = requests.get(file_url, timeout=30, stream=True)
         
         if file_response.status_code != 200:
             return jsonify({'error': 'Erro ao baixar arquivo'}), 500
         
+        # Salvar no cache local
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(cache_path, 'wb') as f:
+                for chunk in file_response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            content_type = file_response.headers.get('Content-Type', 'application/octet-stream')
+            with open(cache_path + '.mime', 'w') as f:
+                f.write(content_type)
+        except Exception as e:
+            logger.warning(f"Erro ao salvar cache de mídia: {e}")
+        
+        # Reabrir o arquivo para servir (evita problemas com stream consumida)
         return Response(
-            file_response.iter_content(chunk_size=8192),
+            open(cache_path, 'rb') if os.path.exists(cache_path) else file_response.iter_content(chunk_size=8192),
             mimetype=file_response.headers.get('Content-Type', 'application/octet-stream'),
             headers={
-                'Content-Disposition': f'inline; filename="{file_path.split("/")[-1]}"',
                 'Cache-Control': 'public, max-age=3600'
             }
         )

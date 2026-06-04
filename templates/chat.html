@@ -410,22 +410,12 @@ function chatApp() {
                 console.log('🔄 Polling iniciado para conversa:', this.selectedConversation.telegram_user_id);
             }
             
-            // ✅ CORREÇÃO QI 600+: Polling mais frequente e robusto
-            // Polling a cada 1 segundo quando há conversa selecionada (máxima responsividade)
+            // Polling a cada 3 segundos (reduz carga no banco em 66%)
             this.pollingInterval = setInterval(() => {
-                // Verificar se ainda há conversa selecionada antes de fazer polling
                 if (this.selectedConversation && this.selectedBot && !this.loadingMessages && !this.sendingMessage) {
                     this.checkNewMessages();
-                } else {
-                    // ✅ DEBUG: Log quando não executa (apenas em dev)
-                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                        if (!this.selectedConversation) console.debug('⏸️ Polling pausado: sem conversa selecionada');
-                        if (!this.selectedBot) console.debug('⏸️ Polling pausado: sem bot selecionado');
-                        if (this.loadingMessages) console.debug('⏸️ Polling pausado: carregando mensagens');
-                        if (this.sendingMessage) console.debug('⏸️ Polling pausado: enviando mensagem');
-                    }
                 }
-            }, 1000); // 1 segundo (máxima frequência para melhor UX)
+            }, 3000);
         },
         
         stopMessagePolling() {
@@ -495,17 +485,8 @@ function chatApp() {
                     const newMessages = data.messages.filter(msg => !existingIds.has(msg.id));
                     
                     if (newMessages.length > 0) {
-                        // Adicionar novas mensagens (já vêm ordenadas por created_at asc)
-                        this.messages.push(...newMessages);
-                        
-                        // Scroll para última mensagem
+                        this.messages.push(...newMessages);                        
                         this.scrollToBottom();
-                        
-                        // Atualizar contador de não lidas
-                        this.loadConversations();
-                        
-                        // ✅ DEBUG: Log sempre (para produção também)
-                        console.log(`✅ Chat: ${newMessages.length} nova(s) mensagem(ns) recebida(s)`);
                     }
                 } else {
                     // ✅ DEBUG: Log quando não há mensagens (apenas em dev)
@@ -569,9 +550,6 @@ function chatApp() {
                 
                 if (data.success) {
                     this.messages = data.messages || [];
-                    // Atualizar contador de não lidas
-                    this.loadConversations();
-                    // Scroll para última mensagem
                     this.scrollToBottom();
                     
                     // ✅ CRÍTICO: Reiniciar polling APÓS carregar mensagens
@@ -605,19 +583,26 @@ function chatApp() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Adicionar mensagem enviada à lista
+                    const sentAt = new Date().toISOString();
                     this.messages.push({
                         id: data.message_id,
                         message_text: messageText,
                         direction: 'outgoing',
-                        created_at: new Date().toISOString(),
+                        created_at: sentAt,
                         is_read: true
                     });
+
+                    // Atualizar último preview na lista de conversas (sem reload)
+                    const conv = this.conversations.find(c => c.telegram_user_id === this.selectedConversation.telegram_user_id);
+                    if (conv) {
+                        conv.last_message = {
+                            text: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+                            created_at: sentAt,
+                            direction: 'outgoing'
+                        };
+                        conv.last_interaction = sentAt;
+                    }
                     
-                    // Recarregar conversas para atualizar última mensagem
-                    this.loadConversations();
-                    
-                    // Scroll para última mensagem
                     this.scrollToBottom();
                     
                     // ✅ CRÍTICO: Verificar novas mensagens após enviar (caso haja resposta imediata)
