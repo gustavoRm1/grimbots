@@ -463,3 +463,49 @@ def schedule_offers(
     except Exception as e:
         logger.error(f"❌ Erro ao agendar {mode_label}s via RQ: {e}", exc_info=True)
         return []
+
+
+def cancel_downsells(payment_id: str):
+    """
+    Cancela downsells RQ agendados para um pagamento
+    Usa Redis SET + scan na fila RQ para garantir cancelamento
+    """
+    logger.info(f"CANCEL_DOWNSELLS payment_id: {payment_id}")
+
+    try:
+        from tasks_async import marathon_queue
+        from rq.job import Job
+        from internal_logic.core.redis_manager import get_redis_connection
+
+        if not marathon_queue:
+            logger.warning("marathon_queue nao disponivel")
+            return
+
+        redis_conn = get_redis_connection()
+        conn = marathon_queue.connection
+        cancelled = 0
+
+        jobs_key = f"gb:downsell:jobs:{payment_id}"
+        job_ids = redis_conn.smembers(jobs_key)
+
+        if job_ids:
+            for job_id in job_ids:
+                try:
+                    job = Job.fetch(job_id, connection=conn)
+                    job.cancel()
+                    cancelled += 1
+                except Exception:
+                    pass
+            redis_conn.delete(jobs_key)
+
+        for job_id in marathon_queue.get_job_ids():
+            if payment_id in job_id:
+                try:
+                    Job.fetch(job_id, connection=conn).cancel()
+                    cancelled += 1
+                except Exception:
+                    pass
+
+        logger.info(f"Cancelados {cancelled} downsells RQ para payment {payment_id}")
+    except Exception as e:
+        logger.error(f"Erro cancel_downsells: {e}")

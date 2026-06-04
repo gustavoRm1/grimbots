@@ -651,3 +651,61 @@ class BotMessenger:
         except Exception as e:
             logger.error(f"❌ Erro ao deletar mensagem: {e}")
             return False
+
+
+def checkActiveFlow(config: Dict[str, Any]) -> bool:
+    """
+    Verifica se Flow Editor esta ativo e valido
+
+    Args:
+        config: Dicionario de configuracao do bot
+
+    Returns:
+        True se flow esta ativo E tem steps validos
+        False caso contrario (inclui flow desabilitado, vazio ou invalido)
+    """
+    import json
+
+    flow_enabled_raw = config.get('flow_enabled', False)
+
+    if isinstance(flow_enabled_raw, str):
+        flow_enabled = flow_enabled_raw.lower().strip() in ('true', '1', 'yes', 'on', 'enabled')
+    elif isinstance(flow_enabled_raw, bool):
+        flow_enabled = flow_enabled_raw
+    elif isinstance(flow_enabled_raw, (int, float)):
+        flow_enabled = bool(flow_enabled_raw)
+    else:
+        flow_enabled = False
+
+    if not flow_enabled:
+        return False
+
+    flow_steps_raw = config.get('flow_steps', [])
+    flow_steps = []
+
+    if flow_steps_raw:
+        if isinstance(flow_steps_raw, str):
+            try:
+                parsed = json.loads(flow_steps_raw)
+                if isinstance(parsed, list):
+                    flow_steps = parsed
+                else:
+                    logger.warning(f"flow_steps JSON nao e lista: {type(parsed)}")
+                    flow_steps = []
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Erro ao parsear flow_steps JSON: {e}")
+                flow_steps = []
+        elif isinstance(flow_steps_raw, list):
+            flow_steps = flow_steps_raw
+        else:
+            logger.warning(f"flow_steps tem tipo inesperado: {type(flow_steps_raw)}")
+            flow_steps = []
+
+    is_active = flow_enabled is True and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0
+
+    if is_active:
+        logger.info(f"Flow Editor ATIVO: {len(flow_steps)} steps configurados")
+    else:
+        logger.info(f"Flow Editor INATIVO: flow_enabled={flow_enabled}, steps_count={len(flow_steps)}")
+
+    return is_active
