@@ -1216,7 +1216,8 @@ class BotManager:
                         from internal_logic.core.extensions import db
                         from internal_logic.core.models import Bot, BotConfig
                         with current_app.app_context():
-                            bot = db.session.get(Bot, bot_id)
+                            from sqlalchemy.orm import joinedload
+                            bot = db.session.query(Bot).options(joinedload(Bot.config)).get(bot_id)
                             if bot and bot.is_active:  # 🔥 CRÍTICO: Removida verificação de user_id - webhook é stateless
                                 config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
                                 config_dict = config_obj.to_dict() if config_obj else {}
@@ -1249,7 +1250,8 @@ class BotManager:
                         # 🔥 CRÍTICO: Limpar transação pendente antes de começar
                         db.session.rollback()
                         
-                        db_bot = db.session.get(Bot, bot_id)
+                        from sqlalchemy.orm import joinedload
+                        db_bot = db.session.query(Bot).options(joinedload(Bot.config)).get(bot_id)
                         if not db_bot:
                             logger.error(f"❌ Bot {bot_id} não existe no banco de dados!")
                             return  # Bot realmente não existe
@@ -4059,7 +4061,8 @@ class BotManager:
                 else:
                     # Fallback: buscar config atual do banco
                     from internal_logic.core.models import Bot
-                    bot = Bot.query.get(bot_id)
+                    from sqlalchemy.orm import joinedload
+                    bot = Bot.query.options(joinedload(Bot.config)).get(bot_id)
                     if bot and bot.config:
                         config = bot.config.to_dict()
                         logger.info(f"⚠️ Snapshot não encontrado, usando config atual do banco")
@@ -4488,7 +4491,8 @@ class BotManager:
             
             bot_config = None
             with current_app.app_context():
-                bot_model = Bot.query.get(bot_id)
+                from sqlalchemy.orm import joinedload
+                bot_model = Bot.query.options(joinedload(Bot.config)).get(bot_id)
                 if bot_model and bot_model.config:
                     bot_config = bot_model.config.to_dict()
             

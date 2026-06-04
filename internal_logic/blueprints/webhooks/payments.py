@@ -55,71 +55,66 @@ def _find_payment_by_webhook(gateway_type: str, result: dict, data: dict) -> Opt
         except (ValueError, TypeError):
             pass
 
-    # Tentativa 2: Busca por filtros unificados (exact match + LIKE)
-    search_filters = []
-    values_seen = set()
+    # ═══════════════════════════════════════════════════════════════════════
+    # Tentativa 2: FASE A — MATCH EXATO (usa índices)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Tentamos matching EXATO primeiro porque usa índices (5-20ms).
+    # Só caímos no ILIKE (full scan) se o exact match falhar.
+    exact_filters = []
+    seen = set()
 
-    def add_equal(value, column):
-        if value and value not in values_seen:
-            search_filters.append(column == value)
-            values_seen.add(value)
+    def _add_exact(value, column):
+        if value and value not in seen:
+            exact_filters.append(column == value)
+            seen.add(value)
 
-    def add_like(value):
-        if value and value not in values_seen:
-            search_filters.append(Payment.payment_id.ilike(f"%{value}%"))
-            values_seen.add(value)
+    _add_exact(event_id, Payment.gateway_transaction_id)
+    _add_exact(event_id, Payment.gateway_transaction_hash)
+    _add_exact(event_ref, Payment.gateway_transaction_id)
+    _add_exact(event_ref, Payment.gateway_transaction_hash)
+    _add_exact(event_ref, Payment.payment_id)
 
-    add_equal(event_id, Payment.gateway_transaction_id)
-    add_equal(event_id, Payment.gateway_transaction_hash)
-    add_equal(event_ref, Payment.gateway_transaction_id)
-    add_equal(event_ref, Payment.gateway_transaction_hash)
-    add_equal(event_ref, Payment.payment_id)
+    if exact_filters:
+        payment = payment_query.filter(or_(*exact_filters)).order_by(Payment.created_at.desc()).first()
+        if payment:
+            logger.info(f"🎯 Payment encontrado via exact match: {payment.payment_id}")
+            return payment
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Tentativa 3: FASE B — ILIKE wildcard (fallback lento)
+    # ═══════════════════════════════════════════════════════════════════════
+    # ILIKE com leading wildcard NUNCA usa índice. É o último recurso.
+    like_filters = []
+
+    def _add_like(value):
+        if value and value not in seen:
+            like_filters.append(Payment.payment_id.ilike(f"%{value}%"))
+            seen.add(value)
 
     if event_hash:
-        search_filters.append(Payment.gateway_transaction_hash.ilike(f"%{event_hash}%"))
+        like_filters.append(Payment.gateway_transaction_hash.ilike(f"%{event_hash}%"))
 
     if event_ref and "_" in event_ref:
         suffix = event_ref.split("_")[-1]
-        search_filters.append(Payment.payment_id.ilike(f"%{suffix}%"))
+        like_filters.append(Payment.payment_id.ilike(f"%{suffix}%"))
 
-    add_like(event_id)
-    add_like(event_tx)
-    add_like(event_hash)
+    _add_like(event_id)
+    _add_like(event_tx)
+    _add_like(event_hash)
 
-    if search_filters:
-        payment = (
-            payment_query
-            .filter(or_(*search_filters))
-            .order_by(Payment.created_at.desc())
-            .first()
-        )
+    if like_filters:
+        payment = payment_query.filter(or_(*like_filters)).order_by(Payment.created_at.desc()).first()
         if payment:
-            logger.info(f"🎯 Payment encontrado via filtros unificados: {payment.payment_id}")
+            logger.info(f"🎯 Payment encontrado via LIKE fallback: {payment.payment_id}")
             return payment
 
-    # Tentativa 3: Fallback extra — busca incremental
+    # ═══════════════════════════════════════════════════════════════════════
+    # Tentativa 4: Busca incremental — tenta cada ID individualmente
+    # ═══════════════════════════════════════════════════════════════════════
     for candidate in filter(None, [event_id, event_tx, data.get('id')]):
         payment = payment_query.filter_by(gateway_transaction_id=str(candidate).strip()).first()
         if payment:
-            logger.info(f"🎯 Payment encontrado via fallback gateway_transaction_id: {payment.payment_id}")
-            return payment
-
-    if event_hash:
-        payment = payment_query.filter_by(gateway_transaction_hash=event_hash).first()
-        if payment:
-            logger.info(f"🎯 Payment encontrado via fallback gateway_transaction_hash: {payment.payment_id}")
-            return payment
-
-    if event_ref:
-        payment = payment_query.filter_by(payment_id=event_ref).first()
-        if payment:
-            logger.info(f"🎯 Payment encontrado via fallback payment_id: {payment.payment_id}")
-            return payment
-
-    if event_hash:
-        payment = payment_query.filter(Payment.payment_id.ilike(f"%{event_hash}%")).first()
-        if payment:
-            logger.info(f"🎯 Payment encontrado via fallback LIKE payment_id: {payment.payment_id}")
+            logger.info(f"🎯 Payment encontrado via fallback incremental: {payment.payment_id}")
             return payment
 
     return None

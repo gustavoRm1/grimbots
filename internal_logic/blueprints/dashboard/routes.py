@@ -71,134 +71,95 @@ def dashboard():
     active_bots = sum(1 for b in all_bots if b.is_active)
     running_bots = sum(1 for b in all_bots if b.is_running)
     
-    # Total de usuários (leads) across all bots
-    total_users = BotUser.query.filter(
-        BotUser.bot_id.in_(bot_ids),
-        BotUser.archived == False
-    ).count() if bot_ids else 0
+    # ══════════════════════════════════════════════════════════════════
+    # ESTATÍSTICAS GLOBAIS (combinadas em 2 queries)
+    # ══════════════════════════════════════════════════════════════════
+    if bot_ids:
+        # Query 1: BotUser — total_users + total_clicks (1 round-trip)
+        user_row = db.session.query(
+            func.count(func.distinct(BotUser.telegram_user_id)).label('total_users'),
+            func.count(func.distinct(BotUser.telegram_user_id)).label('total_clicks'),
+        ).filter(BotUser.bot_id.in_(bot_ids)).first()
+        total_users = user_row.total_users or 0
+        total_clicks = user_row.total_clicks or 0
+
+        # Query 2: Payment — total_sales + total_revenue + pending_sales (1 round-trip)
+        pay_row = db.session.query(
+            func.count(Payment.id).filter(Payment.status == 'paid').label('total_sales'),
+            func.coalesce(func.sum(Payment.amount).filter(Payment.status == 'paid'), 0).label('total_revenue'),
+            func.count(Payment.id).filter(Payment.status == 'pending').label('pending_sales'),
+        ).filter(Payment.bot_id.in_(bot_ids)).first()
+        total_sales = pay_row.total_sales or 0
+        total_revenue = float(pay_row.total_revenue or 0)
+        pending_sales = pay_row.pending_sales or 0
+    else:
+        total_users = total_clicks = total_sales = pending_sales = 0
+        total_revenue = 0.0
     
-    # Total de vendas e receita
-    total_sales = Payment.query.filter(
-        Payment.bot_id.in_(bot_ids),
-        Payment.status == 'paid'
-    ).count() if bot_ids else 0
-    
-    total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id.in_(bot_ids),
-        Payment.status == 'paid'
-    ).scalar() or 0.0 if bot_ids else 0.0
-    
-    # Vendas pendentes
-    pending_sales = Payment.query.filter(
-        Payment.bot_id.in_(bot_ids),
-        Payment.status == 'pending'
-    ).count() if bot_ids else 0
-    
-    # Taxa de conversão
-    total_clicks = BotUser.query.filter(BotUser.bot_id.in_(bot_ids)).count() if bot_ids else 0
-    total_purchases = Payment.query.filter(
-        Payment.bot_id.in_(bot_ids),
-        Payment.status == 'paid'
-    ).count() if bot_ids else 0
+    total_purchases = total_sales
     conversion_rate = (total_purchases / total_clicks * 100) if total_clicks > 0 else 0
-    
-    # Streak
     streak = current_user.current_streak or 0
     
-    # ============================================================================
-    # V2.0 METRICS - HOJE E MÊS
-    # ============================================================================
+    # ══════════════════════════════════════════════════════════════════
+    # V2.0 METRICS — HOJE E MÊS (combinados em 3 queries)
+    # ══════════════════════════════════════════════════════════════════
     if bot_ids:
-        # Vendas e receita de HOJE
-        today_sales = db.session.query(func.count(Payment.id)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status == 'paid',
-            Payment.created_at >= today_start
+        # Garantir que bot_ids está na mão (não é lazy)
+        bot_ids_list = list(bot_ids) if not isinstance(bot_ids, list) else bot_ids
+
+        # Query 1: Payment — today + month stats em UMA query
+        period_row = db.session.query(
+            # Hoje
+            func.count(Payment.id).filter(
+                Payment.status == 'paid', Payment.created_at >= today_start
+            ).label('today_sales'),
+            func.coalesce(func.sum(Payment.amount).filter(
+                Payment.status == 'paid', Payment.created_at >= today_start
+            ), 0).label('today_revenue'),
+            func.count(Payment.id).filter(
+                Payment.status.in_(['pending', 'waiting_payment', 'processing']),
+                Payment.created_at >= today_start
+            ).label('today_pending'),
+            # Mês
+            func.count(Payment.id).filter(
+                Payment.status == 'paid', Payment.created_at >= month_start
+            ).label('month_sales'),
+            func.coalesce(func.sum(Payment.amount).filter(
+                Payment.status == 'paid', Payment.created_at >= month_start
+            ), 0).label('month_revenue'),
+            func.count(Payment.id).filter(
+                Payment.status == 'pending', Payment.created_at >= month_start
+            ).label('month_pending'),
+        ).filter(Payment.bot_id.in_(bot_ids_list)).first()
+
+        today_sales = period_row.today_sales or 0
+        today_revenue = float(period_row.today_revenue or 0)
+        today_pending_sales = period_row.today_pending or 0
+        month_sales = period_row.month_sales or 0
+        month_revenue = float(period_row.month_revenue or 0)
+        month_pending_sales = period_row.month_pending or 0
+
+        # Query 2: BotUser — leads hoje (1 round-trip)
+        today_users = db.session.query(
+            func.count(func.distinct(BotUser.telegram_user_id))
+        ).filter(
+            BotUser.bot_id.in_(bot_ids_list),
+            BotUser.archived == False,
+            BotUser.first_interaction >= today_start
         ).scalar() or 0
-        
-        today_revenue = db.session.query(func.sum(Payment.amount)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status == 'paid',
-            Payment.created_at >= today_start
-        ).scalar() or 0.0
-        
-        # Vendas e receita do MÊS
-        month_sales = db.session.query(func.count(Payment.id)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status == 'paid',
-            Payment.created_at >= month_start
-        ).scalar() or 0
-        
-        month_revenue = db.session.query(func.sum(Payment.amount)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status == 'paid',
-            Payment.created_at >= month_start
-        ).scalar() or 0.0
-        
-        # Vendas pendentes (HOJE e MÊS) - FILTRO CORRIGIDO
-        today_pending_sales = db.session.query(func.count(Payment.id)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status.in_(['pending', 'waiting_payment', 'processing']),
-            Payment.created_at >= today_start
-        ).scalar() or 0
-        
-        month_pending_sales = db.session.query(func.count(Payment.id)).filter(
-            Payment.bot_id.in_(bot_ids),
-            Payment.status == 'pending',
-            Payment.created_at >= month_start
-        ).scalar() or 0
-        
-        # Novos Leads Hoje - ARQUITETURA BLINDADA (SEM DEBUG)
-        # 1. TIMEZONE BLINDADO (BR -> UTC)
-        brasilia_tz = pytz.timezone('America/Sao_Paulo')
-        utc_tz = pytz.UTC
-        agora_br = datetime.now(brasilia_tz)
-        inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
-        
-        # 2. REUSAR BOT_IDS da lista já carregada (evita query extra)
-        bot_ids = [b.id for b in all_bots]
 
-        # 3. CÁLCULO BLINDADO DE HOJE
-        today_users = today_sales = today_pending_sales = 0
-        today_revenue = 0.0
-
-        if bot_ids:
-            # Leads Hoje (DISTINCT + IN_)
-            today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
-                BotUser.bot_id.in_(bot_ids),
-                BotUser.archived == False,
-                BotUser.first_interaction >= inicio_hoje_utc
-            ).scalar() or 0
-
-            # Vendas Pendentes Hoje
-            today_pending_sales = db.session.query(func.count(Payment.id)).filter(
-                Payment.bot_id.in_(bot_ids),
-                Payment.created_at >= inicio_hoje_utc,
-                Payment.status.in_(['pending', 'waiting_payment', 'processing'])
-            ).scalar() or 0
-
-            # Vendas Pagas Hoje
-            today_sales = db.session.query(func.count(Payment.id)).filter(
-                Payment.bot_id.in_(bot_ids),
-                Payment.created_at >= inicio_hoje_utc,
-                Payment.status == 'paid'
-            ).scalar() or 0
-
-            # Receita Hoje
-            today_revenue = db.session.query(func.sum(Payment.amount)).filter(
-                Payment.bot_id.in_(bot_ids),
-                Payment.created_at >= inicio_hoje_utc,
-                Payment.status == 'paid'
-            ).scalar() or 0.0
-        
-        month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
-            BotUser.bot_id.in_(bot_ids),
+        # Query 3: BotUser — leads mês (1 round-trip)
+        month_users = db.session.query(
+            func.count(func.distinct(BotUser.telegram_user_id))
+        ).filter(
+            BotUser.bot_id.in_(bot_ids_list),
             BotUser.archived == False,
             BotUser.first_interaction >= month_start
         ).scalar() or 0
     else:
         today_sales = today_revenue = month_sales = month_revenue = 0
-        today_pending_sales = month_pending_sales = today_users = month_users = 0
+        today_pending_sales = month_pending_sales = 0
+        today_users = month_users = 0
     
     # ============================================================================
     # MONTAR DICIONÁRIO STATS V2.0
@@ -770,14 +731,20 @@ def ranking():
     # Verificar se deve mostrar modal de nome (se ainda não definiu)
     show_name_modal = not current_user.ranking_display_name
     
-    # Buscar conquistas do usuário
-    my_achievements = []
+    # Buscar conquistas do usuário (com joinedload para evitar N+1)
     user_achievements = UserAchievement.query.filter_by(
         user_id=current_user.id
     ).all()
     
+    achievement_ids = [ua.achievement_id for ua in user_achievements]
+    achievements_map = {}
+    if achievement_ids:
+        for ach in Achievement.query.filter(Achievement.id.in_(achievement_ids)).all():
+            achievements_map[ach.id] = ach
+    
+    my_achievements = []
     for ua in user_achievements:
-        achievement = Achievement.query.get(ua.achievement_id)
+        achievement = achievements_map.get(ua.achievement_id)
         if achievement:
             my_achievements.append({
                 'id': achievement.id,

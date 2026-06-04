@@ -1099,42 +1099,34 @@ class Payment(db.Model):
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
     # ✅ META PIXEL INTEGRATION
-    meta_purchase_sent = db.Column(db.Boolean, default=False)
+    meta_purchase_sent = db.Column(db.Boolean, default=False, index=True)
     meta_purchase_sent_at = db.Column(db.DateTime, nullable=True)
-    meta_event_id = db.Column(db.String(100), nullable=True)
+    meta_event_id = db.Column(db.String(100), nullable=True, index=True)
     meta_viewcontent_sent = db.Column(db.Boolean, default=False)
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
     
     # ✅ DELIVERY TRACKING - Purchase disparado na página de entrega
-    delivery_token = db.Column(db.String(64), unique=True, nullable=True, index=True)  # Token único para acesso à página de entrega
-    purchase_sent_from_delivery = db.Column(db.Boolean, default=False)  # Flag se Purchase foi disparado da página de entrega
+    delivery_token = db.Column(db.String(100), unique=True, nullable=True, index=True)
+    purchase_sent_from_delivery = db.Column(db.Boolean, default=False)
     
     # ✅ FLUXO VISUAL - Rastreamento de step atual
-    flow_step_id = db.Column(db.String(50), nullable=True, index=True)  # ID do step do fluxo que gerou este payment
+    flow_step_id = db.Column(db.String(50), nullable=True, index=True)
     # ✅ UTM TRACKING
     utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)
     utm_content = db.Column(db.String(255), nullable=True)
     utm_medium = db.Column(db.String(255), nullable=True)
     utm_term = db.Column(db.String(255), nullable=True)
-    fbclid = db.Column(db.String(255), nullable=True)
+    fbclid = db.Column(db.String(255), nullable=True, index=True)
     campaign_code = db.Column(db.String(255), nullable=True)
     # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing / expiração do Redis)
     click_context_url = db.Column(db.Text, nullable=True)
     
     # ✅ TRACKING V4.1 - Tracking Token Universal
-    tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4.1 - Token universal para persistência
+    tracking_token = db.Column(db.String(200), nullable=True, index=True)
     # ✅ META PIXEL ID - Pixel ID para Sticky Pixel
-    meta_pixel_id = db.Column(db.String(100), nullable=True, index=True)  # Pixel ID para recuperação em /delivery
-    # ✅ FBCLID - Facebook Click ID para atribuição
-    fbclid = db.Column(db.String(255), nullable=True, index=True)  # FBCLID para atribuição de conversão
-    # ✅ DELIVERY TOKEN - Token único para página de entrega
-    delivery_token = db.Column(db.String(100), nullable=True, unique=True, index=True)  # Token para /delivery/{token}
-    # ✅ META PURCHASE SENT - Flag anti-duplicação
-    meta_purchase_sent = db.Column(db.Boolean, default=False, index=True)  # Evita duplo disparo de Purchase
-    # ✅ META EVENT ID - Event ID para deduplicação
-    meta_event_id = db.Column(db.String(100), nullable=True, index=True)  # Event ID consistente PageView→Purchase
-    # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
+    meta_pixel_id = db.Column(db.String(100), nullable=True, index=True)
+    # ✅ pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
     pageview_event_id = db.Column(db.String(256), nullable=True, index=True)  # Event ID do PageView para reutilizar no Purchase
     # ✅ META PIXEL COOKIES (para fallback no Purchase se Redis expirar)
     fbp = db.Column(db.String(255), nullable=True)  # Facebook Browser ID (_fbp cookie)
@@ -1210,7 +1202,7 @@ class BotUser(db.Model):
     utm_medium = db.Column(db.String(255), nullable=True)
     utm_term = db.Column(db.String(255), nullable=True)
     fbclid = db.Column(db.String(255), nullable=True)
-    campaign_code = db.Column(db.String(255), nullable=True)
+    campaign_code = db.Column(db.String(255), nullable=True, index=True)
     external_id = db.Column(db.String(255), nullable=True)
     
     # Contexto do clique (campos confirmados)
@@ -1231,7 +1223,6 @@ class BotUser(db.Model):
     
     # ✅ STICKY PIXEL V4.1 - Campos para persistência de tracking
     # pixel_id = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Pixel ID para recuperação em /delivery
-    campaign_code = db.Column(db.String(100), nullable=True, index=True)  # V4.1 - Código da campanha para remarketing
     
     # Demographic Data (campos confirmados)
     customer_age = db.Column(db.Integer, nullable=True)
