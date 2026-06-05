@@ -402,10 +402,10 @@ def api_sales_chart():
         start_date = get_brazil_time() - timedelta(days=period)
         
         # IDs dos bots do usuário
-        user_bot_ids = [bot.id for bot in current_user.bots]
+        user_bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
+        user_bot_ids = [b.id for b in user_bots]
         
         if not user_bot_ids:
-            # Retornar dados vazios
             result = []
             for i in range(period):
                 date = (get_brazil_time() - timedelta(days=(period - 1 - i))).date()
@@ -456,7 +456,8 @@ def api_dashboard_analytics():
     from internal_logic.core.models import BotUser, Commission
     
     # IDs dos bots do usuário
-    user_bot_ids = [bot.id for bot in current_user.bots]
+    user_bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
+    user_bot_ids = [b.id for b in user_bots]
     
     if not user_bot_ids:
         return jsonify({
@@ -2556,7 +2557,7 @@ def api_get_remarketing_campaigns(bot_id):
     
     try:
         from internal_logic.core.models import RemarketingCampaign
-        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(RemarketingCampaign.created_at.desc()).all()
+        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(RemarketingCampaign.created_at.desc()).limit(100).all()
         
         campaigns_data = []
         for campaign in campaigns:
@@ -2996,8 +2997,10 @@ def check_dashboard_updates():
                 'today_revenue': float(today_stats.revenue or 0.0)
             })
         
-        # Verificar novos pagamentos desde o último check
-        last_check_dt = datetime.fromtimestamp(last_check_timestamp)
+        # Último check em UTC → converter para Brasília naive (igual Payment.created_at)
+        last_check_utc = datetime.utcfromtimestamp(last_check_timestamp)
+        last_check_br = utc_tz.localize(last_check_utc).astimezone(brasilia_tz)
+        last_check_dt = last_check_br.replace(tzinfo=None)
         
         new_payments_query = Payment.query.join(Bot, Payment.bot_id == Bot.id).filter(
             Bot.user_id == current_user.id,
