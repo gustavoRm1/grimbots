@@ -448,9 +448,9 @@ def api_sales_chart():
             Payment.status == 'pending'
         ).scalar() or 0
         
-        users_period = db.session.query(func.count(func.distinct(BotUser.user_id))).filter(
+        users_period = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
             BotUser.bot_id.in_(user_bot_ids),
-            BotUser.created_at >= start_date
+            BotUser.first_interaction >= start_date
         ).scalar() or 0
         
         return jsonify({

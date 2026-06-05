@@ -2066,6 +2066,12 @@ function dashboardApp() {
             scheduled_time: ''       // ✅ V2.0: Hora no formato HH:MM
         },
         
+        // Dados do gráfico (para totalizar)
+        chartRevenue: null,
+        chartSales: null,
+        chartUsers: null,
+        chartPendingSales: null,
+        
         // Data
         stats: {
             total_users: {{ stats.total_users }},
