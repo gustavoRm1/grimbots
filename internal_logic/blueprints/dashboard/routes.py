@@ -72,8 +72,8 @@ def dashboard():
         # Query 1: BotUser — total_users + total_clicks (1 round-trip)
         user_row = db.session.query(
             func.count(func.distinct(BotUser.telegram_user_id)).label('total_users'),
-            func.count(func.distinct(BotUser.telegram_user_id)).label('total_clicks'),
-        ).filter(BotUser.bot_id.in_(bot_ids)).first()
+            func.count(BotUser.id).label('total_clicks'),
+        ).filter(BotUser.bot_id.in_(bot_ids), BotUser.archived == False).first()
         total_users = user_row.total_users or 0
         total_clicks = user_row.total_clicks or 0
 
@@ -468,22 +468,9 @@ def api_dashboard_analytics():
             'commission_data': {}
         })
     
-    # 1. TAXA DE CONVERSÃO (cliques vs compras)
+    # 1. CLICKS (BotUser) e HOJE (timezone)
     total_clicks = BotUser.query.filter(BotUser.bot_id.in_(user_bot_ids)).count()
-    total_purchases = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid'
-    ).count()
-    conversion_rate = (total_purchases / total_clicks * 100) if total_clicks > 0 else 0
     
-    # 2. TICKET MÉDIO
-    total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid'
-    ).scalar() or 0.0
-    avg_ticket = (total_revenue / total_purchases) if total_purchases > 0 else 0
-    
-    # 2.1. VENDAS HOJE - TIMEZONE CORRIGIDO
     import pytz
     brasilia_tz = pytz.timezone('America/Sao_Paulo')
     utc_tz = pytz.UTC
@@ -491,52 +478,35 @@ def api_dashboard_analytics():
     inicio_hoje_br = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
     inicio_hoje_utc = inicio_hoje_br.astimezone(utc_tz).replace(tzinfo=None)
     
-    today_sales = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.status == 'paid',
-        Payment.created_at >= inicio_hoje_utc
-    ).count()
+    # 2. TUDO em UMA query de Payment (6 métricas de uma vez)
+    pay_row = db.session.query(
+        func.count(Payment.id).filter(Payment.status == 'paid').label('total_purchases'),
+        func.coalesce(func.sum(Payment.amount).filter(Payment.status == 'paid'), 0).label('total_revenue'),
+        func.count(Payment.id).filter(Payment.status == 'paid', Payment.created_at >= inicio_hoje_utc).label('today_sales'),
+        func.count(Payment.id).filter(Payment.order_bump_shown == True).label('ob_shown'),
+        func.count(Payment.id).filter(Payment.order_bump_accepted == True).label('ob_accepted'),
+        func.coalesce(func.sum(Payment.order_bump_value).filter(Payment.order_bump_accepted == True, Payment.status == 'paid'), 0).label('ob_revenue'),
+        func.count(Payment.id).filter(Payment.is_downsell == True).label('ds_sent'),
+        func.count(Payment.id).filter(Payment.is_downsell == True, Payment.status == 'paid').label('ds_paid'),
+        func.coalesce(func.sum(Payment.amount).filter(Payment.is_downsell == True, Payment.status == 'paid'), 0).label('ds_revenue'),
+    ).filter(Payment.bot_id.in_(user_bot_ids)).first()
     
-    # 3. PERFORMANCE DE ORDER BUMPS
-    order_bump_shown_count = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.order_bump_shown == True
-    ).count()
+    total_purchases = pay_row.total_purchases or 0
+    total_revenue = float(pay_row.total_revenue or 0)
+    today_sales = pay_row.today_sales or 0
+    order_bump_shown_count = pay_row.ob_shown or 0
+    order_bump_accepted_count = pay_row.ob_accepted or 0
+    order_bump_revenue = float(pay_row.ob_revenue or 0)
+    downsell_sent_count = pay_row.ds_sent or 0
+    downsell_paid_count = pay_row.ds_paid or 0
+    downsell_revenue = float(pay_row.ds_revenue or 0)
     
-    order_bump_accepted_count = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.order_bump_accepted == True
-    ).count()
-    
-    order_bump_revenue = db.session.query(func.sum(Payment.order_bump_value)).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.order_bump_accepted == True,
-        Payment.status == 'paid'
-    ).scalar() or 0.0
-    
+    conversion_rate = (total_purchases / total_clicks * 100) if total_clicks > 0 else 0
+    avg_ticket = (total_revenue / total_purchases) if total_purchases > 0 else 0
     order_bump_acceptance_rate = (order_bump_accepted_count / order_bump_shown_count * 100) if order_bump_shown_count > 0 else 0
-    
-    # 4. PERFORMANCE DE DOWNSELLS
-    downsell_sent_count = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.is_downsell == True
-    ).count()
-    
-    downsell_paid_count = Payment.query.filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.is_downsell == True,
-        Payment.status == 'paid'
-    ).count()
-    
-    downsell_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id.in_(user_bot_ids),
-        Payment.is_downsell == True,
-        Payment.status == 'paid'
-    ).scalar() or 0.0
-    
     downsell_conversion_rate = (downsell_paid_count / downsell_sent_count * 100) if downsell_sent_count > 0 else 0
     
-    # 5. HORÁRIOS DE PICO (vendas por hora)
+    # 3. HORÁRIOS DE PICO (vendas por hora) — query separada (GROUP BY)
     peak_hours_data = db.session.query(
         extract('hour', Payment.created_at).label('hour'),
         func.count(Payment.id).label('sales')
@@ -592,8 +562,10 @@ def ranking():
     from sqlalchemy import func
     from datetime import datetime
     
-    # 🗓️ Cálculo do período mensal
-    now = datetime.now()
+    # 🗓️ Cálculo do período mensal (timezone Brasília)
+    import pytz
+    brasilia_tz = pytz.timezone('America/Sao_Paulo')
+    now = datetime.now(brasilia_tz)
     first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
     # 📅 Período do ranking (default: monthly para o novo motor mensal)

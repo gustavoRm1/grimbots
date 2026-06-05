@@ -454,12 +454,19 @@ function chatApp() {
                 console.log('🔄 Polling iniciado para conversa:', this.selectedConversation.telegram_user_id);
             }
             
-            // Polling a cada 3 segundos (reduz carga no banco em 66%)
-            this.pollingInterval = setInterval(() => {
+            // Polling a cada 3 segundos (pausa se aba em background)
+            const poll = () => {
+                if (document.hidden) return;
                 if (this.selectedConversation && this.selectedBot && !this.loadingMessages && !this.sendingMessage) {
                     this.checkNewMessages();
                 }
-            }, 3000);
+            };
+            this.pollingInterval = setInterval(poll, 3000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && this.selectedConversation) {
+                    this.checkNewMessages();
+                }
+            });
         },
         
         stopMessagePolling() {

@@ -2418,42 +2418,47 @@ function dashboardApp() {
             });
             
             socket.on('payment_update', (data) => {
-                console.log('💰 Nova venda!', data);
+                if (data.status !== 'paid') return;
                 
-                // ✅ CORREÇÃO CRÍTICA: Validar que o pagamento é de um bot do usuário logado
                 const botId = data.bot_id;
                 const isMyBot = this.bots.some(bot => bot.id === botId);
+                if (!isMyBot) return;
                 
-                if (!isMyBot) {
-                    console.warn(`⚠️ Notificação de pagamento ignorada: bot ${botId} não pertence ao usuário logado`);
-                    return; // Ignorar notificações de outros usuários
+                // Atualizar estatísticas locais (totais + períodos)
+                this.stats.total_sales += 1;
+                this.stats.total_revenue += data.amount;
+                
+                const now = new Date();
+                const paymentDate = data.created_at ? new Date(data.created_at) : now;
+                const isToday = paymentDate.toDateString() === now.toDateString();
+                const isThisMonth = paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
+                
+                if (isToday) {
+                    this.stats.today_sales += 1;
+                    this.stats.today_revenue += data.amount;
+                }
+                if (isThisMonth) {
+                    this.stats.month_sales += 1;
+                    this.stats.month_revenue += data.amount;
                 }
                 
-                // Atualizar estatísticas locais
-                if (data.status === 'paid') {
-                    this.stats.total_sales += 1;
-                    this.stats.total_revenue += data.amount;
-                    
-                    // Adicionar à lista de pagamentos recentes
+                // Adicionar à lista (evitar duplicata)
+                if (!this.payments.some(p => p.id === data.payment_id)) {
                     this.payments.unshift({
                         id: data.payment_id,
+                        bot_id: data.bot_id,
                         customer_name: data.customer_name || 'Cliente',
                         amount: data.amount,
                         status: 'paid',
                         created_at: new Date().toISOString()
                     });
-                    
-                    // Mostrar notificação toast in-app (se configuração permitir)
-                    if (this.notificationSettings.notify_approved_sales) {
-                        this.showSaleNotification({...data, status: 'paid'});
-                    }
                 }
                 
-                // Atualizar gráfico
-                this.loadChartData();
+                if (this.notificationSettings.notify_approved_sales) {
+                    this.showSaleNotification({...data, status: 'paid'});
+                }
                 
-                // Atualizar lista de bots
-                this.refreshBots();
+                this.debouncedRefresh();
             });
             
             // ✅ ESCUTAR VENDAS PENDENTES (quando cria PIX)
@@ -3003,19 +3008,29 @@ function dashboardApp() {
             }
         },
         
+        // Debounce helper para evitar chamadas repetidas em eventos WebSocket
+        debouncedRefresh() {
+            if (this._refreshTimer) clearTimeout(this._refreshTimer);
+            this._refreshTimer = setTimeout(() => {
+                this._refreshTimer = null;
+                this.loadChartData();
+                this.refreshBots();
+            }, 2000);
+        },
+
         // Recarregar dados dos bots
         async refreshBots() {
             try {
-                const response = await fetch('/api/bots');
+                const response = await this.fetchWithTimeout('/api/bots');
                 if (response.ok) {
                     const data = await response.json();
-                    // A API retorna um array direto, não um objeto {bots: [...]}
                     this.bots = Array.isArray(data) ? data : (data.bots || []);
-                    this.filterBots(); // Atualizar filtros
-                    console.log('✅ Dados dos bots recarregados:', this.bots.length);
+                    this.filterBots();
                 }
             } catch (error) {
-                console.error('❌ Erro ao recarregar bots:', error);
+                if (error.name !== 'AbortError') {
+                    console.error('❌ Erro ao recarregar bots:', error);
+                }
             }
         },
         
@@ -3051,13 +3066,39 @@ function dashboardApp() {
             }
         },
         
+        // Utility methods
+        showToast(type, message) {
+            const bg = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+            const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+            const toast = document.createElement('div');
+            toast.className = `toast ${bg} text-white`;
+            toast.innerHTML = `<div class="flex items-center"><i class="fas fa-${icon} mr-2"></i><span>${message}</span></div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.animation = 'slideInRight 0.3s ease-out reverse'; setTimeout(() => toast.remove(), 300); }, 3000);
+        },
+        
+        confirmAction(message) {
+            return confirm(message);
+        },
+        
+        async fetchWithTimeout(url, options = {}, timeout = 15000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                return response;
+            } finally {
+                clearTimeout(id);
+            }
+        },
+
         // Bot Actions
         async addBot() {
             if (!this.newBotToken) return;
 
             this.loading = true;
             try {
-                const response = await fetch('/api/bots', {
+                const response = await this.fetchWithTimeout('/api/bots', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3068,13 +3109,30 @@ function dashboardApp() {
 
                 const data = await response.json();
 
-                if (response.ok) {
-                    location.reload();
+                if (response.ok && data.bot) {
+                    this.bots.unshift({
+                        id: data.bot.id,
+                        name: data.bot.name,
+                        username: data.bot.username || '',
+                        is_running: data.bot.is_running,
+                        is_active: data.bot.is_active,
+                        total_users: 0,
+                        total_sales: 0,
+                        total_revenue: 0,
+                        pending_sales: 0,
+                        created_at: new Date().toISOString(),
+                        token: '••••••••••'
+                    });
+                    this.newBotToken = '';
+                    this.newBotName = '';
+                    this.showAddBotModal = false;
+                    this.stats.total_bots += 1;
+                    this.stats.active_bots += 1;
                 } else {
-                    alert('Erro: ' + data.error);
+                    this.showToast('error', data.error || 'Erro ao criar bot');
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                this.showToast('error', error.message);
             } finally {
                 this.loading = false;
             }
@@ -3107,16 +3165,16 @@ function dashboardApp() {
 
         async duplicateBot() {
             if (!this.duplicateBotToken.trim()) {
-                alert('Digite o token do novo bot');
+                this.showToast('warning', 'Digite o token do novo bot');
                 return;
             }
 
-            if (!confirm(`Duplicar o bot "${this.botToDuplicate.name}"?\n\nTodas as configurações serão copiadas para o novo bot.`)) {
+            if (!this.confirmAction(`Duplicar o bot "${this.botToDuplicate.name}"? Todas as configurações serão copiadas.`)) {
                 return;
             }
 
             try {
-                const response = await fetch(`/api/bots/${this.botToDuplicate.id}/duplicate`, {
+                const response = await this.fetchWithTimeout(`/api/bots/${this.botToDuplicate.id}/duplicate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3129,33 +3187,34 @@ function dashboardApp() {
 
                 if (response.ok) {
                     this.showDuplicateBotModal = false;
-                    alert('✅ Bot duplicado com sucesso!');
-                    location.reload();
+                    this.showToast('success', 'Bot duplicado com sucesso!');
+                    await this.refreshBots();
                 } else {
-                    alert('Erro: ' + (data.error || 'Erro ao duplicar bot'));
+                    this.showToast('error', data.error || 'Erro ao duplicar bot');
                 }
             } catch (error) {
-                alert('Erro ao duplicar bot: ' + error.message);
+                this.showToast('error', error.message);
             }
         },
         
         // Deletar Bot
         async deleteBot(botId, botName) {
-            if (!confirm(`Deletar o bot "${botName}"?\n\nEsta ação não pode ser desfeita!`)) {
+            if (!this.confirmAction(`Deletar o bot "${botName}"? Esta ação não pode ser desfeita!`)) {
                 return;
             }
             
             try {
-                const response = await fetch(`/api/bots/${botId}`, { method: 'DELETE' });
+                const response = await this.fetchWithTimeout(`/api/bots/${botId}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (response.ok) {
-                    alert('✅ Bot deletado com sucesso!');
-                    location.reload();
+                    this.bots = this.bots.filter(b => b.id !== botId);
+                    this.stats.total_bots -= 1;
+                    this.showToast('success', 'Bot deletado com sucesso!');
                 } else {
-                    alert('Erro: ' + data.error);
+                    this.showToast('error', data.error);
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                this.showToast('error', error.message);
             }
         },
         
@@ -3541,7 +3600,7 @@ function dashboardApp() {
                 this.loading = true;
                 const exportData = JSON.parse(this.importJson);
                 
-                const response = await fetch('/api/bots/import', {
+                const response = await this.fetchWithTimeout('/api/bots/import', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3555,18 +3614,18 @@ function dashboardApp() {
                 const data = await response.json();
                 
                 if (response.ok) {
-                    let message = `✅ Configurações importadas com sucesso!\n\nBot: ${data.bot_name}`;
+                    let message = `Configurações importadas com sucesso! Bot: ${data.bot_name}`;
                     if (data.warnings && data.warnings.length > 0) {
-                        message += '\n\n⚠️ Avisos:\n' + data.warnings.join('\n');
+                        message += ' (verifique os avisos)';
                     }
-                    alert(message);
+                    this.showToast('success', message);
                     this.showImportExportModal = false;
-                    location.reload();
+                    await this.refreshBots();
                 } else {
-                    alert('Erro: ' + (data.error || 'Erro ao importar configurações'));
+                    this.showToast('error', data.error || 'Erro ao importar configurações');
                 }
             } catch (error) {
-                alert('Erro ao importar: ' + error.message);
+                this.showToast('error', error.message);
             } finally {
                 this.loading = false;
             }
@@ -4482,11 +4541,11 @@ window.openFallbackModalJS = function() {
     
     window.handleFallbackImport = async function() {
         if (!fallbackState.importPreview || !fallbackState.importPreview.valid) {
-            alert('❌ JSON inválido ou não validado');
+            alert('JSON inválido ou não validado');
             return;
         }
         
-        const confirmed = confirm('⚠️ Importar configurações?\n\nEsta ação não pode ser desfeita.');
+        const confirmed = confirm('Importar configurações? Esta ação não pode ser desfeita.');
         if (!confirmed) return;
         
         const btn = document.getElementById('ie-btn-import');
@@ -4509,8 +4568,12 @@ window.openFallbackModalJS = function() {
             
             const data = await response.json();
             if (response.ok) {
-                alert('✅ Importado com sucesso!');
-                location.reload();
+                const toast = document.createElement('div');
+                toast.className = 'toast bg-green-500 text-white';
+                toast.innerHTML = '<div class="flex items-center"><i class="fas fa-check-circle mr-2"></i><span>Importado com sucesso!</span></div>';
+                document.body.appendChild(toast);
+                setTimeout(() => { toast.style.animation = 'slideInRight 0.3s ease-out reverse'; setTimeout(() => toast.remove(), 300); }, 3000);
+                setTimeout(() => location.reload(), 1000);
             } else {
                 alert('Erro: ' + (data.error || 'Erro ao importar'));
                 if (btn) {

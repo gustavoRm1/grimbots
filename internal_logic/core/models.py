@@ -1049,6 +1049,10 @@ class Payment(db.Model):
     __tablename__ = 'payments'
     __table_args__ = (
         db.UniqueConstraint('gateway_type', 'gateway_transaction_hash', name='uq_payment_gateway_hash'),
+        db.Index('idx_payment_bot_status_created', 'bot_id', 'status', 'created_at'),
+        db.Index('idx_payment_bot_downsell_status', 'bot_id', 'is_downsell', 'status'),
+        db.Index('idx_payment_bot_obump_status', 'bot_id', 'order_bump_accepted', 'status'),
+        db.Index('idx_payment_bot_customer', 'bot_id', 'customer_user_id'),
     )
     
     id = db.Column(db.Integer, primary_key=True)
@@ -1246,6 +1250,8 @@ class BotUser(db.Model):
         db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_bot_user'),
         db.Index('idx_bot_users_last_interaction', 'last_interaction'),
         db.Index('idx_bot_users_archived', 'archived'),
+        db.Index('idx_botuser_bot_archived', 'bot_id', 'archived'),
+        db.Index('idx_botuser_bot_archived_firstint', 'bot_id', 'archived', 'first_interaction'),
     )
     
     def to_dict(self):
@@ -1290,6 +1296,7 @@ class BotMessage(db.Model):
     # Índices
     __table_args__ = (
         db.Index('idx_bot_messages_bot_user_created', 'bot_id', 'bot_user_id', 'created_at'),
+        db.Index('idx_botmsg_bot_tg_dir_read', 'bot_id', 'telegram_user_id', 'direction', 'is_read'),
     )
     
     # Relacionamentos
