@@ -531,28 +531,6 @@
     
     <!-- Stats Grid V2.0 -->
     <div class="mb-8">
-        <!-- Filtros de Período (Responsivo) - Estilo idêntico ao bot_stats.html -->
-        <div class="flex items-center gap-2 sm:gap-3 justify-center sm:justify-start flex-wrap mb-4">
-            <button @click="period = 'today'" 
-                    :class="period === 'today' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
-                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
-                <i class="fas fa-calendar-day"></i>
-                <span>Hoje</span>
-            </button>
-            <button @click="period = 'month'" 
-                    :class="period === 'month' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
-                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
-                <i class="fas fa-calendar-alt"></i>
-                <span>Este Mês</span>
-            </button>
-            <button @click="period = 'all'" 
-                    :class="period === 'all' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
-                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
-                <i class="fas fa-infinity"></i>
-                <span>Todos</span>
-            </button>
-        </div>
-        
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <!-- Ganhos Totais V2.0 -->
             <div class="stat-card">
@@ -571,12 +549,6 @@
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                     <div class="text-xs sm:text-sm text-gray-500">Receita confirmada</div>
-                    <template x-if="period !== 'all'">
-                        <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
-                             style="background: rgba(255, 184, 0, 0.1); color: #FFB800;"
-                             x-text="period === 'today' ? `vs Total: ${stats.total_revenue > 0 ? ((stats.today_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_revenue > 0 ? ((stats.month_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%`">
-                        </div>
-                    </template>
                 </div>
             </div>
             
@@ -585,29 +557,18 @@
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                     <div class="stat-label text-xs sm:text-sm">✅ Vendas</div>
                     <div class="text-xs font-bold uppercase whitespace-nowrap" 
-                         style="color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px;"
-                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                         style="color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px;">
+                        <template x-if="filters.period == 7">7 DIAS</template>
+                        <template x-if="filters.period == 30">30 DIAS</template>
+                        <template x-if="filters.period == 90">90 DIAS</template>
                     </div>
                 </div>
                 <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: var(--brand-green-500);">
-                    <template x-if="period === 'today'">
-                        <span>{{ stats.today_sales }}</span>
-                    </template>
-                    <template x-if="period === 'month'">
-                        <span>{{ stats.month_sales }}</span>
-                    </template>
-                    <template x-if="period === 'all'">
-                        <span>{{ stats.total_sales }}</span>
-                    </template>
+                    <span x-show="chartSales !== null" x-text="chartSales"></span>
+                    <span x-show="chartSales === null">{{ stats.month_sales }}</span>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                     <div class="text-xs sm:text-sm text-gray-500">Pagamentos confirmados</div>
-                    <template x-if="period !== 'all'">
-                        <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
-                             style="background: rgba(16, 185, 129, 0.1); color: #10B981;"
-                             x-text="period === 'today' ? `vs Total: ${stats.total_sales > 0 ? ((stats.today_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_sales > 0 ? ((stats.month_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%`">
-                        </div>
-                    </template>
                 </div>
             </div>
         </div>
@@ -623,59 +584,43 @@
             <div class="text-sm text-gray-500">Bots ativos agora</div>
         </div>
         
-        <!-- Vendas Pendentes V2.0 (Respeita Filtro de Período) -->
-        <template x-if="(period === 'today' && stats.today_pending_sales > 0) || (period === 'month' && stats.month_pending_sales > 0) || (period === 'all' && stats.pending_sales > 0)">
+        <!-- Vendas Pendentes V2.0 -->
+        <template x-if="chartPendingSales !== null ? chartPendingSales > 0 : (stats.pending_sales > 0)">
             <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                     <div class="stat-label text-xs sm:text-sm">⏳ Vendas Pendentes</div>
                     <div class="text-xs font-bold uppercase whitespace-nowrap" 
-                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
-                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;">
+                        <template x-if="filters.period == 7">7 DIAS</template>
+                        <template x-if="filters.period == 30">30 DIAS</template>
+                        <template x-if="filters.period == 90">90 DIAS</template>
                     </div>
                 </div>
                 <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: #FFB800;">
-                    <template x-if="period === 'today'">
-                        <span x-text="stats.today_pending_sales"></span>
-                    </template>
-                    <template x-if="period === 'month'">
-                        <span x-text="stats.month_pending_sales"></span>
-                    </template>
-                    <template x-if="period === 'all'">
-                        <span x-text="stats.pending_sales"></span>
-                    </template>
+                    <span x-show="chartPendingSales !== null" x-text="chartPendingSales"></span>
+                    <span x-show="chartPendingSales === null">{{ stats.pending_sales }}</span>
                 </div>
                 <div class="text-xs sm:text-sm text-gray-500">Aguardando confirmação</div>
             </div>
         </template>
         
-        <!-- Usuários V2.0 (Respeita Filtro de Período) -->
+        <!-- Usuários V2.0 -->
         <div class="stat-card" style="border-color: rgba(59, 130, 246, 0.3);">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                 <div class="stat-label text-xs sm:text-sm">👥 Usuários</div>
                 <div class="text-xs font-bold uppercase whitespace-nowrap" 
-                     style="color: #3B82F6; background: rgba(59, 130, 246, 0.1); padding: 4px 8px; border-radius: 4px;"
-                     x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                     style="color: #3B82F6; background: rgba(59, 130, 246, 0.1); padding: 4px 8px; border-radius: 4px;">
+                    <template x-if="filters.period == 7">7 DIAS</template>
+                    <template x-if="filters.period == 30">30 DIAS</template>
+                    <template x-if="filters.period == 90">90 DIAS</template>
                 </div>
             </div>
             <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: var(--brand-blue-500);">
-                <template x-if="period === 'today'">
-                    <span x-text="stats.today_users"></span>
-                </template>
-                <template x-if="period === 'month'">
-                    <span x-text="stats.month_users"></span>
-                </template>
-                <template x-if="period === 'all'">
-                    <span>{{ stats.total_users }}</span>
-                </template>
+                <span x-show="chartUsers !== null" x-text="chartUsers"></span>
+                <span x-show="chartUsers === null">{{ stats.total_users }}</span>
             </div>
             <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                 <div class="text-xs sm:text-sm text-gray-500">Usuários únicos cadastrados</div>
-                <template x-if="period !== 'all'">
-                    <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
-                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6;"
-                         x-text="period === 'today' ? `vs Total: ${stats.total_users > 0 ? ((stats.today_users / stats.total_users) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_users > 0 ? ((stats.month_users / stats.total_users) * 100).toFixed(1) : '0.0'}%`">
-                    </div>
-                </template>
             </div>
         </div>
         
@@ -2121,14 +2066,7 @@ function dashboardApp() {
             scheduled_time: ''       // ✅ V2.0: Hora no formato HH:MM
         },
         
-        // Filtro de Período (compartilhado entre cards)
-        period: 'month',
-        
-        // Dados do gráfico (para totalizar)
-        chartRevenue: null,
-        chartSales: null,
-        
-        // Dados
+        // Data
         stats: {
             total_users: {{ stats.total_users }},
             total_sales: {{ stats.total_sales }},
@@ -2155,7 +2093,7 @@ function dashboardApp() {
         
         // ✅ Paginação de vendas
         currentPaymentPage: 1,
-        paymentsPerPage: 20,
+        paymentsPerPage: 10,
         totalPayments: 0,
         loadingPayments: false,
         
@@ -2913,18 +2851,21 @@ function dashboardApp() {
                 const data = await response.json();
                 console.log('📈 Dados recebidos:', data);
                 
-                if (!data || !Array.isArray(data) || data.length === 0) {
+                if (!data || !data.days || !Array.isArray(data.days) || data.days.length === 0) {
                     console.error('❌ Dados inválidos ou vazios!');
                     return;
                 }
                 
-                const labels = data.map(d => d.date || '');
-                const salesData = data.map(d => Number(d.sales) || 0);
-                const revenueData = data.map(d => Number(d.revenue) || 0);
+                const days = data.days;
+                const labels = days.map(d => d.date || '');
+                const salesData = days.map(d => Number(d.sales) || 0);
+                const revenueData = days.map(d => Number(d.revenue) || 0);
                 
-                // ✅ Somar receita total do período para o card Ganhos Totais
+                // ✅ Somar receita total do período para os cards
                 this.chartRevenue = revenueData.reduce((a, b) => a + b, 0);
                 this.chartSales = salesData.reduce((a, b) => a + b, 0);
+                this.chartUsers = data.period_users || 0;
+                this.chartPendingSales = data.period_pending || 0;
                 
                 console.log('🔢 Labels:', labels);
                 console.log('📊 Sales:', salesData);
@@ -3831,30 +3772,25 @@ function dashboardApp() {
             
             if (total === 0) return [1];
             
-            // Mostrar no máximo 7 páginas
-            if (total <= 7) {
-                // Se tem 7 ou menos páginas, mostrar todas
+            // Mostrar no máximo 5 páginas
+            if (total <= 5) {
                 for (let i = 1; i <= total; i++) {
                     pages.push(i);
                 }
             } else {
-                // Mostrar páginas inteligentemente
-                if (current <= 4) {
-                    // Páginas iniciais: 1, 2, 3, 4, 5, ..., última
-                    for (let i = 1; i <= 5; i++) {
+                if (current <= 3) {
+                    for (let i = 1; i <= 4; i++) {
                         pages.push(i);
                     }
                     pages.push('...');
                     pages.push(total);
-                } else if (current >= total - 3) {
-                    // Páginas finais: 1, ..., penúltimas, última
+                } else if (current >= total - 2) {
                     pages.push(1);
                     pages.push('...');
-                    for (let i = total - 4; i <= total; i++) {
+                    for (let i = total - 3; i <= total; i++) {
                         pages.push(i);
                     }
                 } else {
-                    // Páginas do meio: 1, ..., anteriores, atual, próximas, ..., última
                     pages.push(1);
                     pages.push('...');
                     for (let i = current - 1; i <= current + 1; i++) {

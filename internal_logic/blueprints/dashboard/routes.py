@@ -441,7 +441,23 @@ def api_sales_chart():
                 'revenue': float(day_data.revenue) if day_data and day_data.revenue is not None else 0.0
             })
         
-        return jsonify(result)
+        # Totais do período para os cards
+        pending = db.session.query(func.count(Payment.id)).filter(
+            Payment.bot_id.in_(user_bot_ids),
+            Payment.created_at >= start_date,
+            Payment.status == 'pending'
+        ).scalar() or 0
+        
+        users_period = db.session.query(func.count(func.distinct(BotUser.user_id))).filter(
+            BotUser.bot_id.in_(user_bot_ids),
+            BotUser.created_at >= start_date
+        ).scalar() or 0
+        
+        return jsonify({
+            'days': result,
+            'period_users': users_period,
+            'period_pending': pending
+        })
         
     except Exception as e:
         logger.error(f"Erro no gráfico de vendas: {e}")
