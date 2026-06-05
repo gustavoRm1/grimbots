@@ -34,11 +34,7 @@ def _get_bot_manager(user_id: int):
     return _bot_manager_cache[user_id]
 
 
-def get_brazil_time():
-    """Retorna o horário atual do Brasil (UTC-3)"""
-    from datetime import timedelta
-    from datetime import datetime as dt
-    return dt.utcnow() + timedelta(hours=-3)
+# get_brazil_time é importado do models (linha 13)
 
 
 @dashboard_bp.route('/dashboard')
@@ -52,10 +48,8 @@ def dashboard():
     mode = request.args.get('mode', 'advanced')
     
     # Buscar TODOS os bots do usuário (para cálculos de estatísticas)
-    all_bots = Bot.query.filter_by(user_id=current_user.id).all()
+    all_bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
     bot_ids = [b.id for b in all_bots] if all_bots else []
-    
-    # Derivar ativos da lista já carregada (evita query extra)
     active_bots_only = [b for b in all_bots if b.is_active]
     
     # Períodos de tempo - TIMEZONE CORRIGIDO
@@ -294,7 +288,7 @@ def api_dashboard_stats():
         inicio_hoje_utc = agora_br.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(utc_tz).replace(tzinfo=None)
         
         # 2. EXTRAÇÃO DE BOT_IDS (À prova de falha de JOIN)
-        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
+        user_bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
         bot_ids = [bot.id for bot in user_bots]
 
         if not bot_ids:
@@ -871,7 +865,7 @@ def save_ranking_display_name():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao salvar display name: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao salvar nome de exibição'}), 500
 
 
 # ============================================================================
@@ -883,9 +877,7 @@ def save_ranking_display_name():
 def chat():
     """Página de chat com leads"""
     # Buscar bots do usuário
-    bots = Bot.query.filter_by(user_id=current_user.id).all()
-    
-    # Serializar bots para dict (frontend exige JSON)
+    bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
     bots_list = [{
         'id': b.id,
         'name': b.name,
@@ -1127,13 +1119,17 @@ def get_chat_messages(bot_id, telegram_user_id):
         ).order_by(BotMessage.created_at.asc()).limit(100).all()
         
         # Marcar mensagens como lidas apenas na primeira carga
-        BotMessage.query.filter_by(
-            bot_id=bot_id,
-            telegram_user_id=telegram_user_id,
-            direction='incoming',
-            is_read=False
-        ).update({'is_read': True})
-        db.session.commit()
+        try:
+            BotMessage.query.filter_by(
+                bot_id=bot_id,
+                telegram_user_id=telegram_user_id,
+                direction='incoming',
+                is_read=False
+            ).update({'is_read': True})
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f"Erro ao marcar mensagens como lidas: {e}")
     
     messages_data = [msg.to_dict() for msg in messages]
     
@@ -1226,8 +1222,8 @@ def send_chat_message(bot_id, telegram_user_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao enviar mensagem: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+        return jsonify({'success': False, 'error': 'Erro ao enviar mensagem'}), 500
+    
 
 @dashboard_bp.route('/api/chat/send-media/<int:bot_id>/<telegram_user_id>', methods=['POST'])
 @login_required
@@ -1315,7 +1311,7 @@ def send_chat_media(bot_id, telegram_user_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao enviar arquivo: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Erro ao enviar arquivo'}), 500
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             try:
@@ -1346,9 +1342,14 @@ def get_chat_media(bot_id, file_id):
     if os.path.exists(cache_path):
         mtime = os.path.getmtime(cache_path)
         if time.time() - mtime < 3600:
-            content_type = open(cache_path + '.mime', 'r').read() if os.path.exists(cache_path + '.mime') else 'application/octet-stream'
+            content_type = 'application/octet-stream'
+            if os.path.exists(cache_path + '.mime'):
+                with open(cache_path + '.mime', 'r') as f:
+                    content_type = f.read()
+            with open(cache_path, 'rb') as f:
+                cached_data = f.read()
             return Response(
-                open(cache_path, 'rb'),
+                cached_data,
                 mimetype=content_type,
                 headers={'Cache-Control': 'public, max-age=3600'}
             )
@@ -1386,9 +1387,19 @@ def get_chat_media(bot_id, file_id):
         except Exception as e:
             logger.warning(f"Erro ao salvar cache de mídia: {e}")
         
-        # Reabrir o arquivo para servir (evita problemas com stream consumida)
+        # Servir arquivo do cache
+        if os.path.exists(cache_path):
+            with open(cache_path, 'rb') as f:
+                cached_data = f.read()
+            return Response(
+                cached_data,
+                mimetype=file_response.headers.get('Content-Type', 'application/octet-stream'),
+                headers={
+                    'Cache-Control': 'public, max-age=3600'
+                }
+            )
         return Response(
-            open(cache_path, 'rb') if os.path.exists(cache_path) else file_response.iter_content(chunk_size=8192),
+            file_response.iter_content(chunk_size=8192),
             mimetype=file_response.headers.get('Content-Type', 'application/octet-stream'),
             headers={
                 'Cache-Control': 'public, max-age=3600'
@@ -1396,8 +1407,9 @@ def get_chat_media(bot_id, file_id):
         )
         
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Erro ao obter mídia: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao obter mídia'}), 500
 
 
 # ============================================================================
@@ -1434,7 +1446,7 @@ def update_profile():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar perfil: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar perfil'}), 500
 
 
 @dashboard_bp.route('/api/user/password', methods=['PUT'])
@@ -1456,7 +1468,7 @@ def update_password():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar senha: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar senha'}), 500
 
 
 # ============================================================================
@@ -1467,7 +1479,7 @@ def update_password():
 @login_required
 def redirect_pools_page():
     """Página de gerenciamento de pools de redirecionamento"""
-    bots = Bot.query.filter_by(user_id=current_user.id, is_active=True).all()
+    bots = Bot.query.filter_by(user_id=current_user.id, is_active=True).limit(200).all()
     return render_template('redirect_pools.html', bots=bots)
 
 
@@ -1482,7 +1494,7 @@ def get_redirect_pools():
     
     try:
         # Busca direta por user_id
-        pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
+        pools = RedirectPool.query.filter_by(user_id=current_user.id).limit(100).all()
         
         logger.info(f"✅ [GET_POOLS] Encontrados {len(pools)} pools para o usuário {current_user.id}")
         
@@ -1494,7 +1506,7 @@ def get_redirect_pools():
         
     except Exception as e:
         logger.error(f"❌ [GET_POOLS] Erro ao listar pools: {e}", exc_info=True)
-        return jsonify({'error': 'Erro interno ao carregar redirecionadores', 'details': str(e)}), 500
+        return jsonify({'error': 'Erro interno ao carregar redirecionadores'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['GET'])
@@ -1595,7 +1607,7 @@ def create_redirect_pool():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao criar pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao criar pool'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['PUT'])
@@ -1627,7 +1639,7 @@ def update_redirect_pool(pool_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar pool'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>', methods=['DELETE'])
@@ -1651,7 +1663,7 @@ def delete_redirect_pool(pool_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao remover pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao remover pool'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>/bots', methods=['POST'])
@@ -1694,7 +1706,7 @@ def add_bot_to_pool(pool_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao adicionar bot ao pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao adicionar bot ao pool'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>/bots/<int:bot_id>', methods=['DELETE'])
@@ -1719,7 +1731,7 @@ def remove_bot_from_pool(pool_id, bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao remover bot do pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao remover bot do pool'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>/rotate')
@@ -1852,7 +1864,7 @@ def update_pool_meta_pixel_config(pool_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar Meta Pixel do pool: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar Meta Pixel'}), 500
 
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>/meta-pixel/test', methods=['POST'])
@@ -1886,6 +1898,7 @@ def test_pool_meta_pixel_connection(pool_id):
 
 @dashboard_bp.route('/api/redirect-pools/<int:pool_id>/generate-utmify-utms', methods=['POST'])
 @login_required
+@csrf.exempt
 def generate_utmify_utms(pool_id):
     """
     Gera códigos de UTMs Utmify para Meta Ads
@@ -2045,12 +2058,8 @@ def update_meta_pixel_config(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar configuração Meta Pixel: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar Meta Pixel'}), 500
 
-
-# ============================================================================
-# BOT MANAGEMENT APIs (Resgatadas da migração)
-# ============================================================================
 
 @dashboard_bp.route('/api/bots', methods=['GET'])
 @login_required
@@ -2059,10 +2068,9 @@ def api_get_bots():
     from sqlalchemy import func
     from internal_logic.core.models import BotUser, Payment
     
-    bots = Bot.query.filter_by(user_id=current_user.id).all()
+    bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
     bot_ids = [b.id for b in bots]
     
-    # Batch 1: leads por bot
     user_count_rows = db.session.query(
         BotUser.bot_id,
         func.count(func.distinct(BotUser.telegram_user_id)).label('total_users')
@@ -2161,7 +2169,7 @@ def api_create_bot():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao criar bot: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao criar bot'}), 500
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>', methods=['DELETE'])
@@ -2181,7 +2189,7 @@ def api_delete_bot(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao deletar bot: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao deletar bot'}), 500
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
@@ -2236,7 +2244,7 @@ def api_duplicate_bot(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao duplicar bot: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao duplicar bot'}), 500
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/export', methods=['GET'])
@@ -2265,8 +2273,7 @@ def api_verify_bots_status():
     """Verifica status atual dos bots no Telegram"""
     from bot_manager import BotManager
     
-    bots = Bot.query.filter_by(user_id=current_user.id).all()
-    
+    bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
     bots_status = []
     for bot in bots:
         status = {
@@ -2334,8 +2341,9 @@ def get_bot_config(bot_id):
         
         return jsonify(config_dict)
     except Exception as e:
-        logger.error(f"❌ Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
-        return jsonify({'error': f'Erro ao buscar configuração: {str(e)}'}), 500
+        db.session.rollback()
+        logger.error(f"Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Erro interno ao carregar configuração'}), 500
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
@@ -2486,13 +2494,9 @@ def update_bot_config(bot_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Erro ao atualizar config do bot {bot_id}: {e}", exc_info=True)
-        return jsonify({'error': f'Erro ao atualizar configuração: {str(e)}'}), 500
+        logger.error(f"Erro ao atualizar config do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Erro ao atualizar configuração'}), 500
 
-
-# ============================================================================
-# NOTIFICATION SETTINGS APIs (Resgatadas da migração)
-# ============================================================================
 
 @dashboard_bp.route('/api/notification-settings', methods=['GET'])
 @login_required
@@ -2664,19 +2668,15 @@ def api_create_remarketing_campaign(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao criar campanha: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao criar campanha'}), 500
 
-
-# ============================================================================
-# GATEWAY APIs (Integração de Pagamentos)
-# ============================================================================
 
 @dashboard_bp.route('/api/gateways', methods=['GET'])
 @login_required
 def api_get_gateways():
     """Retorna todos os gateways do usuário atual"""
     try:
-        gateways = Gateway.query.filter_by(user_id=current_user.id).all()
+        gateways = Gateway.query.filter_by(user_id=current_user.id).limit(50).all()
         
         gateways_data = []
         for gateway in gateways:
@@ -2814,7 +2814,7 @@ def api_create_gateway():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao criar gateway: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Erro ao criar gateway'}), 500
 
 
 @dashboard_bp.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
@@ -2832,7 +2832,7 @@ def api_delete_gateway(gateway_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao deletar gateway: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao deletar gateway'}), 500
 
 
 @dashboard_bp.route('/api/gateways/<int:gateway_id>', methods=['PUT'])
@@ -2929,7 +2929,7 @@ def api_update_gateway(gateway_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar gateway {gateway_id}: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'Erro ao atualizar gateway'}), 500
 
 
 @dashboard_bp.route('/api/gateways/<int:gateway_id>/clear-credentials', methods=['POST', 'DELETE'])
@@ -2958,7 +2958,7 @@ def clear_gateway_credentials(gateway_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao limpar credenciais do gateway {gateway_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao limpar credenciais'}), 500
 
 
 # ==================== API CHECK UPDATES (Polling para novos pagamentos) ====================
@@ -2989,7 +2989,7 @@ def check_dashboard_updates():
         last_check_timestamp = request.args.get('last_check', type=float)
         
         # Query via JOIN (arquitetura legada)
-        user_bot_ids = [bot.id for bot in Bot.query.filter_by(user_id=current_user.id, is_active=True).all()]
+        user_bot_ids = [bot.id for bot in Bot.query.filter_by(user_id=current_user.id, is_active=True).limit(200).all()]
         
         if not user_bot_ids:
             return jsonify({
@@ -3061,7 +3061,7 @@ def check_dashboard_updates():
         logger.error(f"Erro ao verificar atualizações do dashboard: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao verificar atualizações'}), 500
 
 
 # ==================== BOT CRUD APIs (Faltantes) ====================
@@ -3112,7 +3112,7 @@ def api_update_bot(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar bot {bot_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao atualizar bot'}), 500
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/toggle', methods=['POST'])
@@ -3153,7 +3153,7 @@ def api_toggle_bot(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao toggle bot {bot_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
+        return jsonify({'success': False, 'error': 'Erro ao alternar bot'}), 400
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/test-connection', methods=['POST'])
@@ -3177,7 +3177,7 @@ def api_test_bot_connection(bot_id):
         
     except Exception as e:
         logger.error(f"Erro ao testar conexão do bot {bot_id}: {e}")
-        return jsonify({'success': False, 'valid': False, 'error': str(e)}), 400
+        return jsonify({'success': False, 'valid': False, 'error': 'Erro ao testar conexão'}), 400
 
 
 @dashboard_bp.route('/api/bots/<int:bot_id>/token', methods=['PUT'])
@@ -3265,7 +3265,7 @@ def api_update_bot_token(bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao atualizar token do bot {bot_id}: {e}")
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': 'Erro ao atualizar token'}), 400
 
 
 # ==================== POOL BOTS API (Endpoint alternativo) ====================
@@ -3297,5 +3297,5 @@ def api_delete_pool_bot(pool_bot_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao remover bot do pool {pool_bot_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erro ao remover bot do pool'}), 500
 

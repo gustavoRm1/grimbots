@@ -2750,20 +2750,31 @@ function dashboardApp() {
             notification.className = 'fixed top-4 right-4 max-w-sm text-white p-4 rounded-xl shadow-2xl z-50 animate-slide-in notification-mobile';
             notification.style.background = `linear-gradient(135deg, ${bgColor} 0%, ${isPending ? '#DAA520' : '#059669'} 100%)`;
 
-            // Ícone do sistema (mesmo usado no favicon/base.html)
-            const grimbotsIconDataUrl = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>";
+            const inner = document.createElement('div');
+            inner.className = 'flex items-center gap-3';
 
-            notification.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <div class="flex-shrink-0">
-                        <img src="${grimbotsIconDataUrl}" alt="grimbots" class="w-12 h-12 rounded-2xl shadow-md border border-white/20" />
-                    </div>
-                    <div class="flex-1">
-                        <div class="font-bold text-lg">${title}</div>
-                        <div class="text-sm opacity-95 mt-1">${message}</div>
-                    </div>
-                </div>
-            `;
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'flex-shrink-0';
+            const img = document.createElement('img');
+            img.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>";
+            img.alt = 'grimbots';
+            img.className = 'w-12 h-12 rounded-2xl shadow-md border border-white/20';
+            imgWrap.appendChild(img);
+
+            const textWrap = document.createElement('div');
+            textWrap.className = 'flex-1';
+            const titleEl = document.createElement('div');
+            titleEl.className = 'font-bold text-lg';
+            titleEl.textContent = title;
+            const msgEl = document.createElement('div');
+            msgEl.className = 'text-sm opacity-95 mt-1';
+            msgEl.textContent = message;
+
+            textWrap.appendChild(titleEl);
+            textWrap.appendChild(msgEl);
+            inner.appendChild(imgWrap);
+            inner.appendChild(textWrap);
+            notification.appendChild(inner);
             
             document.body.appendChild(notification);
             
@@ -4240,19 +4251,22 @@ window.openFallbackModalJS = function() {
         if (!fallbackState.exportData && bots.length > 0) {
             const botList = container.querySelector('#ie-bot-list');
             if (botList) {
-                botList.innerHTML = bots.map(bot => `
-                    <label onclick="selectFallbackBot(${bot.id})" 
-                           style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${fallbackState.selectedBot?.id === bot.id ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}; border: 2px solid ${fallbackState.selectedBot?.id === bot.id ? '#FFB800' : 'transparent'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                botList.innerHTML = bots.map(bot => {
+                    const safeId = Number(bot.id) || 0;
+                    const selected = fallbackState.selectedBot?.id === bot.id;
+                    return `
+                    <label onclick="selectFallbackBot(${safeId})" 
+                           style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${selected ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}; border: 2px solid ${selected ? '#FFB800' : 'transparent'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
                            onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
-                           onmouseout="this.style.background='${fallbackState.selectedBot?.id === bot.id ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}'">
-                        <input type="radio" name="fallback-bot" ${fallbackState.selectedBot?.id === bot.id ? 'checked' : ''} 
-                               style="accent-color: #FFB800;" onclick="event.stopPropagation(); selectFallbackBot(${bot.id})">
+                           onmouseout="this.style.background='${selected ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}'">
+                        <input type="radio" name="fallback-bot" ${selected ? 'checked' : ''} 
+                               style="accent-color: #FFB800;" onclick="event.stopPropagation(); selectFallbackBot(${safeId})">
                         <div>
                             <div style="font-weight: bold; color: #fff;">${escapeHtml(bot.name || 'Bot')}</div>
                             <div style="font-size: 12px; color: #999;">@${escapeHtml(bot.username || 'N/A')}</div>
                         </div>
-                    </label>
-                `).join('');
+                    </label>`;
+                }).join('');
             }
         }
     }
@@ -4530,6 +4544,8 @@ window.openFallbackModalJS = function() {
     
     // ✅ NOTIFICAÇÃO MODERNA COM REDIRECIONAMENTO PARA MASTER ANALYTICS
     function showCampaignNotification(message, groupId) {
+        const safeMessage = escapeHtml(message || '');
+        const safeGroupId = escapeHtml(String(groupId || ''));
         // Remover notificação anterior se existir
         const existing = document.querySelector('.campaign-notification');
         if (existing) existing.remove();
@@ -4544,10 +4560,10 @@ window.openFallbackModalJS = function() {
                     </div>
                     <div class="flex-1">
                         <h3 class="font-bold text-lg mb-1">Campanha Iniciada! 🚀</h3>
-                        <p class="text-white text-opacity-90 text-sm mb-4">${message}</p>
-                        ${groupId ? `
+                        <p class="text-white text-opacity-90 text-sm mb-4">${safeMessage}</p>
+                        ${safeGroupId ? `
                         <div class="flex gap-2">
-                            <button onclick="window.location.href='/remarketing/group/${groupId}'" 
+                            <button onclick="window.location.href='/remarketing/group/${encodeURIComponent(safeGroupId)}'" 
                                     class="bg-white text-green-600 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-opacity-90 transition-all flex items-center gap-2">
                                 <i class="fas fa-chart-line"></i>
                                 Ver Master Analytics
@@ -4576,7 +4592,6 @@ window.openFallbackModalJS = function() {
     }
     
 // ✅ Garantir que função está disponível globalmente
-console.log('[Import/Export] Função forceOpenImportExportModal definida:', typeof window.forceOpenImportExportModal);
 </script>
 {% endblock %}
 

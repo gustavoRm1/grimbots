@@ -11,20 +11,14 @@ let gamificationSocket = null;
 
 function initGamification() {
     if (!window.socket) {
-        console.warn('⚠️ Socket.IO não disponível');
         return;
     }
     
-    gamificationSocket = window.socket;
+    destroyGamification();
     
-    // Inscrever em notificações de gamificação
+    gamificationSocket = window.socket;
     gamificationSocket.emit('subscribe_gamification');
     
-    gamificationSocket.on('subscribed', (data) => {
-        console.log('✅ Inscrito em gamificação:', data.room);
-    });
-    
-    // Eventos de gamificação
     gamificationSocket.on('achievement_unlocked', handleAchievementUnlocked);
     gamificationSocket.on('league_promotion', handleLeaguePromotion);
     gamificationSocket.on('title_unlocked', handleTitleUnlocked);
@@ -32,50 +26,46 @@ function initGamification() {
     gamificationSocket.on('season_ending', handleSeasonEnding);
 }
 
+function destroyGamification() {
+    if (gamificationSocket) {
+        gamificationSocket.off('achievement_unlocked', handleAchievementUnlocked);
+        gamificationSocket.off('league_promotion', handleLeaguePromotion);
+        gamificationSocket.off('title_unlocked', handleTitleUnlocked);
+        gamificationSocket.off('ranking_update', handleRankingUpdate);
+        gamificationSocket.off('season_ending', handleSeasonEnding);
+    }
+    gamificationSocket = null;
+}
+
 // ============================================================================
 // HANDLERS DE EVENTOS
 // ============================================================================
 
 function handleAchievementUnlocked(data) {
-    console.log('🏆 Achievement unlocked:', data);
-    
-    // Tocar som
     playAchievementSound(data.sound);
-    
-    // Mostrar popup
     showAchievementPopup(data);
-    
-    // Mostrar animação
     if (data.animation === 'confetti' || data.animation === 'confetti_gold') {
         showConfetti(data.achievement.rarity);
     }
 }
 
 function handleLeaguePromotion(data) {
-    console.log('📈 League promotion:', data);
-    
     playSound('level_up.mp3');
     showLeaguePromotionPopup(data);
 }
 
 function handleTitleUnlocked(data) {
-    console.log('👑 Title unlocked:', data);
-    
     playSound('title_unlock.mp3');
     showTitlePopup(data);
 }
 
 function handleRankingUpdate(data) {
-    console.log('📊 Ranking update:', data);
-    
     if (data.direction === 'up' && data.delta >= 50) {
         showRankingNotification(data);
     }
 }
 
 function handleSeasonEnding(data) {
-    console.log('📅 Season ending:', data);
-    
     if (data.days_left <= 7) {
         showSeasonEndingBanner(data);
     }
@@ -171,6 +161,11 @@ function closeAchievementPopup() {
 // ============================================================================
 
 function showConfetti(rarity) {
+    const existingConfetti = document.querySelectorAll('.confetti-piece');
+    if (existingConfetti.length > 50) {
+        existingConfetti.forEach(el => el.remove());
+    }
+    
     const confettiColors = {
         'epic': ['#A855F7', '#EC4899', '#3B82F6'],
         'legendary': ['#F59E0B', '#FDE68A', '#FBBF24'],
@@ -179,7 +174,6 @@ function showConfetti(rarity) {
     
     const colors = confettiColors[rarity] || ['#F59E0B', '#3B82F6', '#34D399'];
     
-    // Usar biblioteca de confetes (exemplo simplificado)
     const duration = rarity === 'mythic' ? 5000 : 3000;
     const count = rarity === 'mythic' ? 200 : 100;
     
@@ -210,9 +204,8 @@ function playAchievementSound(soundFile) {
     try {
         const audio = new Audio(`/static/sounds/${soundFile}`);
         audio.volume = 0.5;
-        audio.play().catch(e => console.warn('Não foi possível tocar som:', e));
+        audio.play().catch(() => {});
     } catch (e) {
-        console.warn('Erro ao tocar som:', e);
     }
 }
 
@@ -387,7 +380,6 @@ async function fetchGamificationProfile() {
             return data.profile;
         }
     } catch (e) {
-        console.error('Erro ao buscar perfil de gamificação:', e);
     }
     return null;
 }
@@ -402,7 +394,6 @@ async function fetchAchievements(filters = {}) {
             return data.achievements;
         }
     } catch (e) {
-        console.error('Erro ao buscar conquistas:', e);
     }
     return [];
 }
@@ -417,7 +408,6 @@ async function fetchLeaderboard(filters = {}) {
             return data.leaderboard;
         }
     } catch (e) {
-        console.error('Erro ao buscar leaderboard:', e);
     }
     return [];
 }
@@ -438,7 +428,6 @@ async function equipTitle(titleId) {
             return true;
         }
     } catch (e) {
-        console.error('Erro ao equipar título:', e);
     }
     return false;
 }
@@ -449,7 +438,6 @@ async function markNotificationRead(notificationId) {
             method: 'POST'
         });
     } catch (e) {
-        console.error('Erro ao marcar notificação como lida:', e);
     }
 }
 
@@ -464,9 +452,12 @@ if (document.readyState === 'loading') {
     initGamification();
 }
 
+document.addEventListener('beforeunload', destroyGamification);
+
 // Expor funções globalmente
 window.gamification = {
     init: initGamification,
+    destroy: destroyGamification,
     fetchProfile: fetchGamificationProfile,
     fetchAchievements,
     fetchLeaderboard,

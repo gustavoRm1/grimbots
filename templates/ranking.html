@@ -476,6 +476,7 @@
                             <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
                                  alt="Logo Sistema"
                                  class="w-full h-full object-contain scale-110"
+                                 loading="lazy"
                                  style="filter: brightness(1.25) contrast(1.15) saturate(1.1) drop-shadow(0 0 12px rgba(255, 255, 255, 0.4));"
                                  onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\\'fas fa-user-secret text-3xl md:text-4xl text-white opacity-80\\'></i>';">
                         </div>
@@ -702,7 +703,7 @@
                         <!-- Imagem da Placa - Responsiva e Sem Fundo Branco -->
                         <div class="text-center mb-3 md:mb-4 flex-shrink-0" style="background: transparent;">
                             <div class="relative inline-block" style="background: transparent;">
-                                <img src="{{ url_for('static', filename='img/' + award.image) }}?v=7.0&nocache=20251103" 
+                                <img src="{{ url_for('static', filename='img/' + award.image) }}?v=7.0&nocache=20251103" loading="lazy" 
                                      alt="Placa {{ award.name }}"
                                      class="mx-auto transition-all duration-300 {% if not award.is_unlocked %}grayscale brightness-[0.5]{% endif %}"
                                      style="width: 100%; max-width: 220px; height: auto; aspect-ratio: 1; object-fit: contain; background: transparent; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.7));{% else %}filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));{% endif %}"

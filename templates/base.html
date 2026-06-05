@@ -112,13 +112,13 @@
     
     <!-- jsPlumb Community Edition - Editor Visual de Fluxo -->
     <!-- CDN confiável do jsPlumb 2.x (carregar ANTES do Alpine.js) -->
-    <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
     
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
     <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script defer src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -140,6 +140,17 @@
     </style>
     
     {% block extra_head %}{% endblock %}
+
+    <!-- Service Worker -->
+    <script defer>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js').catch(function(err) {
+                    console.warn('[SW] Registration failed:', err);
+                });
+            });
+        }
+    </script>
 </head>
 <body style="background: var(--bg-primary); color: var(--text-primary);">
     {% if current_user.is_authenticated %}
