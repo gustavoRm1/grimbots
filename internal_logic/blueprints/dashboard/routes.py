@@ -397,7 +397,8 @@ def api_sales_chart():
     from datetime import timedelta
     
     try:
-        period = 7
+        period = int(request.args.get('period', 7))
+        period = max(1, min(period, 365))
         
         start_date = get_brazil_time() - timedelta(days=period)
         
@@ -3037,6 +3038,53 @@ def check_dashboard_updates():
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': 'Erro ao verificar atualizações'}), 500
+
+
+@dashboard_bp.route('/api/dashboard/payments')
+@login_required
+def api_paginated_payments():
+    """API: Paginação de pagamentos do dashboard"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    per_page = max(5, min(per_page, 100))
+    
+    user_bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
+    bot_ids = [b.id for b in user_bots]
+    
+    if not bot_ids:
+        return jsonify({'payments': [], 'total': 0, 'pages': 1, 'page': 1})
+    
+    base_query = db.session.query(Payment, Bot).join(
+        Bot, Payment.bot_id == Bot.id
+    ).filter(Payment.bot_id.in_(bot_ids))
+    
+    total = base_query.count()
+    pages = max(1, (total + per_page - 1) // per_page)
+    
+    payments = base_query.order_by(Payment.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    payments_list = []
+    for payment, bot in payments:
+        payments_list.append({
+            'id': payment.id,
+            'customer_name': payment.customer_name,
+            'product_name': payment.product_name,
+            'amount': float(payment.amount),
+            'status': payment.status,
+            'created_at': payment.created_at.isoformat() if payment.created_at else None,
+            'bot_id': bot.id,
+            'bot_name': bot.name,
+            'bot_username': getattr(bot, 'username', '')
+        })
+    
+    return jsonify({
+        'payments': payments_list,
+        'total': total,
+        'pages': pages,
+        'page': page,
+        'has_next': page < pages,
+        'has_prev': page > 1
+    })
 
 
 # ==================== BOT CRUD APIs (Faltantes) ====================

@@ -444,21 +444,15 @@
     .max-w-full {
         padding-left: 0.5rem;
         padding-right: 0.5rem;
-        max-width: 100vw;
-        overflow-x: hidden;
+        width: 100%;
     }
     
-    /* Prevenir overflow horizontal */
     * {
         box-sizing: border-box;
     }
     
-    body {
-        overflow-x: hidden;
-    }
-    
-    /* Garantir que grids sejam sempre 1 coluna em mobile */
-    .grid {
+    /* Apenas grids de cards devem ser 1 coluna em mobile */
+    .stats-grid, .bots-grid, .payments-grid {
         grid-template-columns: 1fr !important;
     }
 }
@@ -470,13 +464,9 @@
     overflow: hidden;
 }
 
-/* Fix para flex items que possam quebrar */
-.flex {
-    flex-wrap: nowrap;
-}
-
+/* Flex: nowrap por padrão, wrap só em containers específicos no mobile */
 @media (max-width: 767px) {
-    .flex {
+    .flex-mobile-wrap {
         flex-wrap: wrap;
     }
 }
@@ -569,20 +559,15 @@
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                     <div class="stat-label text-xs sm:text-sm">💰 Ganhos Totais</div>
                     <div class="text-xs font-bold uppercase whitespace-nowrap" 
-                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
-                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;">
+                        <template x-if="filters.period == 7">7 DIAS</template>
+                        <template x-if="filters.period == 30">30 DIAS</template>
+                        <template x-if="filters.period == 90">90 DIAS</template>
                     </div>
                 </div>
                 <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem break-all" style="color: var(--brand-gold-500);">
-                    <template x-if="period === 'today'">
-                        <span>R$ {{ "%.2f"|format(stats.today_revenue) }}</span>
-                    </template>
-                    <template x-if="period === 'month'">
-                        <span>R$ {{ "%.2f"|format(stats.month_revenue) }}</span>
-                    </template>
-                    <template x-if="period === 'all'">
-                        <span>R$ {{ "%.2f"|format(stats.total_revenue) }}</span>
-                    </template>
+                    <span x-show="chartRevenue !== null">R$ <span x-text="formatMoney(chartRevenue)"></span></span>
+                    <span x-show="chartRevenue === null">R$ {{ "%.2f"|format(stats.month_revenue) }}</span>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                     <div class="text-xs sm:text-sm text-gray-500">Receita confirmada</div>
@@ -936,7 +921,7 @@
         </template>
         
         <!-- ✅ Paginação -->
-        <div x-show="filteredPayments && filteredPayments.length > 0 && Math.ceil(filteredPayments.length / paymentsPerPage) > 1" 
+        <div x-show="filteredPayments.length > 0 && totalPaymentPages > 1" 
              class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
             <!-- Botão Anterior -->
             <button @click="prevPaymentPage()" 
@@ -969,7 +954,7 @@
         </div>
 
         <!-- Empty State -->
-        <template x-if="filteredPayments.length === 0">
+        <template x-if="filteredPayments.length === 0 && !loadingPayments">
             <div class="text-center py-16">
                 <div class="text-6xl mb-4">💰</div>
                 <h3 class="text-xl font-bold text-white mb-2">Nenhuma venda ainda</h3>
@@ -2139,6 +2124,10 @@ function dashboardApp() {
         // Filtro de Período (compartilhado entre cards)
         period: 'month',
         
+        // Dados do gráfico (para totalizar)
+        chartRevenue: null,
+        chartSales: null,
+        
         // Dados
         stats: {
             total_users: {{ stats.total_users }},
@@ -2160,13 +2149,15 @@ function dashboardApp() {
             month_users: {{ stats.month_users }}
         },
         bots: {{ bots|tojson|safe }},
-        payments: {{ recent_payments|tojson|safe }},
+        payments: [],
         filteredBots: [],
         filteredPayments: [],
         
         // ✅ Paginação de vendas
         currentPaymentPage: 1,
-        paymentsPerPage: 10,
+        paymentsPerPage: 20,
+        totalPayments: 0,
+        loadingPayments: false,
         
         filters: {
             period: '7'
@@ -2189,7 +2180,7 @@ function dashboardApp() {
             
             console.log('🚀 Dashboard V2.0 inicializando...');
             this.filteredBots = this.bots;
-            this.filteredPayments = this.payments;
+            this.loadPaymentsPage(1);
             
             // ✅ Watcher: Resetar página quando filteredPayments mudar
             this.$watch('filteredPayments', () => {
@@ -2930,6 +2921,10 @@ function dashboardApp() {
                 const labels = data.map(d => d.date || '');
                 const salesData = data.map(d => Number(d.sales) || 0);
                 const revenueData = data.map(d => Number(d.revenue) || 0);
+                
+                // ✅ Somar receita total do período para o card Ganhos Totais
+                this.chartRevenue = revenueData.reduce((a, b) => a + b, 0);
+                this.chartSales = salesData.reduce((a, b) => a + b, 0);
                 
                 console.log('🔢 Labels:', labels);
                 console.log('📊 Sales:', salesData);
@@ -3822,14 +3817,11 @@ function dashboardApp() {
         
         // ✅ Computed Properties - Paginação de Vendas
         get paginatedPayments() {
-            const start = (this.currentPaymentPage - 1) * this.paymentsPerPage;
-            const end = start + this.paymentsPerPage;
-            return this.filteredPayments.slice(start, end);
+            return this.filteredPayments;
         },
         
         get totalPaymentPages() {
-            if (!this.filteredPayments || this.filteredPayments.length === 0) return 1;
-            return Math.ceil(this.filteredPayments.length / this.paymentsPerPage);
+            return this.totalPayments ? Math.ceil(this.totalPayments / this.paymentsPerPage) : 1;
         },
         
         get visiblePaymentPages() {
@@ -3877,24 +3869,36 @@ function dashboardApp() {
         },
         
         // ✅ Métodos de Navegação - Paginação de Vendas
+        async loadPaymentsPage(page) {
+            this.currentPaymentPage = page;
+            this.loadingPayments = true;
+            try {
+                const response = await fetch(`/api/dashboard/payments?page=${page}&per_page=${this.paymentsPerPage}`);
+                const data = await response.json();
+                this.filteredPayments = data.payments;
+                this.totalPayments = data.total;
+            } catch (e) {
+                console.error('Erro ao carregar pagamentos:', e);
+            } finally {
+                this.loadingPayments = false;
+            }
+        },
+        
         goToPaymentPage(page) {
             if (page !== '...' && page >= 1 && page <= this.totalPaymentPages) {
-                this.currentPaymentPage = page;
-                // ✅ Removido scroll automático - manter posição atual da tela
+                this.loadPaymentsPage(page);
             }
         },
         
         nextPaymentPage() {
             if (this.currentPaymentPage < this.totalPaymentPages) {
-                this.currentPaymentPage++;
-                // ✅ Removido scroll automático - manter posição atual da tela
+                this.loadPaymentsPage(this.currentPaymentPage + 1);
             }
         },
         
         prevPaymentPage() {
             if (this.currentPaymentPage > 1) {
-                this.currentPaymentPage--;
-                // ✅ Removido scroll automático - manter posição atual da tela
+                this.loadPaymentsPage(this.currentPaymentPage - 1);
             }
         },
         
