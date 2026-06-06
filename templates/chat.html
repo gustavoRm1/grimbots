@@ -25,7 +25,7 @@
     <!-- Main Container -->
     <div class="flex-1 flex overflow-hidden">
         <!-- Sidebar: Bots -->
-        <div class="w-64 border-r overflow-y-auto" style="border-color: var(--border-subtle); background: var(--bg-secondary);" x-show="!selectedConversation">
+        <div class="w-64 border-r overflow-y-auto flex-shrink-0" style="border-color: var(--border-subtle); background: var(--bg-secondary);">
             <div class="p-4">
                 <h2 class="text-sm font-semibold mb-3 uppercase" style="color: var(--txt-secondary);">Bots Online</h2>
                 <div class="space-y-2">
@@ -244,6 +244,24 @@
                     </div>
                 </template>
                 <template x-if="!loadingMessages && messages.length > 0">
+                    <div>
+                        <template x-if="hasMoreMessages">
+                            <div class="text-center py-3">
+                                <button 
+                                    @click="loadMoreMessages()"
+                                    :disabled="loadingMoreMessages"
+                                    class="px-5 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                                    style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);"
+                                >
+                                    <template x-if="!loadingMoreMessages">
+                                        <span><i class="fas fa-chevron-up mr-2"></i>Carregar mensagens anteriores</span>
+                                    </template>
+                                    <template x-if="loadingMoreMessages">
+                                        <span><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</span>
+                                    </template>
+                                </button>
+                            </div>
+                        </template>
                     <template x-for="msg in messages" :key="msg.id">
                         <div class="flex items-start gap-3" :class="msg.direction === 'outgoing' ? 'justify-end' : ''">
                             <template x-if="msg.direction === 'incoming'">
@@ -319,6 +337,7 @@
                             </template>
                         </div>
                     </template>
+                    </div>
                 </template>
             </div>
 
@@ -431,6 +450,10 @@ function chatApp() {
         fileInput: null,
         conversationOffset: 0,
         conversationLimit: 50,
+        messageOffset: 0,
+        messageLimit: 50,
+        hasMoreMessages: false,
+        loadingMoreMessages: false,
 
         init() {
             if (this.bots.length > 0) {
@@ -460,7 +483,7 @@ function chatApp() {
                     this.checkNewMessages();
                 }
             };
-            this.pollingInterval = setInterval(poll, 3000);
+            this.pollingInterval = setInterval(poll, 8000);
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden && this.selectedConversation) {
                     this.checkNewMessages();
@@ -555,6 +578,8 @@ function chatApp() {
             this.selectedConversation = null;
             this.conversations = [];
             this.messages = [];
+            this.messageOffset = 0;
+            this.hasMoreMessages = false;
             this.loadConversations();
         },
 
@@ -605,12 +630,14 @@ function chatApp() {
             this.selectedConversation = conv;
             this.loadingMessages = true;
             this.messages = [];
+            this.messageOffset = 0;
+            this.hasMoreMessages = false;
             
             // Parar polling anterior antes de carregar nova conversa
             this.stopMessagePolling();
             
             try {
-                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${conv.telegram_user_id}`);
+                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${conv.telegram_user_id}?offset=0&limit=${this.messageLimit}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -620,7 +647,14 @@ function chatApp() {
                 
                 if (data.success) {
                     this.messages = data.messages || [];
+                    this.hasMoreMessages = data.has_more || false;
                     this.scrollToBottom();
+                    
+                    // Marcar badge do sidebar como lido no frontend
+                    if (this.selectedBot) {
+                        this.selectedBot.unread_count = 0;
+                    }
+                    conv.unread_count = 0;
                     
                     // ✅ CRÍTICO: Reiniciar polling APÓS carregar mensagens
                     this.startMessagePolling();
@@ -631,6 +665,34 @@ function chatApp() {
                 console.error('Erro ao carregar mensagens:', error);
             } finally {
                 this.loadingMessages = false;
+            }
+        },
+        
+        async loadMoreMessages() {
+            if (!this.hasMoreMessages || this.loadingMoreMessages) return;
+            
+            this.loadingMoreMessages = true;
+            this.messageOffset = this.messages.length;
+            
+            try {
+                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}?offset=${this.messageOffset}&limit=${this.messageLimit}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.messages) {
+                    this.messages = [...data.messages, ...this.messages];
+                    this.hasMoreMessages = data.has_more || false;
+                } else {
+                    console.error('Erro ao carregar mais mensagens:', data.error || 'Erro desconhecido');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar mais mensagens:', error);
+            } finally {
+                this.loadingMoreMessages = false;
             }
         },
 

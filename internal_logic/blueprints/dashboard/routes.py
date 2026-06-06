@@ -1100,6 +1100,7 @@ def get_chat_messages(bot_id, telegram_user_id):
     
     # Buscar mensagens novas usando timestamp
     since_timestamp = request.args.get('since_timestamp', type=str)
+    has_more = False
     
     BRAZIL_TZ_OFFSET = timedelta(hours=-3)
     
@@ -1138,10 +1139,23 @@ def get_chat_messages(bot_id, telegram_user_id):
             ).order_by(BotMessage.created_at.desc()).limit(50).all()
             messages.reverse()
     else:
+        offset = request.args.get('offset', 0, type=int)
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 200)
+        
+        total_count = BotMessage.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=telegram_user_id
+        ).count()
+        
         messages = BotMessage.query.filter_by(
             bot_id=bot_id,
             telegram_user_id=telegram_user_id
-        ).order_by(BotMessage.created_at.asc()).limit(100).all()
+        ).order_by(BotMessage.created_at.desc()).offset(offset).limit(limit).all()
+        
+        messages.reverse()
+        
+        has_more = (offset + limit) < total_count
         
         # Marcar mensagens como lidas apenas na primeira carga
         try:
@@ -1162,7 +1176,10 @@ def get_chat_messages(bot_id, telegram_user_id):
         'success': True,
         'bot_user': bot_user.to_dict(),
         'messages': messages_data,
-        'total': len(messages_data)
+        'total': len(messages_data),
+        'has_more': has_more,
+        'offset': request.args.get('offset', 0, type=int) if not since_timestamp else 0,
+        'limit': request.args.get('limit', 50, type=int) if not since_timestamp else 50
     })
 
 
