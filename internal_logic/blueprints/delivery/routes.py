@@ -159,8 +159,7 @@ def delivery_page(token):
                 return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
         
         # Buscar pool CORRETO (o que gerou o PageView, não o primeiro)
-        # Prioridade: 1) pool_id do tracking_data, 2) primeiro pool do bot
-        pool_id_from_tracking = None
+        # Prioridade: 1) payment.pool_id, 2) pool_id do tracking_data, 3) primeiro pool do bot
         pool_bot = None
         
         # RECUPERAR tracking_data primeiro (para identificar pool correto)
@@ -171,21 +170,26 @@ def delivery_page(token):
             telegram_user_id=str(telegram_user_id)
         ).first()
         
-        if bot_user and bot_user.tracking_session_id:
+        # PRIORIDADE 1: payment.pool_id (determinístico, salvo na criação do payment)
+        if hasattr(payment, 'pool_id') and payment.pool_id:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=payment.pool_id).first()
+            if pool_bot:
+                logger.info(f" Delivery - Pool via payment.pool_id: {payment.pool_id}")
+        
+        # PRIORIDADE 2: pool_id do tracking_data (Redis)
+        if not pool_bot and bot_user and bot_user.tracking_session_id:
             temp_tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
             pool_id_from_tracking = temp_tracking_data.get('pool_id')
+            if pool_id_from_tracking:
+                pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=pool_id_from_tracking).first()
+                if pool_bot:
+                    logger.info(f" Delivery - Pool via tracking_data: pool_id={pool_id_from_tracking}")
         
-        # Buscar pool CORRETO
-        if pool_id_from_tracking:
-            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=pool_id_from_tracking).first()
-            if pool_bot:
-                logger.info(f" Delivery - Pool correto encontrado via tracking_data: pool_id={pool_id_from_tracking}")
-        
-        # Fallback: primeiro pool do bot
+        # PRIORIDADE 3: primeiro pool do bot (fallback)
         if not pool_bot:
             pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
             if pool_bot:
-                logger.warning(f" Delivery - Usando primeiro pool do bot (pool_id não encontrado no tracking_data): pool_id={pool_bot.pool_id}")
+                logger.warning(f" Delivery - Usando primeiro pool do bot (pool_id não encontrado): pool_id={pool_bot.pool_id}")
         
         if not pool_bot:
             logger.warning(f" Payment {payment.id}: Bot sem pool — usando payment.bot como fallback")

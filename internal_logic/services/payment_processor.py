@@ -38,20 +38,26 @@ def generate_delivery_token(payment: Payment) -> str:
 def get_pixel_id_for_payment(payment: Payment) -> Optional[str]:
     """Obtém o ID do pixel Meta para tracking, considerando sticky pixel."""
     from internal_logic.core.models import get_brazil_time, RedirectPool
-    pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-    # ✅ CORREÇÃO: Usar pool_id diretamente ao invés de backref .pool
-    pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
     
-    # Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
+    # PRIORIDADE 1: campaign_code do BotUser (sticky pixel, fonte mais confiável)
     bot_user_for_pixel = BotUser.query.filter_by(
         bot_id=payment.bot_id, 
         telegram_user_id=str(payment.customer_user_id)
     ).first() if payment.customer_user_id else None
+    pixel_from_user = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
+    if pixel_from_user:
+        return pixel_from_user
     
-    user_origin_pixel = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
-    pixel_from_user = user_origin_pixel if user_origin_pixel and str(user_origin_pixel).isdigit() else None
+    # PRIORIDADE 2: pool via payment.pool_id (determinístico)
+    if hasattr(payment, 'pool_id') and payment.pool_id:
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=payment.pool_id).first()
+        if pool_bot and pool_bot.pool and pool_bot.pool.meta_pixel_id:
+            return pool_bot.pool.meta_pixel_id
     
-    return pixel_from_user or (pool.meta_pixel_id if pool else None)
+    # PRIORIDADE 3: primeiro pool do bot (fallback)
+    pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+    pool = RedirectPool.query.get(pool_bot.pool_id) if pool_bot else None
+    return pool.meta_pixel_id if pool else None
 
 
 def build_delivery_message(payment: Payment, link_to_send: Optional[str], has_meta_pixel: bool) -> str:
@@ -265,18 +271,21 @@ def send_payment_delivery_legacy(payment: Payment, bot_manager=None, socketio=No
             logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
         # ✅ Buscar pool para verificar Meta Pixel
-        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        pool_bot = None
+        if hasattr(payment, 'pool_id') and payment.pool_id:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=payment.pool_id).first()
+        if not pool_bot:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
         pool = pool_bot.pool if pool_bot else None
 
-        # ✅ Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
+        # ✅ Sticky Pixel: priorizar pixel da origem do usuário (campaign_code)
         bot_user_for_pixel = BotUser.query.filter_by(
             bot_id=payment.bot_id, 
             telegram_user_id=str(payment.customer_user_id)
         ).first() if payment.customer_user_id else None
         
         user_origin_pixel = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
-        pixel_from_user = user_origin_pixel if user_origin_pixel and str(user_origin_pixel).isdigit() else None
-        pixel_id_to_use = pixel_from_user or (pool.meta_pixel_id if pool else None)
+        pixel_id_to_use = user_origin_pixel or (pool.meta_pixel_id if pool else None)
 
         has_meta_pixel = bool(pool and pool.meta_tracking_enabled and pixel_id_to_use)
         
@@ -1495,19 +1504,25 @@ def generate_delivery_token(payment: Payment) -> str:
 
 def get_pixel_id_for_payment(payment: Payment) -> Optional[str]:
     """Obtém o ID do pixel Meta para tracking, considerando sticky pixel."""
-    pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-    pool = pool_bot.pool if pool_bot else None
-    
-    # Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
+    # PRIORIDADE 1: campaign_code do BotUser (sticky pixel, fonte mais confiável)
     bot_user_for_pixel = BotUser.query.filter_by(
         bot_id=payment.bot_id, 
         telegram_user_id=str(payment.customer_user_id)
     ).first() if payment.customer_user_id else None
+    pixel_from_user = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
+    if pixel_from_user:
+        return pixel_from_user
     
-    user_origin_pixel = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
-    pixel_from_user = user_origin_pixel if user_origin_pixel and str(user_origin_pixel).isdigit() else None
-    
-    return pixel_from_user or (pool.meta_pixel_id if pool else None)
+    # PRIORIDADE 2: pool via payment.pool_id (determinístico)
+    pool = None
+    if hasattr(payment, 'pool_id') and payment.pool_id:
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=payment.pool_id).first()
+        if pool_bot:
+            pool = pool_bot.pool
+    if not pool:
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        pool = pool_bot.pool if pool_bot else None
+    return pool.meta_pixel_id if pool else None
 
 
 def build_delivery_message(payment: Payment, link_to_send: Optional[str], has_meta_pixel: bool) -> str:
@@ -1809,12 +1824,27 @@ def _get_pixel_config(payment) -> Dict[str, Any]:
             'pixel_source': None
         }
         
+        # PRIORIDADE 0: campaign_code do BotUser (fonte mais confiável)
+        campaign_code = None
+        if payment.customer_user_id:
+            try:
+                from internal_logic.core.models import BotUser
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    telegram_user_id=str(payment.customer_user_id).replace('user_', '')
+                ).first()
+                if bot_user:
+                    campaign_code = getattr(bot_user, 'campaign_code', None)
+            except Exception:
+                pass
+        
         # Recuperar dados de tracking
         tracking_data = _recover_tracking_data(payment)
         pool = _get_bot_pool(payment)
         
         # Ordem de prioridade garantida (Sticky Pixel):
         pixel_sources = [
+            campaign_code,                                # 0. BotUser.campaign_code (sticky)
             getattr(payment, 'meta_pixel_id', None),      # 1. Payment (Backup do banco)
             tracking_data.get('pixel_id') if tracking_data else None,  # 2. Redis
             pool.meta_pixel_id if pool else None          # 3. Pool Original
@@ -1825,9 +1855,10 @@ def _get_pixel_config(payment) -> Dict[str, Any]:
         
         # Determinar origem para logging
         source_map = {
-            0: 'payment',
-            1: 'redis', 
-            2: 'pool'
+            0: 'campaign_code',
+            1: 'payment',
+            2: 'redis', 
+            3: 'pool'
         }
         
         if pixel_id:
@@ -1875,9 +1906,13 @@ def _recover_tracking_data(payment) -> Optional[Dict[str, Any]]:
         return None
     
 def _get_bot_pool(payment) -> Optional[Any]:
-        """Busca pool associado ao bot"""
+        """Busca pool associado ao bot — usa payment.pool_id quando disponível"""
         try:
             from internal_logic.core.models import PoolBot
+            if hasattr(payment, 'pool_id') and payment.pool_id:
+                pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=payment.pool_id).first()
+                if pool_bot:
+                    return pool_bot.pool
             pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
             return pool_bot.pool if pool_bot else None
         except Exception:

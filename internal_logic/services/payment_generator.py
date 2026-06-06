@@ -107,6 +107,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
     pageview_event_id = None
     redirect_id = None
     meta_pixel_id = None
+    pool_id_from_tracking = None
     tracking_token = None
 
     lock_acquired = False
@@ -612,9 +613,10 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                     pageview_event_id = tracking_data_v4.get("pageview_event_id")
                     redirect_id = tracking_data_v4.get("redirect_id")
                     meta_pixel_id = tracking_data_v4.get("pixel_id")
+                    pool_id_from_tracking = tracking_data_v4.get("pool_id")
                     tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
 
-                if tracking_token:
+                    if tracking_token:
                     recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
                     if recovered_payload:
                         tracking_data_v4 = recovered_payload
@@ -624,6 +626,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                         pageview_event_id = tracking_data_v4.get("pageview_event_id")
                         redirect_id = tracking_data_v4.get("redirect_id")
                         meta_pixel_id = tracking_data_v4.get("pixel_id")
+                        pool_id_from_tracking = tracking_data_v4.get("pool_id")
                         tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
                         token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
                         logger.info(f" Tracking payload recuperado do Redis para token {token_log}... | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview_event_id={'ok' if pageview_event_id else 'missing'}")
@@ -939,6 +942,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                     status=payment_status,
                     tracking_token=getattr(bot_user_for_payment, 'tracking_session_id', None) if bot_user_for_payment else (tracking_token if tracking_token else None),
                     meta_pixel_id=getattr(bot_user_for_payment, 'campaign_code', None) if bot_user_for_payment else None,
+                    pool_id=pool_id_from_tracking if pool_id_from_tracking else None,
                     fbclid=getattr(bot_user_for_payment, 'fbclid', None) if bot_user_for_payment else None,
                     order_bump_shown=order_bump_shown,
                     order_bump_accepted=order_bump_accepted,
