@@ -2,6 +2,16 @@
 
 echo "🔄 Iniciando o RESTART COMPLETO do sistema Grimbots..."
 
+echo "🗄️ Passo 0: Garantindo Redis (RQ + Tracking)..."
+sudo systemctl start redis
+sleep 1
+if redis-cli ping 2>/dev/null | grep -q PONG; then
+    echo "   ✅ Redis online."
+else
+    echo "   ❌ Redis não respondeu! Workers RQ vão falhar."
+    exit 1
+fi
+
 echo "🌐 Passo 1: Reiniciando o Servidor Web (Painel e API)..."
 sudo systemctl restart grimbots
 if [ $? -eq 0 ]; then
