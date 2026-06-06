@@ -359,107 +359,102 @@
                         </div>
                     </template>
                     <template x-if="!loadingProfile && customerProfile">
-                        <!-- Identificação -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Identificação</h4>
-                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                <div><span class="opacity-50">Nome:</span> <span x-text="customerProfile.basic.first_name || '-'"></span></div>
-                                <div><span class="opacity-50">Username:</span> <span x-text="'@' + (customerProfile.basic.username || 'sem_username')"></span></div>
-                                <div><span class="opacity-50">Telegram ID:</span> <span x-text="customerProfile.basic.telegram_user_id"></span></div>
-                            </div>
-                        </div>
-
-                        <!-- Tracking -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Tracking</h4>
-                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                <div><span class="opacity-50">Pixel:</span> <span x-text="customerProfile.tracking.campaign_code || '-'"></span></div>
-                                <div><span class="opacity-50">fbclid:</span> <span class="block truncate" x-text="customerProfile.tracking.fbclid || '-'"></span></div>
-                                <div><span class="opacity-50">fbp:</span> <span class="block truncate" x-text="customerProfile.tracking.fbp || '-'"></span></div>
-                                <div><span class="opacity-50">fbc:</span> <span class="block truncate" x-text="customerProfile.tracking.fbc || '-'"></span></div>
-                                <div><span class="opacity-50">UTM Source:</span> <span x-text="customerProfile.tracking.utm_source || '-'"></span></div>
-                                <div><span class="opacity-50">UTM Medium:</span> <span x-text="customerProfile.tracking.utm_medium || '-'"></span></div>
-                                <div><span class="opacity-50">UTM Campaign:</span> <span x-text="customerProfile.tracking.utm_campaign || '-'"></span></div>
-                                <div><span class="opacity-50">UTM Content:</span> <span x-text="customerProfile.tracking.utm_content || '-'"></span></div>
-                                <div><span class="opacity-50">UTM Term:</span> <span x-text="customerProfile.tracking.utm_term || '-'"></span></div>
-                                <div><span class="opacity-50">Session ID:</span> <span class="block truncate" x-text="customerProfile.tracking.tracking_session_id || '-'"></span></div>
-                                <div><span class="opacity-50">External ID:</span> <span class="block truncate" x-text="customerProfile.tracking.external_id || '-'"></span></div>
-                                <div><span class="opacity-50">Click URL:</span> <span class="block truncate" x-text="customerProfile.tracking.click_context_url || '-'"></span></div>
-                                <div><span class="opacity-50">Click em:</span> <span x-text="customerProfile.tracking.click_timestamp ? formatDate(customerProfile.tracking.click_timestamp) : '-'"></span></div>
-                            </div>
-                        </div>
-
-                        <!-- Dispositivo -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Dispositivo</h4>
-                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                <div><span class="opacity-50">IP:</span> <span x-text="customerProfile.device.ip_address || '-'"></span></div>
-                                <div><span class="opacity-50">Device:</span> <span x-text="customerProfile.device.device_type || '-'"></span></div>
-                                <div><span class="opacity-50">OS:</span> <span x-text="customerProfile.device.os_type || '-'"></span></div>
-                                <div><span class="opacity-50">Browser:</span> <span x-text="customerProfile.device.browser || '-'"></span></div>
-                                <div><span class="opacity-50">Modelo:</span> <span x-text="customerProfile.device.device_model || '-'"></span></div>
-                                <div><span class="opacity-50">User Agent:</span> <span class="block truncate" x-text="customerProfile.device.user_agent || '-'"></span></div>
-                            </div>
-                        </div>
-
-                        <!-- Demográfico -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Demográfico</h4>
-                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                <div><span class="opacity-50">Cidade:</span> <span x-text="customerProfile.demographic.customer_city || '-'"></span></div>
-                                <div><span class="opacity-50">Estado:</span> <span x-text="customerProfile.demographic.customer_state || '-'"></span></div>
-                                <div><span class="opacity-50">País:</span> <span x-text="customerProfile.demographic.customer_country || '-'"></span></div>
-                                <div><span class="opacity-50">Idade:</span> <span x-text="customerProfile.demographic.customer_age || '-'"></span></div>
-                                <div><span class="opacity-50">Gênero:</span> <span x-text="customerProfile.demographic.customer_gender || '-'"></span></div>
-                            </div>
-                        </div>
-
-                        <!-- Atividade -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Atividade</h4>
-                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                <div><span class="opacity-50">Primeira interação:</span> <span x-text="customerProfile.activity.first_interaction ? formatDate(customerProfile.activity.first_interaction) : '-'"></span></div>
-                                <div><span class="opacity-50">Última interação:</span> <span x-text="customerProfile.activity.last_interaction ? formatDate(customerProfile.activity.last_interaction) : '-'"></span></div>
-                                <div><span class="opacity-50">Welcome sent:</span> <span x-text="customerProfile.activity.welcome_sent ? 'Sim' : 'Não'"></span></div>
-                                <div><span class="opacity-50">PageView sent:</span> <span x-text="customerProfile.activity.meta_pageview_sent ? 'Sim' : 'Não'"></span></div>
-                            </div>
-                        </div>
-
-                        <!-- Pool de Origem -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pool de Origem</h4>
-                            <template x-if="customerProfile.pool">
+                        <div>
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Identificação</h4>
                                 <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
-                                    <div><span class="opacity-50">Pool:</span> <span x-text="customerProfile.pool.name"></span></div>
-                                    <div><span class="opacity-50">Pixel ID:</span> <span x-text="customerProfile.pool.meta_pixel_id"></span></div>
+                                    <div><span class="opacity-50">Nome:</span> <span x-text="customerProfile.basic.first_name || '-'"></span></div>
+                                    <div><span class="opacity-50">Username:</span> <span x-text="'@' + (customerProfile.basic.username || 'sem_username')"></span></div>
+                                    <div><span class="opacity-50">Telegram ID:</span> <span x-text="customerProfile.basic.telegram_user_id"></span></div>
                                 </div>
-                            </template>
-                            <template x-if="!customerProfile.pool">
-                                <p class="text-xs opacity-50">Sem pool associado</p>
-                            </template>
-                        </div>
+                            </div>
 
-                        <!-- Pagamentos -->
-                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
-                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pagamentos</h4>
-                            <template x-if="customerProfile.payments.length === 0">
-                                <p class="text-xs opacity-50">Nenhum pagamento</p>
-                            </template>
-                            <template x-for="p in customerProfile.payments" :key="p.id">
-                                <div class="border-b py-2 text-xs" style="border-color: var(--border-subtle); color: var(--txt-secondary);">
-                                    <div class="flex justify-between">
-                                        <span x-text="formatDate(p.created_at)"></span>
-                                        <span class="font-semibold" style="color: var(--txt-primary);" x-text="'R$ ' + formatMoney(p.amount)"></span>
-                                    </div>
-                                    <div class="flex justify-between">
-                                        <span x-text="p.gateway_type || '-'"></span>
-                                        <span :class="p.status === 'paid' ? 'text-green-400' : 'text-yellow-400'" x-text="p.status"></span>
-                                    </div>
-                                    <div class="opacity-50">
-                                        <span x-text="p.product_name || '-'"></span>
-                                    </div>
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Tracking</h4>
+                                <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                    <div><span class="opacity-50">Pixel:</span> <span x-text="customerProfile.tracking.campaign_code || '-'"></span></div>
+                                    <div><span class="opacity-50">fbclid:</span> <span class="block truncate" x-text="customerProfile.tracking.fbclid || '-'"></span></div>
+                                    <div><span class="opacity-50">fbp:</span> <span class="block truncate" x-text="customerProfile.tracking.fbp || '-'"></span></div>
+                                    <div><span class="opacity-50">fbc:</span> <span class="block truncate" x-text="customerProfile.tracking.fbc || '-'"></span></div>
+                                    <div><span class="opacity-50">UTM Source:</span> <span x-text="customerProfile.tracking.utm_source || '-'"></span></div>
+                                    <div><span class="opacity-50">UTM Medium:</span> <span x-text="customerProfile.tracking.utm_medium || '-'"></span></div>
+                                    <div><span class="opacity-50">UTM Campaign:</span> <span x-text="customerProfile.tracking.utm_campaign || '-'"></span></div>
+                                    <div><span class="opacity-50">UTM Content:</span> <span x-text="customerProfile.tracking.utm_content || '-'"></span></div>
+                                    <div><span class="opacity-50">UTM Term:</span> <span x-text="customerProfile.tracking.utm_term || '-'"></span></div>
+                                    <div><span class="opacity-50">Session ID:</span> <span class="block truncate" x-text="customerProfile.tracking.tracking_session_id || '-'"></span></div>
+                                    <div><span class="opacity-50">External ID:</span> <span class="block truncate" x-text="customerProfile.tracking.external_id || '-'"></span></div>
+                                    <div><span class="opacity-50">Click URL:</span> <span class="block truncate" x-text="customerProfile.tracking.click_context_url || '-'"></span></div>
+                                    <div><span class="opacity-50">Click em:</span> <span x-text="customerProfile.tracking.click_timestamp ? formatDate(customerProfile.tracking.click_timestamp) : '-'"></span></div>
                                 </div>
-                            </template>
+                            </div>
+
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Dispositivo</h4>
+                                <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                    <div><span class="opacity-50">IP:</span> <span x-text="customerProfile.device.ip_address || '-'"></span></div>
+                                    <div><span class="opacity-50">Device:</span> <span x-text="customerProfile.device.device_type || '-'"></span></div>
+                                    <div><span class="opacity-50">OS:</span> <span x-text="customerProfile.device.os_type || '-'"></span></div>
+                                    <div><span class="opacity-50">Browser:</span> <span x-text="customerProfile.device.browser || '-'"></span></div>
+                                    <div><span class="opacity-50">Modelo:</span> <span x-text="customerProfile.device.device_model || '-'"></span></div>
+                                    <div><span class="opacity-50">User Agent:</span> <span class="block truncate" x-text="customerProfile.device.user_agent || '-'"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Demográfico</h4>
+                                <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                    <div><span class="opacity-50">Cidade:</span> <span x-text="customerProfile.demographic.customer_city || '-'"></span></div>
+                                    <div><span class="opacity-50">Estado:</span> <span x-text="customerProfile.demographic.customer_state || '-'"></span></div>
+                                    <div><span class="opacity-50">País:</span> <span x-text="customerProfile.demographic.customer_country || '-'"></span></div>
+                                    <div><span class="opacity-50">Idade:</span> <span x-text="customerProfile.demographic.customer_age || '-'"></span></div>
+                                    <div><span class="opacity-50">Gênero:</span> <span x-text="customerProfile.demographic.customer_gender || '-'"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Atividade</h4>
+                                <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                    <div><span class="opacity-50">Primeira interação:</span> <span x-text="customerProfile.activity.first_interaction ? formatDate(customerProfile.activity.first_interaction) : '-'"></span></div>
+                                    <div><span class="opacity-50">Última interação:</span> <span x-text="customerProfile.activity.last_interaction ? formatDate(customerProfile.activity.last_interaction) : '-'"></span></div>
+                                    <div><span class="opacity-50">Welcome sent:</span> <span x-text="customerProfile.activity.welcome_sent ? 'Sim' : 'Não'"></span></div>
+                                    <div><span class="opacity-50">PageView sent:</span> <span x-text="customerProfile.activity.meta_pageview_sent ? 'Sim' : 'Não'"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pool de Origem</h4>
+                                <template x-if="customerProfile.pool">
+                                    <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                        <div><span class="opacity-50">Pool:</span> <span x-text="customerProfile.pool.name"></span></div>
+                                        <div><span class="opacity-50">Pixel ID:</span> <span x-text="customerProfile.pool.meta_pixel_id"></span></div>
+                                    </div>
+                                </template>
+                                <template x-if="!customerProfile.pool">
+                                    <p class="text-xs opacity-50">Sem pool associado</p>
+                                </template>
+                            </div>
+
+                            <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                                <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pagamentos</h4>
+                                <template x-if="customerProfile.payments.length === 0">
+                                    <p class="text-xs opacity-50">Nenhum pagamento</p>
+                                </template>
+                                <template x-for="p in customerProfile.payments" :key="p.id">
+                                    <div class="border-b py-2 text-xs" style="border-color: var(--border-subtle); color: var(--txt-secondary);">
+                                        <div class="flex justify-between">
+                                            <span x-text="formatDate(p.created_at)"></span>
+                                            <span class="font-semibold" style="color: var(--txt-primary);" x-text="'R$ ' + formatMoney(p.amount)"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span x-text="p.gateway_type || '-'"></span>
+                                            <span :class="p.status === 'paid' ? 'text-green-400' : 'text-yellow-400'" x-text="p.status"></span>
+                                        </div>
+                                        <div class="opacity-50">
+                                            <span x-text="p.product_name || '-'"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </template>
                 </div>
