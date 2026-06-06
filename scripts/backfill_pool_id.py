@@ -39,8 +39,7 @@ def _try_from_tracking_token(payment) -> int | None:
         return None
     try:
         from internal_logic.services.tracking_service_v4 import TrackingServiceV4
-        from internal_logic.core.extensions import redis_client
-        ts = TrackingServiceV4(redis_client)
+        ts = TrackingServiceV4()
         data = ts.recover_tracking_data(payment.tracking_token)
         if data:
             pool_id = data.get("pool_id")
@@ -63,8 +62,7 @@ def _try_from_botuser_session(payment) -> int | None:
         ).first()
         if bot_user and bot_user.tracking_session_id:
             from internal_logic.services.tracking_service_v4 import TrackingServiceV4
-            from internal_logic.core.extensions import redis_client
-            ts = TrackingServiceV4(redis_client)
+            ts = TrackingServiceV4()
             data = ts.recover_tracking_data(bot_user.tracking_session_id)
             if data:
                 pool_id = data.get("pool_id")

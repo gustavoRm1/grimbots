@@ -330,6 +330,12 @@ class TrackingServiceV4:
         payload.setdefault("created_at", now_iso)
         payload["updated_at"] = now_iso
         compact = {k: v for k, v in payload.items() if v not in (None, "", [])}
+
+        existing = self.recover_tracking_data(tracking_token) or {}
+        if existing:
+            compact['pool_id'] = compact.get('pool_id') or existing.get('pool_id')
+            compact['pixel_id'] = compact.get('pixel_id') or existing.get('pixel_id')
+
         ok = self.save_tracking_token(tracking_token, compact)
         if not ok:
             return False

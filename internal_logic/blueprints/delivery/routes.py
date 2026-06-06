@@ -215,20 +215,20 @@ def delivery_page(token):
         # ✅ CLEAN ARCHITECTURE: 'Fio Invisível' - extrair tracking do BotUser
         # A tabela Payment é 100% financeira - tracking vem do perfil do usuário
         
-        # A. Buscar dados de marketing do BotUser
-        pixel_id = getattr(bot_user, 'campaign_code', None) if bot_user else None
+        # A. Buscar dados de marketing
         fbp = getattr(bot_user, 'fbp', None) if bot_user else None
         fbc = getattr(bot_user, 'fbc', None) if bot_user else None
         fbclid = getattr(bot_user, 'fbclid', None) if bot_user else None
         
-        # B. Fallback Inteligente: se BotUser não tiver campaign_code, buscar do Payment ou Pool
-        pixel_source = 'BotUser'
-        if not pixel_id:
-            pixel_id = payment.meta_pixel_id if payment else None
-            pixel_source = 'Payment'
+        # B. Prioridade do Pixel: 1) Payment (salvo do tracking data), 2) Pool, 3) BotUser.campaign_code (sticky)
+        pixel_source = 'Payment'
+        pixel_id = payment.meta_pixel_id if payment else None
         if not pixel_id:
             pixel_id = pool.meta_pixel_id if pool else None
             pixel_source = 'Pool'
+        if not pixel_id:
+            pixel_id = getattr(bot_user, 'campaign_code', None) if bot_user else None
+            pixel_source = 'BotUser'
         logger.info(f"[FILO_INVISIVEL] Pixel: {pixel_id}, source: {pixel_source}")
         
         # C. Validação de pixel_id
