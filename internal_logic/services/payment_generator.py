@@ -616,7 +616,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                     pool_id_from_tracking = tracking_data_v4.get("pool_id")
                     tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
 
-                    if tracking_token:
+                if tracking_token:
                     recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
                     if recovered_payload:
                         tracking_data_v4 = recovered_payload
