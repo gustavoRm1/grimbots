@@ -337,7 +337,8 @@ def reconcile_meta_purchases(days: int = 7, limit: int = 200):
     import logging
     from datetime import datetime, timedelta, timezone
     from internal_logic.core.models import db, Payment
-    from app import app, send_meta_pixel_purchase_event
+    from app import app
+    from _legacy_exports.legacy_tracking_logic import send_meta_pixel_purchase_event
 
     logger = logging.getLogger(__name__)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
