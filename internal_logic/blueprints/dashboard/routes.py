@@ -1362,6 +1362,111 @@ def send_chat_media(bot_id, telegram_user_id):
                 logger.warning(f"Erro ao remover arquivo temporário: {e}")
 
 
+@dashboard_bp.route('/api/chat/customer-profile/<int:bot_id>/<telegram_user_id>')
+@login_required
+def get_customer_profile(bot_id, telegram_user_id):
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+
+        bot_user = BotUser.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=telegram_user_id
+        ).first()
+
+        if not bot_user:
+            return jsonify({'success': False, 'error': 'Usuário não encontrado'}), 404
+
+        tracking = {
+            'campaign_code': bot_user.campaign_code,
+            'fbclid': bot_user.fbclid,
+            'fbp': bot_user.fbp,
+            'fbc': bot_user.fbc,
+            'utm_source': bot_user.utm_source,
+            'utm_medium': bot_user.utm_medium,
+            'utm_campaign': bot_user.utm_campaign,
+            'utm_content': bot_user.utm_content,
+            'utm_term': bot_user.utm_term,
+            'tracking_session_id': bot_user.tracking_session_id,
+            'click_timestamp': bot_user.click_timestamp.isoformat() if bot_user.click_timestamp else None,
+            'click_context_url': bot_user.last_click_context_url,
+            'external_id': bot_user.external_id,
+        }
+
+        device = {
+            'ip_address': bot_user.ip_address,
+            'user_agent': bot_user.user_agent,
+            'device_type': bot_user.device_type,
+            'os_type': bot_user.os_type,
+            'browser': bot_user.browser,
+            'device_model': bot_user.device_model,
+        }
+
+        demographic = {
+            'customer_age': bot_user.customer_age,
+            'customer_city': bot_user.customer_city,
+            'customer_state': bot_user.customer_state,
+            'customer_country': bot_user.customer_country,
+            'customer_gender': bot_user.customer_gender,
+        }
+
+        activity = {
+            'first_interaction': bot_user.first_interaction.isoformat() if bot_user.first_interaction else None,
+            'last_interaction': bot_user.last_interaction.isoformat() if bot_user.last_interaction else None,
+            'welcome_sent': bot_user.welcome_sent,
+            'meta_pageview_sent': bot_user.meta_pageview_sent,
+        }
+
+        payments_query = Payment.query.filter_by(
+            bot_id=bot_id,
+            customer_user_id=str(telegram_user_id)
+        ).order_by(Payment.created_at.desc()).limit(10).all()
+
+        payments = [{
+            'id': p.id,
+            'amount': p.amount,
+            'net_amount': p.net_amount,
+            'status': p.status,
+            'gateway_type': p.gateway_type,
+            'product_name': p.product_name,
+            'created_at': p.created_at.isoformat() if p.created_at else None,
+            'paid_at': p.paid_at.isoformat() if p.paid_at else None,
+            'meta_purchase_sent': p.meta_purchase_sent,
+            'meta_pixel_id': p.meta_pixel_id,
+            'pool_id': p.pool_id,
+            'delivery_token': p.delivery_token,
+        } for p in payments_query]
+
+        pool_info = None
+        if payments_query:
+            last_with_pool = next((p for p in payments_query if p.pool_id), None)
+            if last_with_pool and last_with_pool.pool:
+                pool_info = {
+                    'id': last_with_pool.pool.id,
+                    'name': last_with_pool.pool.name,
+                    'meta_pixel_id': last_with_pool.pool.meta_pixel_id,
+                }
+
+        return jsonify({
+            'success': True,
+            'customer': {
+                'basic': {
+                    'first_name': bot_user.first_name,
+                    'username': bot_user.username,
+                    'telegram_user_id': bot_user.telegram_user_id,
+                },
+                'tracking': tracking,
+                'device': device,
+                'demographic': demographic,
+                'activity': activity,
+                'payments': payments,
+                'pool': pool_info,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Erro ao carregar perfil do cliente: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @dashboard_bp.route('/api/chat/media/<int:bot_id>/<file_id>')
 @login_required
 def get_chat_media(bot_id, file_id):

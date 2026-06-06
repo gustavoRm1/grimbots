@@ -221,6 +221,13 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button @click="showProfile = !showProfile; if(showProfile) loadCustomerProfile()"
+                            class="p-2 rounded-lg transition-all border"
+                            :class="showProfile ? 'bg-blue-500/20 text-blue-400 border-blue-500' : 'hover:bg-gray-800/50'"
+                            style="border-color: var(--border-subtle);"
+                            title="Perfil do cliente">
+                        <i class="fas fa-user-circle"></i>
+                    </button>
                     <template x-if="selectedConversation?.has_paid">
                         <span class="px-2 py-1 text-xs font-semibold rounded bg-green-500/20 text-green-400">
                             <i class="fas fa-check-circle mr-1"></i> Cliente Pago
@@ -229,49 +236,51 @@
                 </div>
             </div>
 
-            <!-- Messages Area -->
-            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container" x-ref="messagesContainer">
-                <template x-if="loadingMessages">
-                    <div class="flex items-center justify-center h-full">
-                        <i class="fas fa-spinner fa-spin text-2xl" style="color: var(--txt-secondary);"></i>
-                    </div>
-                </template>
-                <template x-if="!loadingMessages && messages.length === 0">
-                    <div class="text-center py-12 text-sm" style="color: var(--txt-muted);">
-                        <i class="fas fa-comment-slash text-4xl mb-3"></i>
-                        <p>Nenhuma mensagem ainda</p>
-                        <p class="text-xs mt-2">Comece a conversar enviando uma mensagem abaixo</p>
-                    </div>
-                </template>
-                <template x-if="!loadingMessages && messages.length > 0">
-                    <div>
-                        <template x-if="hasMoreMessages">
-                            <div class="text-center py-3">
-                                <button 
-                                    @click="loadMoreMessages()"
-                                    :disabled="loadingMoreMessages"
-                                    class="px-5 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
-                                    style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);"
-                                >
-                                    <template x-if="!loadingMoreMessages">
-                                        <span><i class="fas fa-chevron-up mr-2"></i>Carregar mensagens anteriores</span>
-                                    </template>
-                                    <template x-if="loadingMoreMessages">
-                                        <span><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</span>
-                                    </template>
-                                </button>
-                            </div>
-                        </template>
-                    <template x-for="msg in messages" :key="msg.id">
-                        <div class="flex items-start gap-3" :class="msg.direction === 'outgoing' ? 'justify-end' : ''">
-                            <template x-if="msg.direction === 'incoming'">
-                                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" 
-                                     :style="`background: ${getStatusColor(selectedConversation?.status || 'only_entered')};`">
-                                    <i class="fas fa-user text-white text-xs"></i>
+            <!-- Messages + Profile Container -->
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Messages Area -->
+                <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container" x-ref="messagesContainer">
+                    <template x-if="loadingMessages">
+                        <div class="flex items-center justify-center h-full">
+                            <i class="fas fa-spinner fa-spin text-2xl" style="color: var(--txt-secondary);"></i>
+                        </div>
+                    </template>
+                    <template x-if="!loadingMessages && messages.length === 0">
+                        <div class="text-center py-12 text-sm" style="color: var(--txt-muted);">
+                            <i class="fas fa-comment-slash text-4xl mb-3"></i>
+                            <p>Nenhuma mensagem ainda</p>
+                            <p class="text-xs mt-2">Comece a conversar enviando uma mensagem abaixo</p>
+                        </div>
+                    </template>
+                    <template x-if="!loadingMessages && messages.length > 0">
+                        <div>
+                            <template x-if="hasMoreMessages">
+                                <div class="text-center py-3">
+                                    <button 
+                                        @click="loadMoreMessages()"
+                                        :disabled="loadingMoreMessages"
+                                        class="px-5 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                                        style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);"
+                                    >
+                                        <template x-if="!loadingMoreMessages">
+                                            <span><i class="fas fa-chevron-up mr-2"></i>Carregar mensagens anteriores</span>
+                                        </template>
+                                        <template x-if="loadingMoreMessages">
+                                            <span><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</span>
+                                        </template>
+                                    </button>
                                 </div>
                             </template>
-                            <div class="max-w-[70%]" :class="msg.direction === 'outgoing' ? 'flex flex-col items-end' : ''">
-                                <div class="rounded-2xl px-4 py-3"
+                        <template x-for="msg in messages" :key="msg.id">
+                            <div class="flex items-start gap-3" :class="msg.direction === 'outgoing' ? 'justify-end' : ''">
+                                <template x-if="msg.direction === 'incoming'">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" 
+                                         :style="`background: ${getStatusColor(selectedConversation?.status || 'only_entered')};`">
+                                        <i class="fas fa-user text-white text-xs"></i>
+                                    </div>
+                                </template>
+                                <div class="max-w-[70%]" :class="msg.direction === 'outgoing' ? 'flex flex-col items-end' : ''">
+                                    <div class="rounded-2xl px-4 py-3"
                                      :style="msg.direction === 'outgoing' ? 'background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;' : 'background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);'">
                                     <!-- Mídia (foto/vídeo/documento) -->
                                     <template x-if="msg.media_url && (msg.message_type === 'photo' || msg.message_type === 'video' || msg.message_type === 'document')">
@@ -339,6 +348,122 @@
                     </template>
                     </div>
                 </template>
+            </div>
+
+            <!-- Profile Panel -->
+            <template x-if="showProfile">
+                <div class="h-full overflow-y-auto p-4 space-y-4 border-l" style="background: var(--bg-primary); width: 380px; flex-shrink: 0; border-color: var(--border-subtle);">
+                    <template x-if="loadingProfile">
+                        <div class="flex items-center justify-center h-32">
+                            <i class="fas fa-spinner fa-spin text-xl" style="color: var(--txt-secondary);"></i>
+                        </div>
+                    </template>
+                    <template x-if="!loadingProfile && customerProfile">
+                        <!-- Identificação -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Identificação</h4>
+                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                <div><span class="opacity-50">Nome:</span> <span x-text="customerProfile.basic.first_name || '-'"></span></div>
+                                <div><span class="opacity-50">Username:</span> <span x-text="'@' + (customerProfile.basic.username || 'sem_username')"></span></div>
+                                <div><span class="opacity-50">Telegram ID:</span> <span x-text="customerProfile.basic.telegram_user_id"></span></div>
+                            </div>
+                        </div>
+
+                        <!-- Tracking -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Tracking</h4>
+                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                <div><span class="opacity-50">Pixel:</span> <span x-text="customerProfile.tracking.campaign_code || '-'"></span></div>
+                                <div><span class="opacity-50">fbclid:</span> <span class="block truncate" x-text="customerProfile.tracking.fbclid || '-'"></span></div>
+                                <div><span class="opacity-50">fbp:</span> <span class="block truncate" x-text="customerProfile.tracking.fbp || '-'"></span></div>
+                                <div><span class="opacity-50">fbc:</span> <span class="block truncate" x-text="customerProfile.tracking.fbc || '-'"></span></div>
+                                <div><span class="opacity-50">UTM Source:</span> <span x-text="customerProfile.tracking.utm_source || '-'"></span></div>
+                                <div><span class="opacity-50">UTM Medium:</span> <span x-text="customerProfile.tracking.utm_medium || '-'"></span></div>
+                                <div><span class="opacity-50">UTM Campaign:</span> <span x-text="customerProfile.tracking.utm_campaign || '-'"></span></div>
+                                <div><span class="opacity-50">UTM Content:</span> <span x-text="customerProfile.tracking.utm_content || '-'"></span></div>
+                                <div><span class="opacity-50">UTM Term:</span> <span x-text="customerProfile.tracking.utm_term || '-'"></span></div>
+                                <div><span class="opacity-50">Session ID:</span> <span class="block truncate" x-text="customerProfile.tracking.tracking_session_id || '-'"></span></div>
+                                <div><span class="opacity-50">External ID:</span> <span class="block truncate" x-text="customerProfile.tracking.external_id || '-'"></span></div>
+                                <div><span class="opacity-50">Click URL:</span> <span class="block truncate" x-text="customerProfile.tracking.click_context_url || '-'"></span></div>
+                                <div><span class="opacity-50">Click em:</span> <span x-text="customerProfile.tracking.click_timestamp ? formatDate(customerProfile.tracking.click_timestamp) : '-'"></span></div>
+                            </div>
+                        </div>
+
+                        <!-- Dispositivo -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Dispositivo</h4>
+                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                <div><span class="opacity-50">IP:</span> <span x-text="customerProfile.device.ip_address || '-'"></span></div>
+                                <div><span class="opacity-50">Device:</span> <span x-text="customerProfile.device.device_type || '-'"></span></div>
+                                <div><span class="opacity-50">OS:</span> <span x-text="customerProfile.device.os_type || '-'"></span></div>
+                                <div><span class="opacity-50">Browser:</span> <span x-text="customerProfile.device.browser || '-'"></span></div>
+                                <div><span class="opacity-50">Modelo:</span> <span x-text="customerProfile.device.device_model || '-'"></span></div>
+                                <div><span class="opacity-50">User Agent:</span> <span class="block truncate" x-text="customerProfile.device.user_agent || '-'"></span></div>
+                            </div>
+                        </div>
+
+                        <!-- Demográfico -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Demográfico</h4>
+                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                <div><span class="opacity-50">Cidade:</span> <span x-text="customerProfile.demographic.customer_city || '-'"></span></div>
+                                <div><span class="opacity-50">Estado:</span> <span x-text="customerProfile.demographic.customer_state || '-'"></span></div>
+                                <div><span class="opacity-50">País:</span> <span x-text="customerProfile.demographic.customer_country || '-'"></span></div>
+                                <div><span class="opacity-50">Idade:</span> <span x-text="customerProfile.demographic.customer_age || '-'"></span></div>
+                                <div><span class="opacity-50">Gênero:</span> <span x-text="customerProfile.demographic.customer_gender || '-'"></span></div>
+                            </div>
+                        </div>
+
+                        <!-- Atividade -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Atividade</h4>
+                            <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                <div><span class="opacity-50">Primeira interação:</span> <span x-text="customerProfile.activity.first_interaction ? formatDate(customerProfile.activity.first_interaction) : '-'"></span></div>
+                                <div><span class="opacity-50">Última interação:</span> <span x-text="customerProfile.activity.last_interaction ? formatDate(customerProfile.activity.last_interaction) : '-'"></span></div>
+                                <div><span class="opacity-50">Welcome sent:</span> <span x-text="customerProfile.activity.welcome_sent ? 'Sim' : 'Não'"></span></div>
+                                <div><span class="opacity-50">PageView sent:</span> <span x-text="customerProfile.activity.meta_pageview_sent ? 'Sim' : 'Não'"></span></div>
+                            </div>
+                        </div>
+
+                        <!-- Pool de Origem -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pool de Origem</h4>
+                            <template x-if="customerProfile.pool">
+                                <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
+                                    <div><span class="opacity-50">Pool:</span> <span x-text="customerProfile.pool.name"></span></div>
+                                    <div><span class="opacity-50">Pixel ID:</span> <span x-text="customerProfile.pool.meta_pixel_id"></span></div>
+                                </div>
+                            </template>
+                            <template x-if="!customerProfile.pool">
+                                <p class="text-xs opacity-50">Sem pool associado</p>
+                            </template>
+                        </div>
+
+                        <!-- Pagamentos -->
+                        <div class="rounded-lg p-3" style="background: var(--bg-tertiary);">
+                            <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Pagamentos</h4>
+                            <template x-if="customerProfile.payments.length === 0">
+                                <p class="text-xs opacity-50">Nenhum pagamento</p>
+                            </template>
+                            <template x-for="p in customerProfile.payments" :key="p.id">
+                                <div class="border-b py-2 text-xs" style="border-color: var(--border-subtle); color: var(--txt-secondary);">
+                                    <div class="flex justify-between">
+                                        <span x-text="formatDate(p.created_at)"></span>
+                                        <span class="font-semibold" style="color: var(--txt-primary);" x-text="'R$ ' + formatMoney(p.amount)"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span x-text="p.gateway_type || '-'"></span>
+                                        <span :class="p.status === 'paid' ? 'text-green-400' : 'text-yellow-400'" x-text="p.status"></span>
+                                    </div>
+                                    <div class="opacity-50">
+                                        <span x-text="p.product_name || '-'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
             </div>
 
             <!-- Input Area -->
@@ -454,6 +579,9 @@ function chatApp() {
         messageLimit: 50,
         hasMoreMessages: false,
         loadingMoreMessages: false,
+        showProfile: false,
+        customerProfile: null,
+        loadingProfile: false,
 
         init() {
             if (this.bots.length > 0) {
@@ -628,6 +756,8 @@ function chatApp() {
 
         async selectConversation(conv) {
             this.selectedConversation = conv;
+            this.showProfile = false;
+            this.customerProfile = null;
             this.loadingMessages = true;
             this.messages = [];
             this.messageOffset = 0;
@@ -890,7 +1020,33 @@ function chatApp() {
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
+        },
+
+        formatMoney(value) {
+            return parseFloat(value || 0).toFixed(2).replace('.', ',');
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        },
+
+        async loadCustomerProfile() {
+            if (!this.selectedConversation || !this.selectedBot) return;
+            this.loadingProfile = true;
+            try {
+                const resp = await fetch(
+                    `/api/chat/customer-profile/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}`
+                );
+                const data = await resp.json();
+                if (data.success) this.customerProfile = data.customer;
+            } catch (e) {
+                console.error('Erro ao carregar perfil:', e);
+            } finally {
+                this.loadingProfile = false;
+            }
+        },
     };
 }
 </script>
