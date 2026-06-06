@@ -5227,6 +5227,26 @@ class BotManager:
             return result
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem: {e}")
+            if any(x in str(e) for x in ['401', 'Unauthorized', 'bot was kicked', 'bot was blocked']):
+                bot_id_to_offline = bot_id
+                if not bot_id_to_offline:
+                    try:
+                        from internal_logic.core.models import Bot as BotModel
+                        bot_rec = BotModel.query.filter_by(token=token).first()
+                        if bot_rec:
+                            bot_id_to_offline = bot_rec.id
+                    except Exception:
+                        pass
+                if bot_id_to_offline:
+                    try:
+                        from internal_logic.core.models import PoolBot
+                        from internal_logic.core.extensions import db
+                        PoolBot.query.filter_by(bot_id=bot_id_to_offline).update({
+                            'status': 'offline',
+                        })
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
             return False
     
     def get_bot_status(self, bot_id: int, verify_telegram: bool = False) -> Dict[str, Any]:

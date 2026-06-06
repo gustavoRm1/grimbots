@@ -48,6 +48,21 @@ def telegram_webhook(bot_id):
             logger.warning(f"⚠️ Webhook para bot inexistente: {bot_id}")
             return jsonify({'status': 'ok'}), 200
         
+        # Health check passivo: bot recebeu webhook → tá online
+        try:
+            from internal_logic.core.models import PoolBot, get_brazil_time
+            pool_bots = PoolBot.query.filter_by(bot_id=bot_id, is_enabled=True).all()
+            if pool_bots:
+                now_db = get_brazil_time()
+                for pb in pool_bots:
+                    pb.last_seen_at = now_db
+                    if pb.status != 'online':
+                        pb.status = 'online'
+                        pb.consecutive_failures = 0
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        
         # ============================================================================
         # TENTATIVA 1: VIA EXPRESSA (Processamento Direto Legado) - PRIMEIRO!
         # ============================================================================

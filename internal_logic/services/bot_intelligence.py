@@ -84,9 +84,9 @@ class BotIntelligenceService:
                 if not getattr(pool_bot, 'is_enabled', True):
                     continue
                 
-                # Verificar status
+                # Verificar status — só exclui se explicitamente offline
                 status = getattr(pool_bot, 'status', 'unknown')
-                if status != 'online':
+                if status == 'offline':
                     continue
                 
                 # Verificar circuit breaker

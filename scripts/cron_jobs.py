@@ -130,9 +130,20 @@ def update_ranking():
 
 
 def health_check_pools():
-    """Health check de pools - executar a cada 15 segundos (ou 1 min via cron)"""
-    from internal_logic.services.payment_processor import health_check_all_pools
-    run_with_context(health_check_all_pools, "health_check_pools")
+    """Health check passivo de pools - baseado em last_seen_at, sem chamar Telegram API"""
+    def update_pool_metrics():
+        from internal_logic.core.models import RedirectPool, get_brazil_time
+        pools = RedirectPool.query.filter_by(is_active=True).all()
+        now_db = get_brazil_time()
+        for pool in pools:
+            pool_bots = list(pool.pool_bots.filter_by(is_enabled=True))
+            total = len(pool_bots)
+            online = sum(1 for pb in pool_bots
+                         if pb.last_seen_at
+                         and (now_db - pb.last_seen_at).total_seconds() < 300)
+            pool.health_percentage = int((online / total * 100)) if total > 0 else 0
+        db.session.commit()
+    run_with_context(update_pool_metrics, "health_check_pools")
 
 
 def remarketing_campaigns():
