@@ -38,7 +38,7 @@ class TrackingServiceV4:
             logger.error(f"❌ TrackingServiceV4 - Erro ao conectar Redis: {e}")
             self.redis = None
         
-        self.ttl_default = 3600  # 1 hora
+        self.ttl_default = 604800  # 7 dias (janela de conversão do lead)
     
     def save_tracking_token(self, tracking_token: str, tracking_data: Dict[str, Any], ttl: int = None) -> bool:
         """Salva dados de tracking no Redis"""

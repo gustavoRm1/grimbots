@@ -78,6 +78,17 @@ def public_redirect(slug):
             # Obter pixel_id do pool
             pixel_id_to_use = getattr(pool, 'meta_pixel_id', None)
             
+            # Salvar tracking data no Redis (pool_id, pixel_id para o delivery)
+            from internal_logic.services.tracking_service_v4 import TrackingServiceV4
+            tracking_service_v4 = TrackingServiceV4()
+            tracking_service_v4.save_tracking_token(tracking_token, {
+                'pool_id': pool.id,
+                'pixel_id': pool.meta_pixel_id,
+                'client_ip': request.remote_addr,
+                'client_user_agent': request.headers.get('User-Agent', ''),
+                'fbclid': request.args.get('fbclid', ''),
+            })
+
             # Disparar PageView (async)
             TrackingService.fire_pageview(pool, request, async_mode=True)
             
@@ -297,7 +308,7 @@ def capture_tracking_cookies():
         }
         
         # V4.1: Salvar dados atualizados no Redis
-        tracking_service_v4.save_tracking_token(tracking_token, updated_data, ttl=3600)
+        tracking_service_v4.save_tracking_token(tracking_token, updated_data)
         
         logger.info(f"✅ V4.1 - Cookies capturados: {tracking_token[:8]}... | fbp: {'✅' if data.get('fbp') else '❌'} | fbc: {'✅' if data.get('fbc') else '❌'}")
         

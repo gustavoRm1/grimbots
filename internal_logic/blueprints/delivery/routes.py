@@ -217,11 +217,14 @@ def delivery_page(token):
         fbc = getattr(bot_user, 'fbc', None) if bot_user else None
         fbclid = getattr(bot_user, 'fbclid', None) if bot_user else None
         
-        # B. Fallback Inteligente: se BotUser não tiver campaign_code, buscar do Pool ou Payment
+        # B. Fallback Inteligente: se BotUser não tiver campaign_code, buscar do Payment ou Pool
         pixel_source = 'BotUser'
         if not pixel_id:
-            pixel_id = pool.meta_pixel_id if pool else payment.meta_pixel_id if payment else None
-            pixel_source = 'Pool' if pool else 'Payment'
+            pixel_id = payment.meta_pixel_id if payment else None
+            pixel_source = 'Payment'
+        if not pixel_id:
+            pixel_id = pool.meta_pixel_id if pool else None
+            pixel_source = 'Pool'
         logger.info(f"[FILO_INVISIVEL] Pixel: {pixel_id}, source: {pixel_source}")
         
         # C. Validação de pixel_id
