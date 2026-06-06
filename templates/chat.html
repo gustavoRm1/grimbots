@@ -27,9 +27,9 @@
         <!-- Sidebar: Bots -->
         <div class="w-64 border-r overflow-y-auto" style="border-color: var(--border-subtle); background: var(--bg-secondary);" x-show="!selectedConversation">
             <div class="p-4">
-                <h2 class="text-sm font-semibold mb-3 uppercase" style="color: var(--txt-secondary);">Bots Online (<span x-text="onlineBotsCount"></span>)</h2>
+                <h2 class="text-sm font-semibold mb-3 uppercase" style="color: var(--txt-secondary);">Bots Online</h2>
                 <div class="space-y-2">
-                    <template x-for="bot in bots.filter(b => b.is_running)" :key="bot.id">
+                    <template x-for="bot in bots" :key="bot.id">
                         <div 
                             @click="selectBot(bot)"
                             class="p-3 rounded-lg cursor-pointer transition-all"
@@ -53,7 +53,7 @@
                             </div>
                         </div>
                     </template>
-                    <template x-if="bots.filter(b => b.is_running).length === 0">
+                    <template x-if="bots.length === 0">
                         <div class="text-center py-8 text-sm" style="color: var(--txt-muted);">
                             <i class="fas fa-robot text-3xl mb-2"></i>
                             <p>Nenhum bot online</p>
@@ -413,7 +413,6 @@
 function chatApp() {
     return {
         bots: {{ bots | tojson }},
-        onlineBotsCount: 0,
         selectedBot: null,
         selectedConversation: null,
         conversations: [],
@@ -434,13 +433,7 @@ function chatApp() {
         conversationLimit: 50,
 
         init() {
-            this.onlineBotsCount = this.bots.filter(b => b.is_running).length;
-            
-            // Auto-selecionar primeiro bot ONLINE se houver
-            const firstOnline = this.bots.find(b => b.is_running);
-            if (firstOnline) {
-                this.selectBot(firstOnline);
-            } else if (this.bots.length > 0) {
+            if (this.bots.length > 0) {
                 this.selectBot(this.bots[0]);
             }
             

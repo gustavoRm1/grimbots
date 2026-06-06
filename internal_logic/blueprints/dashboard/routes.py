@@ -865,17 +865,52 @@ def save_ranking_display_name():
 @dashboard_bp.route('/chat')
 @login_required
 def chat():
-    """Página de chat com leads"""
-    # Buscar bots do usuário
-    bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
+    """Página de chat com leads — otimizado para escala"""
+    bots = Bot.query.filter(
+        Bot.user_id == current_user.id,
+        Bot.is_active == True,
+        db.exists().where(
+            db.and_(
+                BotUser.bot_id == Bot.id,
+                BotUser.archived == False
+            )
+        )
+    ).order_by(Bot.id).limit(100).all()
+
+    if not bots:
+        return render_template('chat.html', bots=[])
+
+    bot_ids = [b.id for b in bots]
+
+    conv_rows = db.session.query(
+        BotUser.bot_id,
+        func.count(BotUser.id).label('total')
+    ).filter(
+        BotUser.bot_id.in_(bot_ids),
+        BotUser.archived == False
+    ).group_by(BotUser.bot_id).all()
+    conv_map = {r.bot_id: r.total for r in conv_rows}
+
+    unread_rows = db.session.query(
+        BotMessage.bot_id,
+        func.count(BotMessage.id).label('total')
+    ).filter(
+        BotMessage.bot_id.in_(bot_ids),
+        BotMessage.direction == 'incoming',
+        BotMessage.is_read == False
+    ).group_by(BotMessage.bot_id).all()
+    unread_map = {r.bot_id: r.total for r in unread_rows}
+
     bots_list = [{
         'id': b.id,
         'name': b.name,
         'username': getattr(b, 'username', ''),
         'is_running': getattr(b, 'is_running', False),
-        'is_active': getattr(b, 'is_active', True)
+        'is_active': getattr(b, 'is_active', True),
+        'total_conversations': conv_map.get(b.id, 0),
+        'unread_count': unread_map.get(b.id, 0),
     } for b in bots]
-    
+
     return render_template('chat.html', bots=bots_list)
 
 
