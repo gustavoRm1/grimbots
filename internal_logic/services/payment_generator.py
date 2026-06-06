@@ -1021,6 +1021,18 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                         or getattr(payment, 'pageview_event_id', None)
                         or getattr(bot_user, 'pageview_event_id', None)
                     )
+
+                    # Resolver pool_bot para o enrichment (mesma lógica do delivery)
+                    from internal_logic.core.models import PoolBot
+                    pool_bot = None
+                    if bot_user and bot_user.tracking_session_id:
+                        temp_tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
+                        pool_id_from_tracking = temp_tracking_data.get('pool_id')
+                        if pool_id_from_tracking:
+                            pool_bot = PoolBot.query.filter_by(bot_id=bot_id, pool_id=pool_id_from_tracking).first()
+                    if not pool_bot:
+                        pool_bot = PoolBot.query.filter_by(bot_id=bot_id).first()
+
                     logger.info(
                         "ENRICHMENT CHECK | PIX",
                         extra={
