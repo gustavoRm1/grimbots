@@ -586,7 +586,7 @@ def bot_stats_api(bot_id):
         'users': users,
         'chart': {
             'daily_sales': chart_data,
-            'period': period
+            'period': raw_period
         },
         'daily_chart': daily_chart,
         'remarketing': remarketing,
@@ -599,7 +599,7 @@ def bot_stats_api(bot_id):
         'os_distribution': os_distribution,
         'browser_distribution': browser_distribution,
         'top_cities': top_cities,
-        'period_label': f'Últimos {period} dias' if str(period).isdigit() else 'Todo o período',
+        'period_label': f'Últimos {raw_period} dias' if str(raw_period).isdigit() else 'Todo o período',
         # Campos de compatibilidade legacy
         'general': {
             'total_users': users['total'],
