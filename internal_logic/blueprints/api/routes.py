@@ -603,15 +603,15 @@ def bot_stats_api(bot_id):
             'conversion_rate': summary['conversion_rate']
         },
         'order_bumps': {
-            'shown': 0,
+            'shown': funnels['order_bump_shown'],
             'accepted': funnels['order_bump_sales'],
-            'acceptance_rate': 0,
+            'acceptance_rate': funnels['order_bump_acceptance_rate'],
             'revenue': funnels['order_bump_revenue']
         },
         'downsells': {
-            'sent': 0,
+            'sent': funnels['downsell_sent'],
             'converted': funnels['downsell_sales'],
-            'conversion_rate': 0,
+            'conversion_rate': funnels['downsell_conversion_rate'],
             'revenue': funnels['downsell_revenue']
         }
     }

@@ -1969,30 +1969,6 @@ window.botStatsApp = function botStatsApp() {
         loading: true,
         selectedPeriod: 'month',  // ✅ FILTRO DE PERÍODO: day, month, all
         
-        // ✅ ANALYTICS V2.0 (QI 540)
-        analyticsV2: {
-            is_organic: false, // Bot orgânico (sem pool)
-            message: '',
-            summary: {
-                today_revenue: 0,
-                today_spend: 0,
-                today_profit: 0,
-                today_roi: 0,
-                today_sales: 0,
-                revenue_change: 0,
-                status: 'neutral'
-            },
-            problems: [],
-            opportunities: [],
-            utm_performance: [],
-            conversion_funnel: {
-                pageviews: 0,
-                viewcontents: 0,
-                purchases: 0,
-                pageview_to_viewcontent: 0,
-                viewcontent_to_purchase: 0
-            }
-        },
         
         stats: {
             general: {
@@ -2093,13 +2069,6 @@ window.botStatsApp = function botStatsApp() {
             try {
                 console.log('Starting initialization...');
                 
-                // CARREGAR ANALYTICS V2.0 (QI 540) - Não bloquear se falhar
-                try {
-                    await this.loadAnalyticsV2();
-                } catch (error) {
-                    console.error(' Erro ao carregar Analytics V2.0 (continuando...):', error);
-                }
-                
                 // ✅ CRÍTICO: Carregar stats normais - ESSENCIAL
                 try {
                     await this.loadStats();
@@ -2171,21 +2140,6 @@ window.botStatsApp = function botStatsApp() {
             }
         },
         
-        async loadAnalyticsV2() {
-            // ✅ CARREGAR ANALYTICS V2.0 - DECISÕES EM 5 SEGUNDOS
-            try {
-                const response = await fetch(`/api/bots/${this.botId}/analytics-v2`);
-                if (response.ok) {
-                    this.analyticsV2 = await response.json();
-                    console.log('✅ Analytics V2.0 carregado:', this.analyticsV2);
-                } else {
-                    console.error('❌ Erro ao carregar Analytics V2.0');
-                }
-            } catch (error) {
-                console.error('💥 Erro ao carregar Analytics V2.0:', error);
-            }
-        },
-        
         async loadStats() {
             this.loading = true;
             try {
@@ -2227,7 +2181,7 @@ window.botStatsApp = function botStatsApp() {
                         conversion_rate: 0,
                         avg_ticket: 0
                     },
-                    products: data.products || [],
+                    products: data.top_products || [],
                     order_bumps: data.order_bumps || this.stats.order_bumps || {
                         shown: 0,
                         accepted: 0,
