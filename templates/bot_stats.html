@@ -1887,12 +1887,6 @@ if (typeof window.botStatsApp === 'undefined') {
                                         </button>
                                         <div x-show="open" @click.outside="open = false" x-cloak
                                              class="absolute z-50 mt-1 right-0 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]">
-                                            <button x-show="!sale.meta_purchase_sent"
-                                                    @click="open = false; resendPurchase(sale.id)"
-                                                    class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
-                                                <i class="fas fa-paper-plane text-blue-400"></i>
-                                                Reenviar Purchase
-                                            </button>
                                             <button x-show="sale.meta_purchase_sent"
                                                     @click="open = false; resendPurchase(sale.id)"
                                                     class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
