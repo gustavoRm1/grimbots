@@ -1899,7 +1899,7 @@ if (typeof window.botStatsApp === 'undefined') {
                                                 <i class="fas fa-redo text-yellow-400"></i>
                                                 Reenviar Purchase
                                             </button>
-                                            <a x-show="sale.delivery_token"
+                                        <a x-show="sale.meta_purchase_sent && sale.delivery_token"
                                                :href="'/delivery/' + sale.delivery_token"
                                                target="_blank"
                                                class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
