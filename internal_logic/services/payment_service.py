@@ -396,8 +396,9 @@ class PaymentService:
                     amount=amount,
                     status=response.status,
                     customer_user_id=customer_user_id,
+                    customer_name=customer_name,
                     product_name=description,
-                    product_description=response.qr_code
+                    product_description=response.qr_code,
                 )
             
             return response
@@ -426,8 +427,13 @@ class PaymentService:
         amount: float,
         status: str,
         customer_user_id: Optional[str] = None,
+        customer_name: Optional[str] = None,
         product_name: Optional[str] = None,
-        product_description: Optional[str] = None
+        product_description: Optional[str] = None,
+        device_type: Optional[str] = None,
+        os_type: Optional[str] = None,
+        browser: Optional[str] = None,
+        device_model: Optional[str] = None
     ):
         """Registra transação no banco de dados"""
         try:
@@ -443,8 +449,13 @@ class PaymentService:
                 gateway_transaction_id=str(transaction_id) if transaction_id else payment_id,
                 gateway_transaction_hash=str(transaction_hash) if transaction_hash else None,
                 customer_user_id=str(customer_user_id) if customer_user_id else None,
+                customer_name=customer_name,
                 product_name=product_name,
-                product_description=product_description
+                product_description=product_description,
+                device_type=device_type,
+                os_type=os_type,
+                browser=browser,
+                device_model=device_model
             )
             self.db.add(payment)
             self.db.commit()

@@ -1838,19 +1838,29 @@ if (typeof window.botStatsApp === 'undefined') {
                                 <td class="text-gray-300" x-text="sale.product_name || 'Produto'"></td>
                                 <td class="font-bold whitespace-nowrap" style="color: var(--brand-gold-300);" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
                                 <td>
-                                    <span x-show="sale.meta_purchase_sent" class="text-emerald-500" title="Purchase enviado ao Meta">
-                                        <i class="fas fa-check-circle"></i>
-                                    </span>
-                                    <span x-show="!sale.meta_purchase_sent" class="text-gray-600" title="Purchase pendente">
-                                        <i class="fas fa-clock"></i>
-                                    </span>
-                                    <a x-show="sale.delivery_token"
-                                       :href="'/delivery/' + sale.delivery_token"
-                                       target="_blank"
-                                       class="text-blue-400 hover:text-blue-300 ml-1 text-xs"
-                                       title="Abrir página de entrega">
-                                        <i class="fas fa-external-link-alt"></i>
-                                    </a>
+                                    <div class="flex items-center gap-1 flex-wrap">
+                                        <span x-show="sale.meta_purchase_sent"
+                                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                              style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                            <i class="fas fa-check-circle text-[10px]"></i>
+                                            Enviado
+                                        </span>
+                                        <span x-show="!sale.meta_purchase_sent"
+                                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                              style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3);">
+                                            <i class="fas fa-clock text-[10px]"></i>
+                                            Pendente
+                                        </span>
+                                        <a x-show="sale.delivery_token"
+                                           :href="'/delivery/' + sale.delivery_token"
+                                           target="_blank"
+                                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ml-1"
+                                           style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.25);"
+                                           title="Abrir página de entrega">
+                                            <i class="fas fa-external-link-alt text-[10px]"></i>
+                                            Link
+                                        </a>
+                                    </div>
                                 </td>
                                 <td class="text-gray-400 text-sm">
                                     <template x-if="sale.device_model">
