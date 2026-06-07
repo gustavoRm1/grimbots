@@ -361,9 +361,46 @@ def delivery_page(token):
         # DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
         # Meta deduplica automaticamente usando eventID/event_id
-        # SERVER-SIDE PURCHASE DESATIVADO: política HTML-only
         if has_meta_pixel and not purchase_already_sent:
-            logger.info(f" [META DELIVERY] Purchase server-side desativado (HTML-only) | payment {payment.id} | event_id {pixel_config.get('event_id')}")
+            try:
+                from utils.encryption import decrypt
+                from celery_app import send_meta_event
+                import time
+
+                access_token = decrypt(pool.meta_access_token)
+                if not access_token:
+                    logger.error(f" [META DELIVERY] meta_access_token ausente ou falha na descriptografia | pool {pool.id}")
+                else:
+                    purchase_event = {
+                        'event_name': 'Purchase',
+                        'event_time': int(time.time()),
+                        'event_id': purchase_event_id,
+                        'action_source': 'website',
+                        'event_source_url': redirect_url,
+                        'user_data': {
+                            'fbp': fbp_value,
+                            'fbc': fbc_value,
+                            'external_id': external_id_normalized,
+                            'client_ip_address': request.remote_addr or '',
+                            'client_user_agent': request.headers.get('User-Agent', ''),
+                        },
+                        'custom_data': {
+                            'value': float(payment.amount),
+                            'currency': 'BRL',
+                            'content_id': str(pool.id) if pool else str(payment.bot_id),
+                            'content_name': payment.product_name or payment.bot.name,
+                        }
+                    }
+
+                    send_meta_event.delay(
+                        pixel_id=pixel_id,
+                        access_token=access_token,
+                        event_data=purchase_event,
+                        test_code=pool.meta_test_event_code
+                    )
+                    logger.info(f" [META DELIVERY] Purchase server-side enfileirado | payment {payment.id} | event_id {purchase_event_id}")
+            except Exception as e:
+                logger.error(f" [META DELIVERY] Erro ao enfileirar Purchase server-side: {e}", exc_info=True)
 
         return response
         
