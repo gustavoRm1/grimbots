@@ -232,7 +232,18 @@ class PaymentService:
         customer_name: str,
         customer_email: str,
         customer_cpf: Optional[str] = None,
-        external_id: Optional[str] = None
+        external_id: Optional[str] = None,
+        order_bump_shown: bool = False,
+        order_bump_accepted: bool = False,
+        order_bump_value: float = 0.0,
+        is_downsell: bool = False,
+        downsell_index: int = None,
+        is_upsell: bool = False,
+        upsell_index: int = None,
+        is_remarketing: bool = False,
+        remarketing_campaign_id: int = None,
+        button_index: int = None,
+        button_config: str = None
     ) -> PixPaymentResponse:
         # Initialize distributed lock variables - MUST be first line
         lock_key = None
@@ -399,6 +410,17 @@ class PaymentService:
                     customer_name=customer_name,
                     product_name=description,
                     product_description=response.qr_code,
+                    order_bump_shown=order_bump_shown,
+                    order_bump_accepted=order_bump_accepted,
+                    order_bump_value=order_bump_value,
+                    is_downsell=is_downsell,
+                    downsell_index=downsell_index,
+                    is_upsell=is_upsell,
+                    upsell_index=upsell_index,
+                    is_remarketing=is_remarketing,
+                    remarketing_campaign_id=remarketing_campaign_id,
+                    button_index=button_index,
+                    button_config=button_config,
                 )
             
             return response
@@ -433,7 +455,18 @@ class PaymentService:
         device_type: Optional[str] = None,
         os_type: Optional[str] = None,
         browser: Optional[str] = None,
-        device_model: Optional[str] = None
+        device_model: Optional[str] = None,
+        order_bump_shown: bool = False,
+        order_bump_accepted: bool = False,
+        order_bump_value: float = 0.0,
+        is_downsell: bool = False,
+        downsell_index: int = None,
+        is_upsell: bool = False,
+        upsell_index: int = None,
+        is_remarketing: bool = False,
+        remarketing_campaign_id: int = None,
+        button_index: int = None,
+        button_config: str = None
     ):
         """Registra transação no banco de dados"""
         try:
@@ -455,7 +488,18 @@ class PaymentService:
                 device_type=device_type,
                 os_type=os_type,
                 browser=browser,
-                device_model=device_model
+                device_model=device_model,
+                order_bump_shown=order_bump_shown,
+                order_bump_accepted=order_bump_accepted,
+                order_bump_value=order_bump_value,
+                is_downsell=is_downsell,
+                downsell_index=downsell_index,
+                is_upsell=is_upsell,
+                upsell_index=upsell_index,
+                is_remarketing=is_remarketing,
+                remarketing_campaign_id=remarketing_campaign_id,
+                button_index=button_index,
+                button_config=button_config
             )
             self.db.add(payment)
             self.db.commit()

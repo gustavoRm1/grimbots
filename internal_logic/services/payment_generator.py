@@ -9,6 +9,7 @@ Fluxo:
 2. Se falha, executa logica legada completa (fallback)
 """
 
+import json
 import logging
 import requests
 from typing import Optional, Dict, Any
@@ -67,7 +68,18 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
             customer_name=customer_name or 'Cliente',
             customer_email=f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
             customer_cpf=customer_user_id,
-            external_id=customer_user_id
+            external_id=customer_user_id,
+            order_bump_shown=order_bump_shown,
+            order_bump_accepted=order_bump_accepted,
+            order_bump_value=order_bump_value,
+            is_downsell=is_downsell,
+            downsell_index=downsell_index,
+            is_upsell=is_upsell,
+            upsell_index=upsell_index,
+            is_remarketing=is_remarketing,
+            remarketing_campaign_id=remarketing_campaign_id,
+            button_index=button_index,
+            button_config=json.dumps(button_config) if button_config else None
         )
 
         if response.success:
