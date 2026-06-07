@@ -37,22 +37,26 @@ def bot_stats_api(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
 
     # Obter período da query string
-    period = request.args.get('period', '30')
+    raw_period = request.args.get('period', '30')
 
-    # Filtro de data baseado no período
-    if period == 'all':
+    # Mapear labels do frontend para dias
+    period_map = {'day': 1, 'today': 1, 'month': 30, '7': 7, '30': 30}
+    if raw_period == 'all':
+        days = None
         date_filter = datetime.min
     else:
-        try:
-            days = int(period)
-            date_filter = datetime.utcnow() - timedelta(days=days)
-        except (ValueError, TypeError):
-            date_filter = datetime.utcnow() - timedelta(days=30)
+        days = period_map.get(raw_period)
+        if days is None:
+            try:
+                days = int(raw_period)
+            except (ValueError, TypeError):
+                days = 30
+        date_filter = datetime.utcnow() - timedelta(days=days)
 
     # Filtro base de pagamentos
     payment_filter = and_(
         Payment.bot_id == bot_id,
-        Payment.created_at >= date_filter if period != 'all' else True
+        Payment.created_at >= date_filter if raw_period != 'all' else True
     )
 
     # Hoje e ontem para cálculos de variação
@@ -73,6 +77,7 @@ def bot_stats_api(bot_id):
         'revenue_change': 0.0,
         'sales_change': 0.0
     }
+    total_pending = 0
 
     chart_data = []
     daily_chart = []
@@ -120,9 +125,11 @@ def bot_stats_api(bot_id):
             payment_filter, Payment.status == 'paid'
         ).scalar() or 0.0
 
-        total_checkouts = db.session.query(func.count(Payment.id)).filter(
-            payment_filter, Payment.status.in_(['paid', 'pending'])
+        total_pending = db.session.query(func.count(Payment.id)).filter(
+            payment_filter, Payment.status == 'pending'
         ).scalar() or 0
+
+        total_checkouts = total_sales + total_pending
 
         conversion_rate = (total_sales / total_checkouts * 100) if total_checkouts > 0 else 0.0
         avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0.0
@@ -203,7 +210,7 @@ def bot_stats_api(bot_id):
     # BLOCO 3: CHART (Gráfico de Vendas Diárias)
     # ============================================================================
     try:
-        chart_days = 7 if period == '7' else 30
+        chart_days = max(7, min(days or 90, 90)) if days else 90
         daily_sales = []
 
         for i in range(chart_days - 1, -1, -1):
@@ -597,7 +604,7 @@ def bot_stats_api(bot_id):
         'general': {
             'total_users': users['total'],
             'total_sales': summary['total_sales'],
-            'pending_sales': 0,
+            'pending_sales': total_pending,
             'total_revenue': summary['total_revenue'],
             'avg_ticket': summary['avg_ticket'],
             'conversion_rate': summary['conversion_rate']

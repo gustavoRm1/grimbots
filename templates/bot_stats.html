@@ -2078,23 +2078,15 @@ window.botStatsApp = function botStatsApp() {
                     this.loading = false;
                 }
                 
-                // ✅ FIX: Usar $nextTick para garantir DOM pronto
+                // ✅ Renderizar gráfico após DOM pronto
                 this.$nextTick(() => {
                     setTimeout(() => {
                         try {
-                            if (typeof this.initChart === 'function') {
-                                this.initChart();
-                            }
+                            this.renderChart();
                             if (typeof this.initDemographicCharts === 'function') {
                                 this.initDemographicCharts();
                             }
-                            // Após criar gráfico, atualizar com dados
                             setTimeout(() => {
-                                if (this.stats && this.stats.daily_chart && this.stats.daily_chart.length > 0) {
-                                    if (typeof this.updateChart === 'function') {
-                                        this.updateChart();
-                                    }
-                                }
                                 if (typeof this.updateDemographicCharts === 'function') {
                                     this.updateDemographicCharts();
                                 }
@@ -2105,17 +2097,9 @@ window.botStatsApp = function botStatsApp() {
                     }, 150);
                 });
                 
-                // ✅ Watcher: Atualizar gráfico quando dados mudarem
+                // ✅ Watcher: Re-renderizar gráfico quando dados mudarem
                 this.$watch('stats.daily_chart', () => {
-                    if (this.salesChart && this.stats && this.stats.daily_chart && this.stats.daily_chart.length > 0) {
-                        try {
-                            if (typeof this.updateChart === 'function') {
-                                this.updateChart();
-                            }
-                        } catch (error) {
-                            console.error('❌ Erro ao atualizar gráfico:', error);
-                        }
-                    }
+                    try { this.renderChart(); } catch (e) {}
                 });
                 
                 // ✅ Watcher: Resetar página quando recent_sales mudar
@@ -2226,23 +2210,9 @@ window.botStatsApp = function botStatsApp() {
                 this.currentSalePage = 1;
                 this.currentCampaignPage = 1;
                 
-                // ✅ Garantir que gráfico exista e seja atualizado
+                // ✅ Renderizar/atualizar gráfico com novos dados
                 this.$nextTick(() => {
-                    // Se gráfico não existe, inicializar primeiro
-                    if (!this.salesChart) {
-                        console.log('🔨 Gráfico não existe, inicializando...');
-                        this.initChart();
-                    }
-                    
-                    // Aguardar um pouco para garantir que o gráfico foi criado
-                    setTimeout(() => {
-                        if (this.stats.daily_chart && this.stats.daily_chart.length > 0) {
-                            console.log('📊 Atualizando gráfico com dados:', this.stats.daily_chart);
-                            this.updateChart();
-                        } else {
-                            console.warn('⚠️ daily_chart não disponível ou vazio nos stats');
-                        }
-                    }, 200);
+                    setTimeout(() => this.renderChart(), 100);
                 });
             } catch (error) {
                 console.error('❌ Erro ao carregar stats:', error);
@@ -2252,55 +2222,42 @@ window.botStatsApp = function botStatsApp() {
             }
         },
         
-        initChart() {
+        renderChart() {
             const ctx = document.getElementById('salesChart');
-            if (!ctx) {
-                console.error('❌ Canvas #salesChart não encontrado no DOM');
-                return;
-            }
-            console.log('✅ Canvas encontrado:', ctx);
-            
-            if (typeof Chart === 'undefined') {
-                console.error('❌ Chart.js não carregado ainda, tentando novamente em 500ms...');
-                setTimeout(() => this.initChart(), 500);
-                return;
-            }
-            console.log('✅ Chart.js disponível');
-            
-            // ✅ FIX: Destruir gráfico anterior se existir
-            if (this.salesChart) {
-                console.log('♻️ Destruindo gráfico anterior...');
-                this.salesChart.destroy();
-            }
-            
-            console.log('🔨 Criando novo gráfico...');
-            
-            // ✅ FIX: Forçar layout antes de criar gráfico
-            ctx.offsetHeight;
-            
+            if (!ctx) return;
+            if (typeof Chart === 'undefined') return;
+
+            if (this.salesChart) this.salesChart.destroy();
+
+            const chartData = this.stats.daily_chart || [];
+            const hasData = chartData.length > 0;
+
             this.salesChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
-                    labels: [],
+                    labels: hasData ? chartData.map(d => d.day) : [],
                     datasets: [
                         {
                             label: 'Vendas',
-                            data: [],
+                            data: hasData ? chartData.map(d => d.sales) : [],
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
                             borderColor: '#3B82F6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 2,
-                            tension: 0.4,
-                            fill: true,
-                            yAxisID: 'y'
+                            borderWidth: 1,
+                            borderRadius: 3,
+                            order: 1
                         },
                         {
                             label: 'Receita (R$)',
-                            data: [],
+                            data: hasData ? chartData.map(d => d.revenue) : [],
+                            type: 'line',
                             borderColor: '#FFB800',
                             backgroundColor: 'rgba(255, 184, 0, 0.1)',
                             borderWidth: 2,
-                            tension: 0.4,
-                            fill: true,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#FFB800',
+                            tension: 0.3,
+                            fill: false,
+                            order: 0,
                             yAxisID: 'y1'
                         }
                     ]
@@ -2308,209 +2265,55 @@ window.botStatsApp = function botStatsApp() {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: false,  // ✅ SEM ANIMAÇÃO (evita loop)
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
+                    animation: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
                             display: true,
                             position: 'bottom',
-                            labels: {
-                                color: '#9CA3AF',
-                                padding: 20
-                            }
+                            labels: { color: '#9CA3AF', padding: 16, boxWidth: 12 }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                            titleColor: '#FFFFFF',
+                            titleColor: '#fff',
                             bodyColor: '#D1D1D1',
                             borderColor: '#FFB800',
                             borderWidth: 1,
-                            padding: 12
-                        }
-                    },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            beginAtZero: true,
-                            ticks: {
-                                color: '#60A5FA',
-                                stepSize: 1
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)'
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
-                            beginAtZero: true,
-                            ticks: {
-                                color: '#FFB800',
-                                callback: function(value) {
-                                    return 'R$ ' + value.toFixed(0);
+                            padding: 10,
+                            callbacks: {
+                                label: function(ctx) {
+                                    if (ctx.dataset.label === 'Receita (R$)') {
+                                        return 'Receita: R$ ' + ctx.raw.toFixed(2);
+                                    }
+                                    return 'Vendas: ' + ctx.raw;
                                 }
-                            },
-                            grid: {
-                                drawOnChartArea: false
                             }
-                        },
-                        x: {
-                            ticks: {
-                                color: '#9CA3AF'
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)'
-                            }
-                        }
-                    }
-                }
-            });
-            
-            console.log('✅ Gráfico criado com sucesso!');
-        },
-        
-        updateChart() {
-            // ✅ Se gráfico não existe, criar primeiro
-            if (!this.salesChart) {
-                console.log('⚠️ Gráfico não existe, criando...');
-                this.initChart();
-                // Aguardar um pouco para garantir criação antes de atualizar
-                setTimeout(() => {
-                    if (this.salesChart) {
-                        this.updateChart();
-                    }
-                }, 300);
-                return;
-            }
-            
-            // ✅ Aceitar array vazio (mostrar gráfico vazio)
-            if (!this.stats.daily_chart) {
-                console.log('⚠️ daily_chart não disponível, usando array vazio');
-                this.stats.daily_chart = [];
-            }
-            
-            console.log('📊 Atualizando gráfico com', this.stats.daily_chart.length, 'pontos de dados...');
-            
-            // ✅ SOLUÇÃO QI 300: DESTRUIR E RECRIAR (evita update() com bug)
-            const ctx = document.getElementById('salesChart');
-            if (!ctx) {
-                console.error('❌ Canvas não encontrado!');
-                return;
-            }
-            
-            // Destruir gráfico anterior
-            if (this.salesChart) {
-                this.salesChart.destroy();
-                console.log('♻️ Gráfico anterior destruído');
-            }
-            
-            // Forçar layout
-            ctx.offsetHeight;
-            
-            // ✅ Verificar se há dados
-            const chartData = this.stats.daily_chart || [];
-            const hasSinglePoint = chartData.length === 1;
-            
-            // ✅ Para gráficos com apenas 1 ponto, garantir que o ponto seja visível
-            const pointRadius = hasSinglePoint ? 6 : 3;
-            const pointHoverRadius = hasSinglePoint ? 8 : 5;
-            
-            // RECRIAR com dados
-            this.salesChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: chartData.map(d => d.date),
-                    datasets: [
-                        {
-                            label: 'Vendas',
-                            data: chartData.map(d => d.sales),
-                            borderColor: '#3B82F6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 2,
-                            tension: hasSinglePoint ? 0 : 0.4, // ✅ Sem curvatura se apenas 1 ponto
-                            fill: true,
-                            yAxisID: 'y',
-                            pointRadius: pointRadius,
-                            pointHoverRadius: pointHoverRadius,
-                            pointBackgroundColor: '#3B82F6',
-                            pointBorderColor: '#FFFFFF',
-                            pointBorderWidth: 2
-                        },
-                        {
-                            label: 'Receita (R$)',
-                            data: chartData.map(d => d.revenue),
-                            borderColor: '#FFB800',
-                            backgroundColor: 'rgba(255, 184, 0, 0.1)',
-                            borderWidth: 2,
-                            tension: hasSinglePoint ? 0 : 0.4, // ✅ Sem curvatura se apenas 1 ponto
-                            fill: true,
-                            yAxisID: 'y1',
-                            pointRadius: pointRadius,
-                            pointHoverRadius: pointHoverRadius,
-                            pointBackgroundColor: '#FFB800',
-                            pointBorderColor: '#FFFFFF',
-                            pointBorderWidth: 2
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,  // ✅ SEM ANIMAÇÃO
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: { color: '#9CA3AF', padding: 20 }
                         }
                     },
                     scales: {
                         y: {
-                            type: 'linear',
-                            position: 'left',
                             beginAtZero: true,
-                            ticks: { 
-                                color: '#60A5FA', 
-                                stepSize: hasSinglePoint ? undefined : 1, // ✅ Auto step para 1 ponto
-                                precision: 0
-                            },
+                            ticks: { color: '#60A5FA', stepSize: 1, precision: 0 },
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            // ✅ Para 1 ponto, garantir que o valor seja visível
-                            min: hasSinglePoint ? 0 : undefined
+                            title: { display: true, text: 'Vendas', color: '#60A5FA' }
                         },
                         y1: {
-                            type: 'linear',
                             position: 'right',
                             beginAtZero: true,
                             ticks: {
                                 color: '#FFB800',
-                                callback: (value) => 'R$ ' + value.toFixed(0),
-                                stepSize: hasSinglePoint ? undefined : undefined // ✅ Auto step
+                                callback: v => 'R$ ' + v.toFixed(0)
                             },
                             grid: { drawOnChartArea: false },
-                            // ✅ Para 1 ponto, garantir que o valor seja visível
-                            min: hasSinglePoint ? 0 : undefined
+                            title: { display: true, text: 'Receita', color: '#FFB800' }
                         },
                         x: {
-                            ticks: { 
-                                color: '#9CA3AF',
-                                maxRotation: 0,
-                                autoSkip: false // ✅ Mostrar todos os labels, mesmo com 1 ponto
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)',
-                                display: true
-                            }
+                            ticks: { color: '#9CA3AF', maxRotation: 0 },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
                         }
                     }
                 }
             });
-            
-            console.log('✅ Gráfico recriado com dados!');
         },
         
         // ✅ Computed Properties - Paginação de Vendas
