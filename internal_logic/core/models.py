@@ -1109,6 +1109,9 @@ class Payment(db.Model):
     # Status
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
+    # ✅ POOL ASSOCIATION (determinístico para pixel/pool matching)
+    pool_id = db.Column(db.Integer, db.ForeignKey('redirect_pools.id', ondelete='SET NULL'), nullable=True, index=True)
+
     # ✅ META PIXEL INTEGRATION
     meta_purchase_sent = db.Column(db.Boolean, default=False, index=True)
     meta_purchase_sent_at = db.Column(db.DateTime, nullable=True)
@@ -1159,6 +1162,9 @@ class Payment(db.Model):
     browser = db.Column(db.String(255), nullable=True)  # Chrome/Safari/Firefox
     device_model = db.Column(db.String(255), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
     
+    # ✅ Pool relationship
+    pool = db.relationship('RedirectPool', backref=db.backref('payments', lazy='dynamic'))
+
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
     updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)  # ✅ Campo para debounce no sync
@@ -1177,7 +1183,23 @@ class Payment(db.Model):
             'status': self.status,
             'gateway_type': self.gateway_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'paid_at': self.paid_at.isoformat() if self.paid_at else None
+            'paid_at': self.paid_at.isoformat() if self.paid_at else None,
+            'pool_id': self.pool_id,
+            'meta_pixel_id': self.meta_pixel_id,
+            'meta_purchase_sent': self.meta_purchase_sent,
+            'delivery_token': self.delivery_token,
+            'device_type': self.device_type,
+            'os_type': self.os_type,
+            'browser': self.browser,
+            'device_model': self.device_model,
+            'customer_city': self.customer_city,
+            'customer_state': self.customer_state,
+            'customer_email': self.customer_email,
+            'customer_phone': self.customer_phone,
+            'is_downsell': self.is_downsell,
+            'order_bump_accepted': self.order_bump_accepted,
+            'is_upsell': self.is_upsell,
+            'is_remarketing': self.is_remarketing,
         }
 
 

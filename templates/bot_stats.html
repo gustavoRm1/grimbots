@@ -433,6 +433,12 @@ if (typeof window.botStatsApp === 'undefined') {
             </div>
         </div>
         <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <a href="/chat?bot_id={{ bot.id }}"
+               class="btn-action text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2"
+               title="Conversar com leads deste bot">
+                <i class="fas fa-comment-dots"></i>
+                <span class="hidden sm:inline">Chat</span>
+            </a>
             <div class="live-indicator text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2">
                 <div class="live-dot w-2 h-2 sm:w-2.5 sm:h-2.5"></div>
                 <span class="hidden sm:inline">AO VIVO</span>
@@ -640,6 +646,110 @@ if (typeof window.botStatsApp === 'undefined') {
         </div>
     </div>
     
+    <!-- ============================================================================ -->
+    <!-- 📊 FUNIL DE CONVERSÃO VISUAL -->
+    <!-- ============================================================================ -->
+    <div class="config-section" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02)); border-color: rgba(16, 185, 129, 0.3);">
+        <div class="config-section-header">
+            <i class="fas fa-funnel-dollar text-2xl text-emerald-500"></i>
+            <div>
+                <div class="config-section-title">Funil de Conversão</div>
+                <div class="config-section-description">Jornada do lead até a venda</div>
+            </div>
+        </div>
+        
+        <div class="space-y-3">
+            <!-- Leads -->
+            <div class="flex items-center gap-3 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-800">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(59, 130, 246, 0.2);">
+                    <i class="fas fa-users text-blue-500"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-400">Leads (iniciaram conversa)</span>
+                        <span class="text-lg font-bold text-white" x-text="stats.general.total_users || 0"></span>
+                    </div>
+                    <div class="progress-bar h-2 mt-2" style="background: rgba(0,0,0,0.4);">
+                        <div class="progress-fill h-2" style="background: #3B82F6; width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Checkouts -->
+            <div class="flex items-center gap-3 p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-800">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(139, 92, 246, 0.2);">
+                    <i class="fas fa-credit-card text-purple-500"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-400">Checkouts (tentativas de pagamento)</span>
+                        <span class="text-lg font-bold text-white" x-text="(stats.general.total_sales || 0) + (stats.general.pending_sales || 0)"></span>
+                    </div>
+                    <div class="flex items-center gap-4 mt-1">
+                        <div class="progress-bar h-2 flex-1" style="background: rgba(0,0,0,0.4);">
+                            <div class="progress-fill h-2" style="background: #8B5CF6;" :style="'width: ' + Math.min(100, ((stats.general.total_sales || 0) / (stats.general.total_users || 1)) * 100) + '%'"></div>
+                        </div>
+                        <span class="text-xs text-gray-500 flex-shrink-0" x-text="((stats.general.total_sales || 0) / (stats.general.total_users || 1) * 100).toFixed(1) + '%'"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vendas Pagas -->
+            <div class="flex items-center gap-3 p-3 sm:p-4 bg-gray-900 rounded-lg border border-emerald-500/30">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(16, 185, 129, 0.2);">
+                    <i class="fas fa-check-circle text-emerald-500"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-400">Vendas Pagas</span>
+                        <span class="text-lg font-bold text-white" x-text="stats.general.total_sales || 0"></span>
+                    </div>
+                    <div class="flex items-center gap-4 mt-1">
+                        <div class="progress-bar h-2 flex-1" style="background: rgba(0,0,0,0.4);">
+                            <div class="progress-fill h-2" style="background: #10B981;" :style="'width: ' + Math.min(100, ((stats.general.total_sales || 0) / (stats.general.total_users || 1)) * 100) + '%'"></div>
+                        </div>
+                        <span class="text-xs font-semibold text-emerald-400 flex-shrink-0" x-text="stats.general.conversion_rate.toFixed(1) + '%'"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Decomposição das Vendas -->
+            <div x-show="(stats.funnels?.downsell_sales || stats.funnels?.order_bump_sales || stats.funnels?.upsell_sales) > 0" class="ml-12 space-y-2 mt-2">
+                <div class="text-xs text-gray-500 font-medium mb-2">Decomposição das Vendas:</div>
+                
+                <div x-show="stats.funnels?.order_bump_sales > 0" class="flex items-center gap-2 p-2 bg-gray-800/50 rounded-lg">
+                    <div class="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></div>
+                    <span class="text-xs text-gray-400 flex-1">com Order Bump</span>
+                    <span class="text-xs font-bold text-white" x-text="stats.funnels.order_bump_sales"></span>
+                    <span class="text-xs text-gray-500" x-text="'(' + ((stats.funnels.order_bump_sales / (stats.general.total_sales || 1)) * 100).toFixed(1) + '%)'"></span>
+                </div>
+                
+                <div x-show="stats.funnels?.upsell_sales > 0" class="flex items-center gap-2 p-2 bg-gray-800/50 rounded-lg">
+                    <div class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                    <span class="text-xs text-gray-400 flex-1">com Upsell</span>
+                    <span class="text-xs font-bold text-white" x-text="stats.funnels.upsell_sales"></span>
+                    <span class="text-xs text-gray-500" x-text="'(' + ((stats.funnels.upsell_sales / (stats.general.total_sales || 1)) * 100).toFixed(1) + '%)'"></span>
+                </div>
+                
+                <div x-show="stats.funnels?.downsell_sales > 0" class="flex items-center gap-2 p-2 bg-gray-800/50 rounded-lg">
+                    <div class="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0"></div>
+                    <span class="text-xs text-gray-400 flex-1">Downsell (recuperadas)</span>
+                    <span class="text-xs font-bold text-white" x-text="stats.funnels.downsell_sales"></span>
+                    <span class="text-xs text-gray-500" x-text="'(' + ((stats.funnels.downsell_sales / (stats.general.total_sales || 1)) * 100).toFixed(1) + '%)'"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-box-success info-box mt-4">
+            <p class="text-sm text-gray-300">
+                <i class="fas fa-chart-line mr-2 text-emerald-400"></i>
+                <strong>Taxa de conversão geral:</strong> 
+                <span x-text="stats.general.conversion_rate.toFixed(1) + '%'"></span>
+                dos leads que iniciam conversa se tornam clientes pagantes.
+            </p>
+        </div>
+    </div>
+
     <!-- ============================================================================ -->
     <!-- 📊 REMARKETING CAMPAIGNS - GESTOR DE TRÁFEGO -->
     <!-- ============================================================================ -->
@@ -1706,34 +1816,89 @@ if (typeof window.botStatsApp === 'undefined') {
                             <th>Cliente</th>
                             <th>Produto</th>
                             <th>Valor</th>
-                            <th>Status</th>
-                            <th>Tipo</th>
+                            <th>Delivery</th>
+                            <th>Dispositivo</th>
                             <th>Data</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         <template x-for="sale in paginatedSales" :key="sale.id">
                             <tr>
-                                <td class="text-white font-medium" x-text="sale.customer_name || 'N/A'"></td>
+                                <td class="text-white font-medium">
+                                    <span x-text="sale.customer_name || 'N/A'"></span>
+                                    <a x-show="sale.customer_username"
+                                       :href="`/chat?bot_id=${botId}&user=${sale.customer_username}`"
+                                       target="_blank"
+                                       class="text-blue-400 hover:text-blue-300 ml-1"
+                                       title="Conversar com este lead">
+                                        <i class="fas fa-comment-alt text-xs"></i>
+                                    </a>
+                                </td>
                                 <td class="text-gray-300" x-text="sale.product_name || 'Produto'"></td>
-                                <td class="font-bold" style="color: var(--brand-gold-300);" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
+                                <td class="font-bold whitespace-nowrap" style="color: var(--brand-gold-300);" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
                                 <td>
-                                    <span class="badge-status" :class="sale.status === 'paid' ? 'badge-paid' : 'badge-pending'">
-                                        <span x-text="sale.status === 'paid' ? 'Pago' : 'Pendente'"></span>
+                                    <span x-show="sale.meta_purchase_sent" class="text-emerald-500" title="Purchase enviado ao Meta">
+                                        <i class="fas fa-check-circle"></i>
                                     </span>
+                                    <span x-show="!sale.meta_purchase_sent" class="text-gray-600" title="Purchase pendente">
+                                        <i class="fas fa-clock"></i>
+                                    </span>
+                                    <a x-show="sale.delivery_token"
+                                       :href="'/delivery/' + sale.delivery_token"
+                                       target="_blank"
+                                       class="text-blue-400 hover:text-blue-300 ml-1 text-xs"
+                                       title="Abrir página de entrega">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
                                 </td>
-                                <td>
-                                    <template x-if="sale.is_downsell">
-                                        <span class="badge-status badge-downsell">Downsell</span>
+                                <td class="text-gray-400 text-sm">
+                                    <template x-if="sale.device_model">
+                                        <span class="flex items-center gap-1">
+                                            <i class="fas" :class="sale.device_type === 'mobile' ? 'fa-mobile-alt' : 'fa-desktop'"></i>
+                                            <span x-text="sale.device_model" class="truncate max-w-[100px]"></span>
+                                        </span>
                                     </template>
-                                    <template x-if="!sale.is_downsell && sale.order_bump_accepted">
-                                        <span class="badge-status badge-bump">c/ Bump</span>
+                                    <template x-if="!sale.device_model && sale.os_type">
+                                        <span class="flex items-center gap-1">
+                                            <i class="fas" :class="sale.device_type === 'mobile' ? 'fa-mobile-alt' : 'fa-desktop'"></i>
+                                            <span x-text="sale.os_type"></span>
+                                        </span>
                                     </template>
-                                    <template x-if="!sale.is_downsell && !sale.order_bump_accepted">
-                                        <span class="badge-status" style="background: rgba(107, 114, 128, 0.15); color: #9CA3AF; border: 1px solid rgba(107, 114, 128, 0.3);">Normal</span>
+                                    <template x-if="!sale.device_model && !sale.os_type">
+                                        <span class="text-gray-600">—</span>
                                     </template>
                                 </td>
-                                <td class="text-gray-400 text-sm" x-text="formatDate(sale.created_at)"></td>
+                                <td class="text-gray-400 text-sm whitespace-nowrap" x-text="formatDate(sale.created_at)"></td>
+                                <td class="relative">
+                                    <div class="flex items-center gap-1" x-data="{ open: false }">
+                                        <button @click="open = !open" class="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
+                                            <i class="fas fa-ellipsis-v text-xs"></i>
+                                        </button>
+                                        <div x-show="open" @click.outside="open = false" x-cloak
+                                             class="absolute z-50 mt-1 right-0 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]">
+                                            <button x-show="!sale.meta_purchase_sent"
+                                                    @click="open = false; resendPurchase(sale.id)"
+                                                    class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
+                                                <i class="fas fa-paper-plane text-blue-400"></i>
+                                                Reenviar Purchase
+                                            </button>
+                                            <button x-show="sale.meta_purchase_sent"
+                                                    @click="open = false; resendPurchase(sale.id)"
+                                                    class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
+                                                <i class="fas fa-redo text-yellow-400"></i>
+                                                Reenviar Purchase
+                                            </button>
+                                            <a x-show="sale.delivery_token"
+                                               :href="'/delivery/' + sale.delivery_token"
+                                               target="_blank"
+                                               class="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2">
+                                                <i class="fas fa-external-link-alt text-green-400"></i>
+                                                Abrir Delivery
+                                            </a>
+                                        </div>
+                                    </div>
+                                </td>
                             </tr>
                         </template>
                     </tbody>
@@ -1880,7 +2045,11 @@ window.botStatsApp = function botStatsApp() {
             },
             daily_chart: [],
             peak_hours: [],
-            recent_sales: []
+            recent_sales: [],
+            device_distribution: {},
+            os_distribution: {},
+            browser_distribution: {},
+            top_cities: []
         },
         
         // ✅ Paginação de vendas
@@ -1896,6 +2065,7 @@ window.botStatsApp = function botStatsApp() {
         showCampaignModal: false,
         selectedCampaign: null,
         resendingCampaign: false,  // Estado para controle de reenvio
+        actionLoading: null,  // payment_id da ação em andamento
         
         // ✅ Modal de edição de campanha
         showEditModal: false,
@@ -2085,7 +2255,11 @@ window.botStatsApp = function botStatsApp() {
                     },
                     daily_chart: data.daily_chart || [],
                     peak_hours: data.peak_hours || [],
-                    recent_sales: data.recent_sales || []
+                    recent_sales: data.recent_sales || [],
+                    device_distribution: data.device_distribution || {},
+                    os_distribution: data.os_distribution || {},
+                    browser_distribution: data.browser_distribution || {},
+                    top_cities: data.top_cities || []
                 };
                 
                 console.log('✅ Stats carregados:', this.stats, 'Período:', this.selectedPeriod);
@@ -2544,7 +2718,7 @@ window.botStatsApp = function botStatsApp() {
         },
         
         // ============================================================================
-        // 📊 GRÁFICOS DEMOGRÁFICOS (GESTOR DE TRÁFEGO)
+        // 📊 GRÁFICOS DEMOGRÁFICOS (GESTOR DE TRÁFEGO) — DADOS REAIS DO BANCO
         // ============================================================================
         
         initDemographicCharts() {
@@ -2552,33 +2726,32 @@ window.botStatsApp = function botStatsApp() {
         },
         
         updateDemographicCharts() {
-            // ✅ Usar demographic_sales (todas as vendas pagas) ou recent_sales como fallback
-            const salesData = this.stats.demographic_sales || this.stats.recent_sales || [];
+            const deviceDist = this.stats.device_distribution;
+            const osDist = this.stats.os_distribution;
             
-            if (!salesData || salesData.length === 0) {
+            if (!deviceDist || Object.keys(deviceDist).length === 0) {
                 console.log('⏳ Aguardando dados demográficos...');
                 return;
             }
             
-            console.log('📊 Atualizando gráficos demográficos...', salesData.length, 'vendas');
-            
             // ===== DISTRIBUIÇÃO POR DEVICE =====
-            const deviceData = this.analyzeDeviceDistribution(salesData);
             if (this.deviceChart) this.deviceChart.destroy();
             const deviceCtx = document.getElementById('deviceChart');
             if (deviceCtx) {
+                const labels = Object.keys(deviceDist);
+                const data = Object.values(deviceDist);
+                const colors = [
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(168, 85, 247, 0.8)',
+                    'rgba(251, 146, 60, 0.8)',
+                ];
                 this.deviceChart = new Chart(deviceCtx, {
                     type: 'pie',
                     data: {
-                        labels: Object.keys(deviceData),
-                        datasets: [{
-                            data: Object.values(deviceData),
-                            backgroundColor: [
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(239, 68, 68, 0.8)'
-                            ]
-                        }]
+                        labels: labels,
+                        datasets: [{ data: data, backgroundColor: colors.slice(0, labels.length) }]
                     },
                     options: {
                         responsive: true,
@@ -2591,58 +2764,32 @@ window.botStatsApp = function botStatsApp() {
             }
             
             // ===== TOP CIDADES (Responsivo) =====
-            const cities = this.analyzeTopCities(salesData);
+            const cities = this.stats.top_cities || [];
             const cityContainer = document.getElementById('cityData');
             if (cityContainer) {
-                cityContainer.innerHTML = cities.slice(0, 5).map((city, index) => `
-                    <div class="flex items-center justify-between p-2 sm:p-3 bg-gray-800 rounded-lg border border-gray-700 gap-2 sm:gap-3">
-                        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                            <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
-                                 style="background: ${index === 0 ? '#FFB800' : index === 1 ? '#C0C0C0' : '#CD7F32'}; color: #000;"
-                                 x-text="${index + 1}"></div>
-                            <div class="min-w-0 flex-1">
-                                <div class="text-xs sm:text-sm font-bold text-white truncate">${city.city}</div>
-                                <div class="text-xs text-gray-500 truncate">${city.state}</div>
+                if (cities.length === 0) {
+                    cityContainer.innerHTML = `<div class="text-center py-6 text-gray-500 text-sm">Sem dados de localização</div>`;
+                } else {
+                    cityContainer.innerHTML = cities.slice(0, 5).map((city, index) => `
+                        <div class="flex items-center justify-between p-2 sm:p-3 bg-gray-800 rounded-lg border border-gray-700 gap-2 sm:gap-3">
+                            <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
+                                     style="background: ${index === 0 ? '#FFB800' : index === 1 ? '#C0C0C0' : '#CD7F32'}; color: #000;">
+                                    ${index + 1}
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs sm:text-sm font-bold text-white truncate">${city.city}</div>
+                                    <div class="text-xs text-gray-500 truncate">${city.state || ''}</div>
+                                </div>
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                <div class="text-base sm:text-lg font-bold" style="color: var(--brand-gold-500);">${city.count}</div>
+                                <div class="text-xs text-gray-400">vendas</div>
                             </div>
                         </div>
-                        <div class="text-right flex-shrink-0">
-                            <div class="text-base sm:text-lg font-bold" style="color: var(--brand-gold-500);">${city.count}</div>
-                            <div class="text-xs text-gray-400">vendas</div>
-                        </div>
-                    </div>
-                `).join('');
+                    `).join('');
+                }
             }
-        },
-        
-        analyzeDeviceDistribution(salesData = null) {
-            const sales = salesData || this.stats.recent_sales || [];
-            const devices = {};
-            sales
-                .filter(s => s.device_model || s.os_type)
-                .forEach(s => {
-                    // Priorizar device_model (iPhone 14, Galaxy S23) ou usar os_type + device_type
-                    const label = s.device_model || `${s.os_type} (${s.device_type || 'mobile'})`;
-                    devices[label] = (devices[label] || 0) + 1;
-                });
-            
-            return devices;
-        },
-        
-        analyzeTopCities(salesData = null) {
-            const sales = salesData || this.stats.recent_sales || [];
-            const cities = {};
-            sales
-                .filter(s => s.customer_city)
-                .forEach(s => {
-                    const key = `${s.customer_city} - ${s.customer_state || 'N/A'}`;
-                    cities[key] = {
-                        city: s.customer_city,
-                        state: s.customer_state || 'N/A',
-                        count: (cities[key]?.count || 0) + 1
-                    };
-                });
-            
-            return Object.values(cities).sort((a, b) => b.count - a.count);
         },
         
         // ✅ Método para mostrar pré-visualização da campanha
@@ -3277,6 +3424,52 @@ window.botStatsApp = function botStatsApp() {
                 'remarketing_buyers': 'Todos que Comprou por Remarketing'
             };
             return segmentLabels[segment] || 'Todos os Usuários';
+        },
+        
+        // ✅ Reenviar evento Purchase para o Meta Pixel
+        async resendPurchase(paymentId) {
+            if (this.actionLoading === paymentId) return;
+            if (!confirm('Reenviar evento Purchase para o Meta Pixel?')) return;
+            
+            this.actionLoading = paymentId;
+            try {
+                const response = await fetch(`/api/bots/${this.botId}/payments/${paymentId}/resend-purchase`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': this.getCsrfToken() || ''
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    // Atualizar a sale localmente
+                    const sale = this.stats.recent_sales.find(s => s.id === paymentId);
+                    if (sale) sale.meta_purchase_sent = true;
+                    this.showToast('✅ Purchase reenviado com sucesso', 'success');
+                } else {
+                    this.showToast('❌ ' + (data.error || 'Erro ao reenviar'), 'error');
+                }
+            } catch (error) {
+                this.showToast('❌ Erro de rede: ' + error.message, 'error');
+            } finally {
+                this.actionLoading = null;
+            }
+        },
+        
+        // ✅ Toast de feedback
+        showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-xl text-sm font-medium transition-all duration-300 ${
+                type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         },
         
         // ✅ Método helper para obter CSRF token

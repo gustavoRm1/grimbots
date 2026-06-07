@@ -467,6 +467,111 @@ def bot_stats_api(bot_id):
         }
 
     # ============================================================================
+    # BLOCO 9: RECENT SALES (Vendas Recentes com Device/Delivery)
+    # ============================================================================
+    recent_sales = []
+    try:
+        recent_sales_query = Payment.query.filter(
+            payment_filter,
+            Payment.status == 'paid'
+        ).order_by(
+            Payment.created_at.desc()
+        ).limit(50).all()
+
+        recent_sales = [{
+            'id': p.id,
+            'payment_id': p.payment_id,
+            'customer_name': p.customer_name,
+            'customer_username': p.customer_username,
+            'product_name': p.product_name,
+            'amount': p.amount,
+            'status': p.status,
+            'is_downsell': p.is_downsell,
+            'order_bump_accepted': p.order_bump_accepted,
+            'is_upsell': p.is_upsell,
+            'is_remarketing': p.is_remarketing,
+            'meta_purchase_sent': p.meta_purchase_sent,
+            'delivery_token': p.delivery_token,
+            'created_at': p.created_at.isoformat() if p.created_at else None,
+            'paid_at': p.paid_at.isoformat() if p.paid_at else None,
+            'device_type': p.device_type,
+            'os_type': p.os_type,
+            'browser': p.browser,
+            'device_model': p.device_model,
+            'customer_city': p.customer_city,
+            'customer_state': p.customer_state,
+            'customer_email': p.customer_email,
+            'customer_phone': p.customer_phone,
+            'gateway_type': p.gateway_type,
+        } for p in recent_sales_query]
+    except Exception as e:
+        logger.error(f"[API STATS] Erro no bloco RECENT SALES para bot {bot_id}: {e}", exc_info=True)
+        recent_sales = []
+
+    # ============================================================================
+    # BLOCO 10: DEVICE DISTRIBUTION (Para Analytics Demográficos)
+    # ============================================================================
+    device_distribution = {}
+    os_distribution = {}
+    browser_distribution = {}
+    try:
+        device_stats = db.session.query(
+            Payment.device_type,
+            func.count(Payment.id).label('count')
+        ).filter(
+            payment_filter, Payment.status == 'paid',
+            Payment.device_type.isnot(None), Payment.device_type != ''
+        ).group_by(Payment.device_type).all()
+        device_distribution = {row.device_type: row.count for row in device_stats}
+
+        os_stats = db.session.query(
+            Payment.os_type,
+            func.count(Payment.id).label('count')
+        ).filter(
+            payment_filter, Payment.status == 'paid',
+            Payment.os_type.isnot(None), Payment.os_type != ''
+        ).group_by(Payment.os_type).order_by(func.count(Payment.id).desc()).all()
+        os_distribution = {row.os_type: row.count for row in os_stats}
+
+        browser_stats = db.session.query(
+            Payment.browser,
+            func.count(Payment.id).label('count')
+        ).filter(
+            payment_filter, Payment.status == 'paid',
+            Payment.browser.isnot(None), Payment.browser != ''
+        ).group_by(Payment.browser).order_by(func.count(Payment.id).desc()).all()
+        browser_distribution = {row.browser: row.count for row in browser_stats}
+    except Exception as e:
+        logger.error(f"[API STATS] Erro no bloco DEVICE DIST para bot {bot_id}: {e}", exc_info=True)
+
+    # ============================================================================
+    # BLOCO 11: TOP CITIES (Cidades com mais vendas)
+    # ============================================================================
+    top_cities = []
+    try:
+        city_stats = db.session.query(
+            Payment.customer_city,
+            Payment.customer_state,
+            func.count(Payment.id).label('count')
+        ).filter(
+            payment_filter, Payment.status == 'paid',
+            Payment.customer_city.isnot(None), Payment.customer_city != ''
+        ).group_by(
+            Payment.customer_city, Payment.customer_state
+        ).order_by(
+            func.count(Payment.id).desc()
+        ).limit(5).all()
+
+        top_cities = [{
+            'city': row.customer_city,
+            'state': row.customer_state or '',
+            'count': row.count
+        } for row in city_stats]
+    except Exception as e:
+        logger.error(f"[API STATS] Erro no bloco TOP CITIES para bot {bot_id}: {e}", exc_info=True)
+        top_cities = []
+
+    # ============================================================================
     # CONTRATO JSON FINAL (Contract Compliance)
     # ============================================================================
     response_data = {
@@ -482,6 +587,11 @@ def bot_stats_api(bot_id):
         'peak_hours': peak_hours,
         'top_products': top_products,
         'funnels': funnels,
+        'recent_sales': recent_sales,
+        'device_distribution': device_distribution,
+        'os_distribution': os_distribution,
+        'browser_distribution': browser_distribution,
+        'top_cities': top_cities,
         'period_label': f'Últimos {period} dias' if str(period).isdigit() else 'Todo o período',
         # Campos de compatibilidade legacy
         'general': {
@@ -623,3 +733,39 @@ def bot_analytics_v2(bot_id):
     except Exception as e:
         logger.error(f"Error in analytics v2 API for bot {bot_id}: {e}")
         return jsonify({'error': 'Failed to load analytics data'}), 500
+
+
+# ============================================================================
+# PAYMENT ACTIONS (Reenviar Purchase, Marcar como Pago)
+# ============================================================================
+
+@api_bp.route('/bots/<int:bot_id>/payments/<int:payment_id>/resend-purchase', methods=['POST'])
+@login_required
+@csrf.exempt
+def resend_purchase(bot_id, payment_id):
+    """Reenviar evento Purchase para o Meta Pixel"""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        payment = Payment.query.filter_by(id=payment_id, bot_id=bot_id).first_or_404()
+
+        if payment.status != 'paid':
+            return jsonify({'error': 'Pagamento não confirmado'}), 400
+
+        # Resetar flag para permitir reenvio no delivery
+        payment.meta_purchase_sent = False
+        db.session.commit()
+
+        # Disparar job de reenvio via RQ/tasks_async
+        try:
+            from tasks_async import send_meta_purchase_event
+            send_meta_purchase_event.delay(payment.id)
+            logger.info(f"✅ Purchase reenviado para payment {payment_id} (bot {bot_id})")
+            return jsonify({'success': True, 'message': 'Purchase reenviado com sucesso'})
+        except ImportError:
+            logger.warning(f"⚠️ tasks_async.send_meta_purchase_event não encontrado, apenas resetou flag")
+            return jsonify({'success': True, 'message': 'Flag resetada (job não encontrado, reenvio manual necessário)'})
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao reenviar Purchase payment {payment_id}: {e}")
+        return jsonify({'error': str(e)}), 500
