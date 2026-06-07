@@ -520,31 +520,6 @@ def process_start_async(
                             bot_user.ip_address = tracking_elite.get('ip')
                             bot_user.user_agent = tracking_elite.get('user_agent')
                             
-                            # Parse device e geolocalização
-                            try:
-                                from utils.device_parser import parse_user_agent, parse_ip_to_location
-                                
-                                device_info = parse_user_agent(bot_user.user_agent)
-                                if hasattr(bot_user, 'device_type'):
-                                    bot_user.device_type = device_info.get('device_type')
-                                if hasattr(bot_user, 'os_type'):
-                                    bot_user.os_type = device_info.get('os_type')
-                                if hasattr(bot_user, 'browser'):
-                                    bot_user.browser = device_info.get('browser')
-                                if hasattr(bot_user, 'device_model'):
-                                    bot_user.device_model = device_info.get('device_model')
-                                
-                                if bot_user.ip_address:
-                                    location_info = parse_ip_to_location(bot_user.ip_address)
-                                    if hasattr(bot_user, 'customer_city'):
-                                        bot_user.customer_city = location_info.get('city', 'Unknown')
-                                    if hasattr(bot_user, 'customer_state'):
-                                        bot_user.customer_state = location_info.get('state', 'Unknown')
-                                    if hasattr(bot_user, 'customer_country'):
-                                        bot_user.customer_country = location_info.get('country', 'BR')
-                            except Exception as e:
-                                logger.warning(f"Erro ao parsear device/geolocalização: {e}")
-                            
                             # ✅ CORREÇÃO SÊNIOR QI 500: Só salvar tracking_session_id de tracking_elite se não tiver tracking_token_from_start
                             # Isso garante que tracking_token_from_start (do start_param) tenha prioridade sobre tracking_elite
                             # ✅ CORREÇÃO CRÍTICA V15: Validar tracking_elite.session_id antes de salvar
@@ -725,6 +700,32 @@ def process_start_async(
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id} com tracking_token_from_start: {e}")
                 
+                # Parse device e geolocalização para todos os usuários (não só quem tem tracking_elite)
+                if bot_user.user_agent:
+                    try:
+                        from utils.device_parser import parse_user_agent, parse_ip_to_location
+
+                        device_info = parse_user_agent(bot_user.user_agent)
+                        if not bot_user.device_type:
+                            bot_user.device_type = device_info.get('device_type')
+                        if not bot_user.os_type:
+                            bot_user.os_type = device_info.get('os_type')
+                        if not bot_user.browser:
+                            bot_user.browser = device_info.get('browser')
+                        if not bot_user.device_model:
+                            bot_user.device_model = device_info.get('device_model')
+
+                        if bot_user.ip_address:
+                            location_info = parse_ip_to_location(bot_user.ip_address)
+                            if not bot_user.customer_city:
+                                bot_user.customer_city = location_info.get('city')
+                            if not bot_user.customer_state:
+                                bot_user.customer_state = location_info.get('state')
+                            if not bot_user.customer_country:
+                                bot_user.customer_country = location_info.get('country', 'BR')
+                    except Exception as e:
+                        logger.warning(f"Erro ao parsear device/geolocalização: {e}")
+                
                 try:
                     db.session.add(bot_user)
                     db.session.flush()
@@ -745,6 +746,8 @@ def process_start_async(
                 logger.info(f"✅ BotUser criado/atualizado: {first_name}")
             else:
                 bot_user.last_interaction = get_brazil_time()
+                bot_user.first_name = first_name
+                bot_user.username = username
                 
                 if external_id_from_start and not bot_user.external_id:
                     bot_user.external_id = external_id_from_start

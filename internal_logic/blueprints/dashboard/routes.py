@@ -1445,6 +1445,19 @@ def get_customer_profile(bot_id, telegram_user_id):
                     'name': last_with_pool.pool.name,
                     'meta_pixel_id': last_with_pool.pool.meta_pixel_id,
                 }
+            # Fallback: buscar pool pelo meta_pixel_id se nenhum payment tem pool_id FK
+            if not pool_info:
+                first_with_pixel = next((p for p in payments_query if p.meta_pixel_id), None)
+                if first_with_pixel and first_with_pixel.meta_pixel_id:
+                    pool_by_pixel = RedirectPool.query.filter_by(
+                        meta_pixel_id=first_with_pixel.meta_pixel_id
+                    ).first()
+                    if pool_by_pixel:
+                        pool_info = {
+                            'id': pool_by_pixel.id,
+                            'name': pool_by_pixel.name,
+                            'meta_pixel_id': pool_by_pixel.meta_pixel_id,
+                        }
 
         return jsonify({
             'success': True,

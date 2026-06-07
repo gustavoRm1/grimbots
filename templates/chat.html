@@ -39,7 +39,7 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex-1 min-w-0">
                                     <p class="font-semibold text-sm truncate" style="color: var(--txt-primary);" x-text="bot.name"></p>
-                                    <p class="text-xs truncate" style="color: var(--txt-secondary);" x-text="'@' + (bot.username || 'sem_username')"></p>
+                                    <p class="text-xs truncate" style="color: var(--txt-secondary);" x-text="'@' + (bot.username || '—')"></p>
                                 </div>
                                 <div class="flex items-center gap-2 ml-2">
                                     <template x-if="bot.unread_count > 0">
@@ -217,7 +217,7 @@
                     </div>
                     <div>
                         <p class="font-semibold" style="color: var(--txt-primary);" x-text="selectedConversation?.first_name || 'Sem nome'"></p>
-                        <p class="text-xs" style="color: var(--txt-secondary);" x-text="'@' + (selectedConversation?.username || 'sem_username')"></p>
+                        <p class="text-xs" style="color: var(--txt-secondary);" x-text="'@' + (selectedConversation?.username || '—')"></p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -364,7 +364,7 @@
                                 <h4 class="text-sm font-semibold mb-2" style="color: var(--txt-primary);">Identificação</h4>
                                 <div class="space-y-1 text-xs" style="color: var(--txt-secondary);">
                                     <div><span class="opacity-50">Nome:</span> <span x-text="customerProfile.basic.first_name || '-'"></span></div>
-                                    <div><span class="opacity-50">Username:</span> <span x-text="'@' + (customerProfile.basic.username || 'sem_username')"></span></div>
+                                    <div><span class="opacity-50">Username:</span> <span x-text="'@' + (customerProfile.basic.username || '—')"></span></div>
                                     <div><span class="opacity-50">Telegram ID:</span> <span x-text="customerProfile.basic.telegram_user_id"></span></div>
                                 </div>
                             </div>
