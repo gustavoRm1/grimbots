@@ -193,12 +193,53 @@ def public_redirect(slug):
 
 @public_bp.route('/health')
 def public_health_check():
-    """Health check público para monitoramento"""
+    """Health check público avançado — monitora Redis, DB e filas RQ"""
+    checks = {}
+    all_ok = True
+
+    # 1. Redis
+    try:
+        from internal_logic.core.redis_manager import get_redis_connection
+        r = get_redis_connection()
+        r.ping()
+        r.set('gb:health:ping', '1', ex=10)
+        checks['redis'] = 'ok'
+    except Exception as e:
+        checks['redis'] = f'error: {e}'
+        all_ok = False
+
+    # 2. Database
+    try:
+        from internal_logic.core.extensions import db
+        from internal_logic.core.models import Bot
+        bot_count = Bot.query.count()
+        checks['database'] = f'ok (bot_count={bot_count})'
+    except Exception as e:
+        checks['database'] = f'error: {e}'
+        all_ok = False
+
+    # 3. RQ Queues (apenas tamanho, sem bloquear)
+    try:
+        from rq import Queue
+        from internal_logic.core.redis_manager import get_redis_connection
+        rq_conn = get_redis_connection(decode_responses=False)
+        queues_info = {}
+        for qname in ('tasks', 'tracking', 'marathon', 'gateway', 'webhook'):
+            q = Queue(qname, connection=rq_conn)
+            queues_info[qname] = q.count
+        checks['queues'] = queues_info
+    except Exception as e:
+        checks['queues'] = f'error: {e}'
+        all_ok = False
+
+    status = 'healthy' if all_ok else 'degraded'
+    status_code = 200 if all_ok else 503
     return jsonify({
-        'status': 'healthy',
+        'status': status,
         'timestamp': datetime.now().isoformat(),
-        'version': '2.0'
-    })
+        'version': '2.0',
+        'checks': checks
+    }), status_code
 
 
 @public_bp.route('/termos-de-uso')

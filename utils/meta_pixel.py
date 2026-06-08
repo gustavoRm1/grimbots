@@ -365,7 +365,7 @@ class MetaPixelAPI:
                 response = requests.post(
                     url,
                     json=payload,
-                    timeout=3,
+                    timeout=10,
                     headers={
                         'Content-Type': 'application/json',
                         'User-Agent': 'GrimPay-MetaPixel/1.0'

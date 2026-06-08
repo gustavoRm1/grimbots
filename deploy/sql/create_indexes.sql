@@ -39,4 +39,28 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_botuser_bot_last_interaction
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payment_bot_created
     ON payment (bot_id, created_at DESC);
 
+-- 8. remarketing_campaigns.bot_id + active — lookup de campanhas ativas
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_remarketing_campaigns_bot_active
+    ON remarketing_campaigns (bot_id, active)
+    WHERE active = TRUE;
+
+-- 9. subscriptions.bot_id + status — queries de planos/assinaturas por bot
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_bot_status
+    ON subscriptions (bot_id, status)
+    WHERE status = 'active';
+
+-- 10. commissions.bot_id + paid — relatórios de comissões pendentes
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_commissions_bot_paid
+    ON commissions (bot_id, paid)
+    WHERE paid = FALSE;
+
+-- 11. webhook_events.gateway + status — reconciliação por gateway
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_webhook_events_gateway_status
+    ON webhook_events (gateway, status)
+    WHERE status = 'pending';
+
+-- 12. webhook_events.received_at — cleanup/queries de archival
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_webhook_events_received_at
+    ON webhook_events (received_at DESC);
+
 COMMIT;

@@ -39,11 +39,12 @@ if queue_name:
 else:
     queues = [
         Queue('tasks', connection=redis_conn),
+        Queue('tracking', connection=redis_conn),
         Queue('gateway', connection=redis_conn),
         Queue('webhook', connection=redis_conn),
         Queue('marathon', connection=redis_conn)
     ]
-    print(f"📡 Monitorando Todas: tasks, gateway, webhook, marathon")
+    print(f"📡 Monitorando Todas: tasks, tracking, gateway, webhook, marathon")
 
 if __name__ == '__main__':
     try:

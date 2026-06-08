@@ -66,14 +66,15 @@ if ! curl -sf http://127.0.0.1:5000/health > /dev/null 2>&1; then
 fi
 
 echo "🤖 [5/7] Levantando Workers RQ via systemd..."
-# tasks=5, gateway=3, webhook=3, marathon=1 — escala para 200k visitas/dia
+# tasks=5, tracking=3, gateway=3, webhook=3, marathon=1 — escala para 200k visitas/dia
 declare -A WORKER_COUNTS=(
     ["tasks"]=5
+    ["tracking"]=3
     ["gateway"]=3
     ["webhook"]=3
     ["marathon"]=1
 )
-QUEUES=("tasks" "gateway" "webhook" "marathon")
+QUEUES=("tasks" "tracking" "gateway" "webhook" "marathon")
 for q in "${QUEUES[@]}"; do
     count=${WORKER_COUNTS[$q]}
     for i in $(seq 1 $count); do

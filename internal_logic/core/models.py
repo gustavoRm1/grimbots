@@ -1140,8 +1140,6 @@ class Payment(db.Model):
     tracking_token = db.Column(db.String(200), nullable=True, index=True)
     # ✅ META PIXEL ID - Pixel ID para Sticky Pixel
     meta_pixel_id = db.Column(db.String(100), nullable=True, index=True)
-    # ✅ POOL ID - Pool de origem do lead (para lookup determinístico)
-    pool_id = db.Column(db.Integer, db.ForeignKey('redirect_pools.id', ondelete='SET NULL'), nullable=True, index=True)
     pool = db.relationship('RedirectPool', backref='payments', lazy='select')
     # ✅ pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
     pageview_event_id = db.Column(db.String(256), nullable=True, index=True)  # Event ID do PageView para reutilizar no Purchase

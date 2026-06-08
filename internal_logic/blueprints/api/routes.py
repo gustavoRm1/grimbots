@@ -5,6 +5,7 @@ Contém todas as rotas de API usadas pelo frontend via AJAX
 ARQUITETURA: Stateless (On-Demand SQL) - 100% defensiva
 """
 
+import json
 import logging
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
@@ -14,6 +15,7 @@ from sqlalchemy import func, extract, and_
 
 from internal_logic.core.models import Bot, Payment, BotUser, RemarketingCampaign
 from internal_logic.core.extensions import db
+from internal_logic.core.redis_manager import get_redis_connection
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,16 @@ def bot_stats_api(bot_id):
 
     # Obter período da query string
     raw_period = request.args.get('period', '30')
+
+    # Cache Redis (30s TTL) — reduz carga no DB para refreshes rápidos do frontend
+    cache_key = f"gb:stats:{bot_id}:{raw_period}"
+    try:
+        r = get_redis_connection()
+        cached = r.get(cache_key)
+        if cached:
+            return jsonify(json.loads(cached))
+    except Exception:
+        pass
 
     # Mapear labels do frontend para dias
     period_map = {'day': 1, 'today': 1, 'month': 30, '7': 7, '30': 30}
@@ -622,6 +634,13 @@ def bot_stats_api(bot_id):
             'revenue': funnels['downsell_revenue']
         }
     }
+
+    # Cache no Redis (30s TTL)
+    try:
+        r = get_redis_connection()
+        r.setex(cache_key, 30, json.dumps(response_data, default=str))
+    except Exception:
+        pass
 
     return jsonify(response_data)
 

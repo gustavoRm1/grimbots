@@ -61,7 +61,7 @@ class RedisManager:
         # Criar connection pool
         self.pool = ConnectionPool.from_url(
             url_for_pool,
-            max_connections=50,
+            max_connections=100,
             socket_keepalive=True,
             socket_connect_timeout=5,
             retry_on_timeout=True,
@@ -71,7 +71,7 @@ class RedisManager:
         # Pool separado para RQ (decode_responses=False)
         self.pool_rq = ConnectionPool.from_url(
             url_for_pool,
-            max_connections=30,
+            max_connections=50,
             socket_keepalive=True,
             socket_connect_timeout=5,
             retry_on_timeout=True,

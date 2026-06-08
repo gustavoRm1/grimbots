@@ -46,16 +46,18 @@ try:
     # RQ serializa jobs como bytes comprimidos, não strings
     redis_conn = get_redis_connection(decode_responses=False)
     
-    # ✅ QI 200: 4 FILAS SEPARADAS (incluindo marathon para remarketing massivo)
+    # ✅ QI 200: 5 FILAS SEPARADAS (incluindo tracking para Meta CAPI)
     task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente - /start, tracking)
+    tracking_queue = Queue('tracking', connection=redis_conn)  # Meta CAPI events (PageView, ViewContent, Purchase)
     marathon_queue = Queue('marathon', connection=redis_conn)  # Remarketing massivo (batch)
     gateway_queue = Queue('gateway', connection=redis_conn)  # Gateway/PIX/Reconciliadores
     webhook_queue = Queue('webhook', connection=redis_conn)  # Webhooks
-    logger.info("✅ 4 Filas RQ inicializadas: tasks, marathon, gateway, webhook")
+    logger.info("✅ 5 Filas RQ inicializadas: tasks, tracking, marathon, gateway, webhook")
 except Exception as e:
     logger.error(f"❌ Erro ao conectar Redis para RQ: {e}")
     redis_conn = None
     task_queue = None
+    tracking_queue = None
     marathon_queue = None
     gateway_queue = None
     webhook_queue = None
@@ -64,24 +66,24 @@ except Exception as e:
 # ============================================================================
 # META CAPI SENDER — migrado de Celery para RQ (tracking fantasma FIX)
 # ============================================================================
-# Antes: send_meta_event.delay() ia pro Celery → ZERO workers → DROPPED
-# Agora: enqueue_meta_event() vai pra RQ task_queue → workers reais
+    # Antes: send_meta_event.delay() ia pro Celery → ZERO workers → DROPPED
+    # Agora: enqueue_meta_event() vai pra RQ tracking_queue → workers dedicados
 # ============================================================================
 
 _META_RETRY = Retry(max=10, interval=[2, 4, 8, 16, 32, 60, 120, 240, 480, 960])
 
 
 def enqueue_meta_event(pixel_id, access_token, event_data, test_code=None):
-    """Enfileira evento Meta CAPI na fila RQ 'tasks' com retry exponential backoff.
+    """Enfileira evento Meta CAPI na fila RQ 'tracking' com retry exponential backoff.
 
     Substitui todas as chamadas antigas::
         from celery_app import send_meta_event
         send_meta_event.delay(pixel_id, token, data)
     """
-    if task_queue is None:
-        logger.error("❌ [META RQ] task_queue indisponível — evento perdido")
+    if tracking_queue is None:
+        logger.error("❌ [META RQ] tracking_queue indisponível — evento perdido")
         return
-    return task_queue.enqueue(
+    return tracking_queue.enqueue(
         rq_send_meta_event,
         pixel_id,
         access_token,
@@ -145,7 +147,7 @@ def rq_send_meta_event(pixel_id, access_token, event_data, test_code=None):
 
     try:
         start = _time.time()
-        response = requests.post(url, json=payload, timeout=3)
+        response = requests.post(url, json=payload, timeout=10)
         latency = int((_time.time() - start) * 1000)
 
         # Log do payload (sem access_token)
@@ -257,6 +259,104 @@ def _ensure_periodic_reconciliations_scheduled() -> None:
                 pass
     except Exception:
         pass
+
+    # Agenda archival diário (tenta, não bloqueia se falhar)
+    try:
+        schedule_archival_jobs()
+    except Exception:
+        pass
+
+
+# ============================================================================
+# ARCHIVAL JOB — Cleanup de dados antigos (roda 1x/dia na marathon queue)
+# ============================================================================
+def archive_old_data():
+    """Move registros antigos para tabelas de archive.
+
+    - bot_messages > 90 dias → bot_messages_archive
+    - webhook_events > 30 dias → webhook_events_archive
+    - Processa em lotes de 50k para não travar o banco
+    """
+    import datetime
+    app = _get_rq_app()
+    with app.app_context():
+        from internal_logic.core.extensions import db
+        from sqlalchemy import text
+
+        cutoff_90d = datetime.datetime.utcnow() - datetime.timedelta(days=90)
+        cutoff_30d = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+
+        # 1. Archive bot_messages (> 90 dias)
+        try:
+            sql_archive = text("""
+                INSERT INTO bot_messages_archive
+                SELECT *, NOW() as archived_at FROM bot_messages
+                WHERE created_at < :cutoff
+                LIMIT 50000
+            """)
+            sql_delete = text("""
+                DELETE FROM bot_messages
+                WHERE id IN (
+                    SELECT id FROM bot_messages_archive
+                    WHERE archived_at > NOW() - INTERVAL '1 minute'
+                )
+            """)
+            result = db.session.execute(sql_archive, {'cutoff': cutoff_90d})
+            archived = result.rowcount
+            if archived > 0:
+                db.session.execute(sql_delete)
+                db.session.commit()
+                logger.info(f"📦 Archival: {archived} bot_messages movidas para archive")
+            else:
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"❌ Archival bot_messages falhou: {e}")
+
+        # 2. Archive webhook_events (> 30 dias)
+        try:
+            sql_archive_wh = text("""
+                INSERT INTO webhook_events_archive
+                SELECT *, NOW() as archived_at FROM webhook_events
+                WHERE received_at < :cutoff
+                LIMIT 10000
+            """)
+            sql_delete_wh = text("""
+                DELETE FROM webhook_events
+                WHERE id IN (
+                    SELECT id FROM webhook_events_archive
+                    WHERE archived_at > NOW() - INTERVAL '1 minute'
+                )
+            """)
+            result = db.session.execute(sql_archive_wh, {'cutoff': cutoff_30d})
+            archived_wh = result.rowcount
+            if archived_wh > 0:
+                db.session.execute(sql_delete_wh)
+                db.session.commit()
+                logger.info(f"📦 Archival: {archived_wh} webhook_events movidas para archive")
+            else:
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"❌ Archival webhook_events falhou: {e}")
+
+
+def schedule_archival_jobs():
+    """Agenda archival diário na marathon queue (03:00 BRT = 06:00 UTC)."""
+    try:
+        from redis import Redis as _Redis
+        _r = _Redis.from_url(REDIS_URL)
+        from rq_scheduler import Scheduler
+        scheduler = Scheduler(queue_name='marathon', connection=_r)
+        scheduler.cron(
+            '0 6 * * *',
+            archive_old_data,
+            id='archive_old_data_daily',
+            replace_existing=True
+        )
+        logger.info("📅 Archival diário agendado (03:00 BRT)")
+    except Exception as e:
+        logger.error(f"❌ Falha ao agendar archival: {e}")
 
 
 def reconcile_server_purchases() -> int:

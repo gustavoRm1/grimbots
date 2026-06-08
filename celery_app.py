@@ -180,7 +180,7 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
         user_data_log = {k: ('<redacted>' if k == 'access_token' else v) for k, v in user_data.items()}
         logger.debug(f"👤 USER_DATA ({event_data.get('event_name')}): keys={list(user_data_log.keys())}")
         
-        response = requests.post(url, json=payload, timeout=3)
+        response = requests.post(url, json=payload, timeout=10)
 
         try:
             raw_body = response.json()
