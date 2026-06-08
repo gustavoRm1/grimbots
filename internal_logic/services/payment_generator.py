@@ -914,7 +914,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                             )
 
                             if lock_acquired:
-                                from celery_app import send_meta_event
+                                from tasks_async import enqueue_meta_event
                                 from utils.encryption import decrypt
                                 from utils.meta_pixel import MetaPixelAPI
 
@@ -971,7 +971,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                                         }
                                     }
 
-                                    send_meta_event.delay(
+                                    enqueue_meta_event(
                                         pixel_id=pool_for_meta.meta_pixel_id,
                                         access_token=access_token,
                                         event_data=pageview_enriched_event,

@@ -96,7 +96,7 @@
         // --- CONFIGURAÇÃO DE REDIRECIONAMENTO ---
         const REDIRECT_DELAY_MS = 4000; // 4 segundos é suficiente e melhor UX
         const redirectAllowedAt = Date.now() + REDIRECT_DELAY_MS;
-        const redirectUrl = '{{ redirect_url | replace("'", "\\'") or "" }';
+        const redirectUrl = '{{ redirect_url | replace("'", "\\'") or "" }}';
         const loadingEl = document.getElementById('loading');
         const linkEl = document.getElementById('redirect-link');
 

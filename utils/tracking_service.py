@@ -381,8 +381,8 @@ class TrackingServiceV4:
 
         if async_mode:
             try:
-                from celery_app import send_meta_event
-                send_meta_event.delay(pixel_id, access_token, payload)
+                from tasks_async import enqueue_meta_event
+                enqueue_meta_event(pixel_id, access_token, payload)
             except Exception as e:
                 logger.warning(f"[PAGEVIEW] async fallback sync: {e}")
                 self._send_pageview_sync(pixel_id, access_token, payload)

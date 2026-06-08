@@ -61,6 +61,167 @@ except Exception as e:
     webhook_queue = None
 
 
+# ============================================================================
+# META CAPI SENDER — migrado de Celery para RQ (tracking fantasma FIX)
+# ============================================================================
+# Antes: send_meta_event.delay() ia pro Celery → ZERO workers → DROPPED
+# Agora: enqueue_meta_event() vai pra RQ task_queue → workers reais
+# ============================================================================
+
+_META_RETRY = Retry(max=10, interval=[2, 4, 8, 16, 32, 60, 120, 240, 480, 960])
+
+
+def enqueue_meta_event(pixel_id, access_token, event_data, test_code=None):
+    """Enfileira evento Meta CAPI na fila RQ 'tasks' com retry exponential backoff.
+
+    Substitui todas as chamadas antigas::
+        from celery_app import send_meta_event
+        send_meta_event.delay(pixel_id, token, data)
+    """
+    if task_queue is None:
+        logger.error("❌ [META RQ] task_queue indisponível — evento perdido")
+        return
+    return task_queue.enqueue(
+        rq_send_meta_event,
+        pixel_id,
+        access_token,
+        event_data,
+        test_code,
+        retry=_META_RETRY,
+        job_timeout=30,
+    )
+
+
+def rq_send_meta_event(pixel_id, access_token, event_data, test_code=None):
+    """Envia evento para Meta Conversions API (RQ worker).
+
+    Port da Celery task ``celery_app.send_meta_event`` sem dependência de Celery.
+    Retry é gerenciado pelo RQ ``Retry`` configurado no enqueue.
+    """
+    import json
+    import requests
+    import time as _time
+    from utils.meta_token_validator import validate_meta_token as _validate_meta_token
+
+    _logger = logging.getLogger(f"{__name__}.meta")
+
+    # ── 1. Validar event_data ──
+    required = ["event_name", "event_time", "event_id", "action_source"]
+    missing = [f for f in required if not event_data.get(f)]
+    if missing:
+        _logger.error("❌ [META RQ] Event data inválido — campos ausentes: %s", missing)
+        return {"success": False, "error": f"missing fields: {missing}"}
+
+    user_data = event_data.get("user_data", {})
+    if not isinstance(user_data, dict):
+        _logger.error("❌ [META RQ] user_data deve ser dict")
+        return {"success": False, "error": "user_data not dict"}
+
+    custom_data = event_data.get("custom_data")
+    if custom_data is not None and not isinstance(custom_data, dict):
+        event_data["custom_data"] = {}
+    elif custom_data is None:
+        event_data["custom_data"] = {}
+
+    # ── 2. Validar token ──
+    try:
+        token_valid = _validate_meta_token(access_token)
+        if not token_valid:
+            _logger.critical(
+                "ALERT | Token Invalid | Pixel: %s | Timestamp: %s",
+                pixel_id,
+                _time.strftime("%Y-%m-%dT%H:%M:%S"),
+            )
+            return {"success": False, "error": "token invalid"}
+    except Exception as e:
+        _logger.error("🚨 [META RQ] Erro na validação do token: %s", e)
+        return {"success": False, "error": str(e)}
+
+    # ── 3. Enviar para Meta CAPI ──
+    url = f"https://graph.facebook.com/v19.0/{pixel_id}/events"
+    payload = {"data": [event_data], "access_token": access_token}
+    if test_code:
+        payload["test_event_code"] = test_code
+
+    try:
+        start = _time.time()
+        response = requests.post(url, json=payload, timeout=3)
+        latency = int((_time.time() - start) * 1000)
+
+        # Log do payload (sem access_token)
+        safe_payload = {k: v for k, v in payload.items() if k != "access_token"}
+        _logger.info(
+            "[META RQ] %s event_id=%s pixel=%s latency=%dms",
+            event_data.get("event_name"),
+            event_data.get("event_id"),
+            pixel_id,
+            latency,
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            events_received = result.get("events_received", 0)
+            _logger.info(
+                "SUCCESS | Meta %s | ID: %s | EventsReceived: %s | fbtrace: %s",
+                event_data.get("event_name"),
+                event_data.get("event_id"),
+                events_received,
+                result.get("fbtrace_id"),
+            )
+
+            # Marcar meta_purchase_sent se for Purchase
+            if events_received and events_received >= 1 and event_data.get("event_name") == "Purchase":
+                try:
+                    app = _get_rq_app()
+                    with app.app_context():
+                        from internal_logic.core.models import db, Payment, get_brazil_time
+                        payment = Payment.query.filter_by(
+                            meta_event_id=event_data["event_id"]
+                        ).first()
+                        if payment and not payment.meta_purchase_sent:
+                            payment.meta_purchase_sent = True
+                            payment.meta_purchase_sent_at = get_brazil_time()
+                            db.session.commit()
+                            _logger.info(
+                                "✅ META PURCHASE CONFIRMADO | payment_id=%s",
+                                payment.id,
+                            )
+                except Exception as mark_err:
+                    _logger.error(
+                        "⚠️ Falha ao marcar meta_purchase_sent: %s", mark_err
+                    )
+
+            return result
+
+        elif response.status_code >= 500 or response.status_code == 429:
+            _logger.warning(
+                "RETRY | Meta %s | status=%d | attempt via RQ Retry",
+                event_data.get("event_name"),
+                response.status_code,
+            )
+            raise Exception(f"Meta API {response.status_code}: {response.text[:200]}")
+
+        else:
+            _logger.error(
+                "FAILED | Meta %s | status=%d | %s",
+                event_data.get("event_name"),
+                response.status_code,
+                response.text[:200],
+            )
+            return {"error": response.text, "status_code": response.status_code}
+
+    except requests.exceptions.Timeout:
+        _logger.warning(
+            "TIMEOUT | Meta %s | retry via RQ Retry",
+            event_data.get("event_name"),
+        )
+        raise
+
+    except requests.exceptions.RequestException as e:
+        _logger.warning("NETWORK | Meta %s | %s | retry via RQ Retry", event_data.get("event_name"), e)
+        raise
+
+
 _AUX_TABLES_READY = False
 
 

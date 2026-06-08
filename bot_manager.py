@@ -273,9 +273,9 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
             event_source_url = f'https://app.grimbots.online/go/{pool.slug}'
         
         # ============================================================================
-        # ✅ ENFILEIRAR EVENTO VIEWCONTENT (ASSÍNCRONO - MVP DIA 2)
+        # ✅ ENFILEIRAR EVENTO VIEWCONTENT (ASSÍNCRONO - RQ)
         # ============================================================================
-        from celery_app import send_meta_event
+        from tasks_async import enqueue_meta_event
         import time
         
         event_data = {
@@ -306,15 +306,12 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
                    f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
                    f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
-        # ✅ ENFILEIRAR COM PRIORIDADE MÉDIA
-        task = send_meta_event.apply_async(
-            args=[
-                pool.meta_pixel_id,
-                access_token,
-                event_data,
-                pool.meta_test_event_code
-            ],
-            priority=5  # Média prioridade
+        # ✅ ENFILEIRAR NA RQ (tracking real, não fantasma)
+        enqueue_meta_event(
+            pixel_id=pool.meta_pixel_id,
+            access_token=access_token,
+            event_data=event_data,
+            test_code=pool.meta_test_event_code
         )
         
         # Marcar como enviado IMEDIATAMENTE (flag otimista)

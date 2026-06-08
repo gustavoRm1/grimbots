@@ -243,7 +243,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO (ASSÍNCRONO - NÃO BLOQUEIA!)
         # ============================================================================
-        from celery_app import send_meta_event
+        from tasks_async import enqueue_meta_event
         
         # ✅ CORREÇÃO SÊNIOR QI 500: SEMPRE usar external_id normalizado (garante matching com Purchase!)
         external_id_for_hash = external_id
@@ -347,15 +347,15 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             'custom_data': custom_data
         }
         
-        # ✅ ENFILEIRAR (NÃO ESPERA RESPOSTA)
-        task = send_meta_event.delay(
+        # ✅ ENFILEIRAR NA RQ (NÃO ESPERA RESPOSTA)
+        job = enqueue_meta_event(
             pixel_id=pool.meta_pixel_id,
             access_token=access_token,
             event_data=event_data,
             test_code=pool.meta_test_event_code
         )
         
-        logger.info(f"📤 PageView enfileirado: Pool {pool.id} | Event ID: {event_id} | Task: {task.id}")
+        logger.info(f"📤 PageView enfileirado: Pool {pool.id} | Event ID: {event_id} | Job: {job.id}")
         
         # ✅ CRÍTICO: Capturar event_source_url para Purchase
         event_source_url = request.url or f'https://app.grimbots.online/go/{pool.slug}'
@@ -561,7 +561,7 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO VIEWCONTENT (ASSÍNCRONO - MVP DIA 2)
         # ============================================================================
-        from celery_app import send_meta_event
+        from tasks_async import enqueue_meta_event
         
         event_data = {
             'event_name': 'ViewContent',
@@ -591,15 +591,12 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
                    f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
                    f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
-        # ✅ ENFILEIRAR COM PRIORIDADE MÉDIA
-        task = send_meta_event.apply_async(
-            args=[
-                pool.meta_pixel_id,
-                access_token,
-                event_data,
-                pool.meta_test_event_code
-            ],
-            priority=5  # Média prioridade
+        # ✅ ENFILEIRAR NA RQ
+        enqueue_meta_event(
+            pixel_id=pool.meta_pixel_id,
+            access_token=access_token,
+            event_data=event_data,
+            test_code=pool.meta_test_event_code
         )
         
         # Marcar como enviado IMEDIATAMENTE (flag otimista)
@@ -644,7 +641,7 @@ def send_meta_pixel_purchase_event(payment):
     from utils.tracking_service import TrackingServiceV4
     from utils.meta_pixel import MetaPixelAPI
     from utils.encryption import decrypt
-    from celery_app import send_meta_event
+    from tasks_async import enqueue_meta_event
     from internal_logic.core.extensions import db
     from internal_logic.core.models import BotUser
     
@@ -795,8 +792,8 @@ def send_meta_pixel_purchase_event(payment):
                 "event_data": event_data,
                 "test_code": getattr(pool, "meta_test_event_code", None) if pool else None,
             }
-            task = send_meta_event.delay(**kwargs)
-            logger.info(f"[META PURCHASE] Enfileirado | event_id={purchase_event_id} | task={task.id}")
+            job = enqueue_meta_event(**kwargs)
+            logger.info(f"[META PURCHASE] Enfileirado | event_id={purchase_event_id} | job={job.id}")
             enqueued = True
         else:
             logger.warning(f"[META PURCHASE] Pixel/AccessToken ausente - não foi possível enfileirar | event_id={purchase_event_id}")

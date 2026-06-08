@@ -364,7 +364,7 @@ def delivery_page(token):
         if has_meta_pixel and not purchase_already_sent:
             try:
                 from utils.encryption import decrypt
-                from celery_app import send_meta_event
+                from tasks_async import enqueue_meta_event
                 import time
 
                 access_token = decrypt(pool.meta_access_token)
@@ -392,7 +392,7 @@ def delivery_page(token):
                         }
                     }
 
-                    send_meta_event.delay(
+                    enqueue_meta_event(
                         pixel_id=pixel_id,
                         access_token=access_token,
                         event_data=purchase_event,
