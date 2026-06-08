@@ -18,7 +18,23 @@ git pull origin main
 echo "📦 Passo 5: Instalando dependências (inclui novas adições ao requirements.txt)..."
 /root/grimbots/venv/bin/pip install -r requirements.txt
 
-echo "🔄 Passo 6: Rodando migrações de banco de dados..."
-/root/grimbots/venv/bin/python init_db.py 2>/dev/null || echo "⚠️ init_db.py não encontrado ou falhou — migrações devem ser manuais"
+echo "🗄️ Passo 6: Aplicando migrações de banco de dados (índices de performance)..."
+if command -v psql &>/dev/null; then
+    /root/grimbots/venv/bin/python -c "
+import os, re
+url = os.environ.get('DATABASE_URL', '')
+m = re.match(r'postgresql://(.+):(.+)@(.+)/(.+)', url)
+if m:
+    print(f'psql -h {m.group(3)} -U {m.group(1)} -d {m.group(4)} -f /root/grimbots/deploy/sql/create_indexes.sql')
+else:
+    print('⚠️ DATABASE_URL não reconhecida — execute o SQL manualmente: psql -d <db> -f deploy/sql/create_indexes.sql')
+" 2>/dev/null | bash 2>/dev/null || echo "   ⚠️ Migração SQL manual necessária: psql -d <db> -f deploy/sql/create_indexes.sql"
+else
+    echo "   ⚠️ psql não encontrado — migração manual: psql -d <db> -f deploy/sql/create_indexes.sql"
+fi
 
-echo "✅ PRONTO! Repositório atualizado e dependências instaladas com sucesso!"
+echo ""
+echo "=============================================="
+echo "✅ Código atualizado com sucesso!"
+echo "📋 Próximo passo: sudo bash restart-system.sh"
+echo "=============================================="
