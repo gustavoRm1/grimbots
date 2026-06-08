@@ -7,6 +7,7 @@ Extraído de celery_app.py para ser usado por múltiplos clientes CAPI.
 
 import logging
 import time
+from typing import Optional
 
 import requests
 
