@@ -36,8 +36,8 @@ def _get_rq_app():
     global _rq_app
     if _rq_app is None:
         from internal_logic.core.extensions import create_app
-        _rq_app = create_app(skip_sync_thread=True)
-        logger.info("✅ App Flask inicializada para workers RQ (skip_sync_thread=True)")
+        _rq_app = create_app(skip_sync_thread=True, rq_pool=True)
+        logger.info("✅ App Flask inicializada para workers RQ (skip_sync_thread=True, rq_pool=True)")
     return _rq_app
 
 # Conectar ao Redis

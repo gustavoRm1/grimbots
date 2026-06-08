@@ -67,7 +67,7 @@ class Config:
     SOCKETIO_MESSAGE_QUEUE = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
     
     @classmethod
-    def init_app(cls, app):
+    def init_app(cls, app, rq_pool=False):
         """Aplica todas as configurações ao app Flask"""
         
         # SECRET_KEY
@@ -98,6 +98,14 @@ class Config:
         engine_options = cls.SQLALCHEMY_ENGINE_OPTIONS.copy()
         engine_options['connect_args'] = cls.get_connect_args()
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
+        
+        # Workers RQ usam pool reduzido para não estourar max_connections do PostgreSQL
+        if rq_pool:
+            rq_options = engine_options.copy()
+            rq_options['pool_size'] = 5
+            rq_options['max_overflow'] = 3
+            rq_options['pool_recycle'] = 300
+            app.config['SQLALCHEMY_ENGINE_OPTIONS'] = rq_options
         
         # Cookies/Sessão
         if cls.SESSION_COOKIE_DOMAIN:

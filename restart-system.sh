@@ -69,9 +69,9 @@ echo "🤖 [5/7] Levantando Workers RQ via systemd..."
 # tasks=5, tracking=3, gateway=3, webhook=3, marathon=1 — escala para 200k visitas/dia
 declare -A WORKER_COUNTS=(
     ["tasks"]=5
-    ["tracking"]=3
-    ["gateway"]=3
-    ["webhook"]=3
+    ["tracking"]=2
+    ["gateway"]=2
+    ["webhook"]=2
     ["marathon"]=1
 )
 QUEUES=("tasks" "tracking" "gateway" "webhook" "marathon")

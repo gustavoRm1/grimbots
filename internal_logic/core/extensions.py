@@ -27,13 +27,14 @@ limiter = Limiter(
 )
 
 
-def create_app(skip_sync_thread: bool = False):
+def create_app(skip_sync_thread: bool = False, rq_pool: bool = False):
     """
     Application Factory Pattern — Cria e configura a aplicação Flask
     
     Args:
         skip_sync_thread: Se True, pula a thread de sincronização de webhooks
                           e o agendamento de reconciliações (útil para workers RQ)
+        rq_pool: Se True, usa pool_size=5 para workers RQ (vs 25 do Gunicorn)
     """
     # Mapeamento absoluto da raiz do projeto (dois níveis acima de 'core')
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -55,7 +56,7 @@ def create_app(skip_sync_thread: bool = False):
     # APLICAR CONFIGURAÇÕES CENTRALIZADAS
     # ============================================================================
     from internal_logic.core.config import Config
-    Config.init_app(app)
+    Config.init_app(app, rq_pool=rq_pool)
     
     # ============================================================================
     # INICIALIZAR EXTENSÕES FLASK
