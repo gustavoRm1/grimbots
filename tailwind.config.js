@@ -1,0 +1,83 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+    content: [
+        './templates/**/*.html',
+        './internal_logic/**/*.py',
+    ],
+    theme: {
+        extend: {
+            colors: {
+                gold: {
+                    900: 'var(--brand-gold-600)',
+                    700: 'var(--brand-gold-500)',
+                    500: 'var(--brand-gold-500)',
+                    300: 'var(--brand-gold-400)',
+                    100: 'var(--brand-gold-200)',
+                },
+                emerald: {
+                    900: 'var(--brand-emerald-700)',
+                    700: 'var(--brand-emerald-600)',
+                    500: 'var(--brand-emerald-500)',
+                    300: 'var(--brand-emerald-400)',
+                    100: 'var(--brand-emerald-300)',
+                },
+                dark: {
+                    primary: 'var(--dark-950)',
+                    secondary: 'var(--dark-950)',
+                    tertiary: 'var(--dark-900)',
+                    surface: 'var(--dark-900)',
+                    surfaceMid: 'var(--dark-800)',
+                    surfaceHigh: 'var(--dark-800)',
+                },
+                trust: {
+                    900: 'var(--trust-800)',
+                    700: 'var(--trust-700)',
+                    500: 'var(--trust-500)',
+                    300: 'var(--trust-400)',
+                    100: 'var(--trust-300)',
+                },
+                alert: {
+                    900: 'var(--alert-800)',
+                    700: 'var(--alert-700)',
+                    500: 'var(--alert-500)',
+                    300: 'var(--alert-400)',
+                    100: 'var(--alert-300)',
+                },
+                txt: {
+                    primary: 'var(--txt-primary)',
+                    secondary: 'var(--txt-secondary)',
+                    tertiary: 'var(--txt-tertiary)',
+                    muted: 'var(--txt-muted)',
+                },
+                bg950: '#0d0d0d',
+                bg900: '#161616',
+                bg850: '#1e1e1e',
+                surface800: '#262626',
+                surface700: '#2d2d2d',
+                surface600: '#353535',
+                textPrimary: '#FAFAFA',
+                textSecondary: '#B8B8B8',
+                textTertiary: '#8A8A8A',
+                textDisabled: '#5A5A5A',
+                accent500: '#FFBA08',
+                accent600: '#E6A800',
+                accent400: '#FFD23F',
+                accent300: '#FFE180',
+                danger500: '#EF4444',
+                danger600: '#DC2626',
+                success500: '#22C55E',
+                success600: '#16A34A',
+                warning500: '#F59E0B',
+                info500: '#60A5FA',
+            },
+            boxShadow: {
+                'gold-glow': '0 0 20px rgba(255, 184, 0, 0.3), 0 0 40px rgba(255, 184, 0, 0.1)',
+                'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.3)',
+            },
+            fontFamily: {
+                sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+            },
+        },
+    },
+    plugins: [],
+}

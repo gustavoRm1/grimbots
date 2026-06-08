@@ -519,284 +519,72 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                 utm_term = getattr(bot_user, 'utm_term', None) if bot_user else None
 
                 redis_tracking_payload: Dict[str, Any] = {}
-                if not is_remarketing:
-                    tracking_token = None
+                tracking_token = None
 
-                if is_remarketing:
-                    if bot_user and bot_user.tracking_session_id:
-                        tracking_token = bot_user.tracking_session_id
-                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                        logger.info(f"[REMARKETING] Forcando tracking_token do BotUser.tracking_session_id: {token_log}...")
-                    else:
-                        tracking_token = None
-                        logger.error(f"[REMARKETING] BotUser sem tracking_session_id - Payment sera criado sem tracking_token (atribuicao prejudicada)")
-                elif bot_user and bot_user.tracking_session_id and not is_remarketing:
-                    tracking_token = bot_user.tracking_session_id
-                    token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                    logger.info(f"Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MAXIMA): {token_log}...")
+                # ├─ PRIORIDADE 1: tracking_session_id do BotUser (vem do /go/<slug>)
+                if bot_user and bot_user.tracking_session_id:
+                    candidate = bot_user.tracking_session_id
+                    norm = candidate.replace('-', '').lower()
+                    if len(norm) == 32 and all(c in '0123456789abcdef' for c in norm):
+                        tracking_token = candidate
+                        logger.info(f"[TRACKING] Token do bot_user.tracking_session_id: {tracking_token[:20]}...")
 
-                    is_generated_token = tracking_token.startswith('tracking_')
-                    if is_generated_token:
-                        token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                        logger.error(f"[GENERATE PIX] bot_user.tracking_session_id contem token GERADO: {token_log_30}...")
-                        logger.error(f"   Token gerado nao tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
-                        logger.error(f"   Tentando recuperar token UUID correto via fbclid...")
-
-                        if bot_user and getattr(bot_user, 'fbclid', None):
-                            try:
-                                fbclid_from_botuser = bot_user.fbclid
-                                tracking_token_key = f"tracking:fbclid:{fbclid_from_botuser}"
-                                recovered_token_from_fbclid = tracking_service.redis.get(tracking_token_key)
-                                if recovered_token_from_fbclid:
-                                    normalized_recovered = recovered_token_from_fbclid.replace('-', '').lower()
-                                    is_recovered_uuid = len(normalized_recovered) == 32 and all(c in '0123456789abcdef' for c in normalized_recovered)
-                                    if is_recovered_uuid:
-                                        tracking_token = recovered_token_from_fbclid
-                                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                        logger.info(f"[GENERATE PIX] Token UUID correto recuperado via fbclid: {token_log}...")
-                                        logger.info(f"   Atualizando bot_user.tracking_session_id com token UUID correto")
-                                        bot_user.tracking_session_id = tracking_token
-                                    else:
-                                        logger.warning(f"[GENERATE PIX] Token recuperado via fbclid tem formato invalido: {recovered_token_from_fbclid[:30]}... (len={len(recovered_token_from_fbclid)}) - IGNORANDO")
-                            except Exception as e:
-                                logger.warning(f"Erro ao recuperar token UUID via fbclid: {e}")
-                        else:
-                            logger.warning(f"[GENERATE PIX] bot_user.fbclid ausente - nao e possivel recuperar token UUID correto")
-
-                    try:
-                        recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
-                        if recovered_payload:
-                            redis_tracking_payload = recovered_payload
-                            logger.info(f"Tracking payload recuperado do bot_user.tracking_session_id: fbp={'ok' if recovered_payload.get('fbp') else 'missing'}, fbc={'ok' if recovered_payload.get('fbc') else 'missing'}, ip={'ok' if recovered_payload.get('client_ip') else 'missing'}, ua={'ok' if recovered_payload.get('client_user_agent') else 'missing'}, pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
-                    except Exception as e:
-                        logger.warning(f"Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
-                elif bot_user:
-                    logger.warning(f"BotUser {bot_user.id} encontrado mas tracking_session_id esta vazio (telegram_user_id: {customer_user_id})")
-
-                if not is_remarketing and not tracking_token and customer_user_id:
+                # ├─ PRIORIDADE 2: Redis indices (fallback para leads sem redirect)
+                if not tracking_token and customer_user_id:
                     try:
                         cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
                         if cached_token:
-                            is_generated_token = cached_token.startswith('tracking_')
-                            normalized_cached = cached_token.replace('-', '').lower()
-                            is_uuid_token = len(normalized_cached) == 32 and all(c in '0123456789abcdef' for c in normalized_cached)
-
-                            if is_generated_token:
-                                logger.error(f"[GENERATE PIX] Token recuperado de tracking:last_token e GERADO: {cached_token[:30]}... - IGNORANDO")
-                                logger.error(f"   Token gerado nao tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
-                            elif is_uuid_token:
+                            norm = cached_token.replace('-', '').lower()
+                            if len(norm) == 32 and all(c in '0123456789abcdef' for c in norm):
                                 tracking_token = cached_token
-                                token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                logger.info(f"Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {token_log}...")
-                            else:
-                                logger.warning(f"[GENERATE PIX] Token recuperado de tracking:last_token tem formato invalido: {cached_token[:30]}... (len={len(cached_token)}) - IGNORANDO")
+                                logger.info(f"[TRACKING] Token de tracking:last_token:user: {tracking_token[:20]}...")
                     except Exception:
-                        logger.exception("Falha ao recuperar tracking:last_token do Redis")
+                        logger.exception("[TRACKING] Erro tracking:last_token:user")
 
-                if not is_remarketing and not tracking_token and customer_user_id:
+                if not tracking_token and customer_user_id:
                     try:
-                        cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
-                        if cached_payload:
-                            redis_tracking_payload = json.loads(cached_payload)
-                            recovered_token_from_chat = redis_tracking_payload.get("tracking_token")
-                            if recovered_token_from_chat:
-                                is_generated_token = recovered_token_from_chat.startswith('tracking_')
-                                normalized_chat = recovered_token_from_chat.replace('-', '').lower()
-                                is_uuid_token = len(normalized_chat) == 32 and all(c in '0123456789abcdef' for c in normalized_chat)
-
-                                if is_generated_token:
-                                    logger.error(f"[GENERATE PIX] Token recuperado de tracking:chat e GERADO: {recovered_token_from_chat[:30]}... - IGNORANDO")
-                                    logger.error(f"   Token gerado nao tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
-                                elif is_uuid_token:
-                                    tracking_token = recovered_token_from_chat
-                                    token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                    logger.info(f"Tracking token recuperado de tracking:chat:{customer_user_id}: {token_log}...")
-                                else:
-                                    logger.warning(f"[GENERATE PIX] Token recuperado de tracking:chat tem formato invalido: {recovered_token_from_chat[:30]}... (len={len(recovered_token_from_chat)}) - IGNORANDO")
+                        raw = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
+                        if raw:
+                            chat_data = json.loads(raw)
+                            t = chat_data.get("tracking_token")
+                            if t:
+                                norm = t.replace('-', '').lower()
+                                if len(norm) == 32 and all(c in '0123456789abcdef' for c in norm):
+                                    tracking_token = t
+                                    redis_tracking_payload = chat_data
+                                    logger.info(f"[TRACKING] Token de tracking:chat: {tracking_token[:20]}...")
                     except Exception:
-                        logger.exception("Falha ao recuperar tracking:chat do Redis")
+                        logger.exception("[TRACKING] Erro tracking:chat")
 
+                # ├─ PRIORIDADE 3.5: Fallback token legado (tracking_xxx) — mesmo comportamento do código antigo
+                if not tracking_token and bot_user and bot_user.tracking_session_id:
+                    candidate = bot_user.tracking_session_id
+                    if candidate.startswith('tracking_'):
+                        tracking_token = candidate
+                        logger.warning(f"[TOKEN LEGADO] Fallback para token legado: {candidate[:30]}...")
+
+                # ├─ Se achou token novo e bot_user tem session_id diferente → atualizar
+                if tracking_token and bot_user and bot_user.tracking_session_id != tracking_token:
+                    bot_user.tracking_session_id = tracking_token
+                    logger.info(f"[TRACKING] bot_user.tracking_session_id atualizado: {tracking_token[:20]}...")
+
+                # ── Recuperar payload do Redis ─────────────────────────────
                 tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
+                if tracking_token and not tracking_data_v4:
+                    recovered = tracking_service.recover_tracking_data(tracking_token) or {}
+                    if recovered:
+                        tracking_data_v4 = recovered
+                        logger.info(f"[TRACKING] Payload Redis recuperado | "
+                                     f"fbp={'ok' if recovered.get('fbp') else 'missing'} "
+                                     f"fbc={'ok' if recovered.get('fbc') else 'missing'} "
+                                     f"pageview_event_id={'ok' if recovered.get('pageview_event_id') else 'missing'}")
 
+                # ── Extrair campos do tracking_data ────────────────────────
                 if tracking_data_v4:
-                    fbc = tracking_data_v4.get("fbc")
-                    fbp = tracking_data_v4.get("fbp")
-                    fbclid = tracking_data_v4.get("fbclid")
-                    pageview_event_id = tracking_data_v4.get("pageview_event_id")
-                    redirect_id = tracking_data_v4.get("redirect_id")
-                    meta_pixel_id = tracking_data_v4.get("pixel_id")
-                    pool_id_from_tracking = tracking_data_v4.get("pool_id")
-                    tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
-
-                if tracking_token:
-                    recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
-                    if recovered_payload:
-                        tracking_data_v4 = recovered_payload
-                        fbc = tracking_data_v4.get("fbc")
-                        fbp = tracking_data_v4.get("fbp")
-                        fbclid = tracking_data_v4.get("fbclid")
-                        pageview_event_id = tracking_data_v4.get("pageview_event_id")
-                        redirect_id = tracking_data_v4.get("redirect_id")
-                        meta_pixel_id = tracking_data_v4.get("pixel_id")
-                        pool_id_from_tracking = tracking_data_v4.get("pool_id")
-                        tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
-                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                        logger.info(f" Tracking payload recuperado do Redis para token {token_log}... | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview_event_id={'ok' if pageview_event_id else 'missing'}")
-                    elif not tracking_data_v4:
-                        logger.warning(" Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
-                    if bot_user and tracking_token:
-                        is_generated_token = tracking_token.startswith('tracking_')
-                        normalized_token_check = tracking_token.replace('-', '').lower()
-                        is_uuid_token = len(normalized_token_check) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check)
-                        if is_uuid_token and bot_user.tracking_session_id != tracking_token:
-                            bot_user.tracking_session_id = tracking_token
-                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                            logger.info(f" bot_user.tracking_session_id atualizado com token do redirect: {token_log}...")
-
-                if not tracking_token:
-                    recovered_token_from_fbclid = None
-                    if bot_user and getattr(bot_user, 'fbclid', None):
-                        try:
-                            fbclid_from_botuser = bot_user.fbclid
-                            tracking_token_key = f"tracking:fbclid:{fbclid_from_botuser}"
-                            recovered_token_from_fbclid = tracking_service.redis.get(tracking_token_key)
-                            if recovered_token_from_fbclid:
-                                tracking_token = recovered_token_from_fbclid
-                                token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                logger.info(f"Tracking token recuperado do Redis via fbclid do BotUser: {token_log}...")
-                                recovered_payload_from_fbclid = tracking_service.recover_tracking_data(tracking_token) or {}
-                                if recovered_payload_from_fbclid:
-                                    tracking_data_v4 = recovered_payload_from_fbclid
-                                    logger.info(f"Tracking payload recuperado via fbclid: fbp={'ok' if recovered_payload_from_fbclid.get('fbp') else 'missing'}, fbc={'ok' if recovered_payload_from_fbclid.get('fbc') else 'missing'}, ip={'ok' if recovered_payload_from_fbclid.get('client_ip') else 'missing'}, ua={'ok' if recovered_payload_from_fbclid.get('client_user_agent') else 'missing'}, pageview_event_id={'ok' if recovered_payload_from_fbclid.get('pageview_event_id') else 'missing'}")
-                                    if bot_user and tracking_token:
-                                        is_generated_token = tracking_token.startswith('tracking_')
-                                        normalized_token_check2 = tracking_token.replace('-', '').lower()
-                                        is_uuid_token = len(normalized_token_check2) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check2)
-
-                                        if is_generated_token:
-                                            token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                            logger.error(f"[GENERATE PIX] Token recuperado via fbclid e GERADO: {token_log_30}... - NAO atualizar bot_user.tracking_session_id")
-                                        elif is_uuid_token:
-                                            if bot_user.tracking_session_id != tracking_token:
-                                                bot_user.tracking_session_id = tracking_token
-                                                token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                                logger.info(f"bot_user.tracking_session_id atualizado com token recuperado via fbclid: {token_log}...")
-                                        else:
-                                            token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                            len_log = len(tracking_token) if tracking_token else 'N/A'
-                                            logger.warning(f"[GENERATE PIX] Token recuperado via fbclid tem formato invalido: {token_log_30}... (len={len_log})")
-                        except Exception as e:
-                            logger.warning(f"Erro ao recuperar tracking_token via fbclid do BotUser: {e}")
-
-                    if not tracking_token and bot_user:
-                        try:
-                            chat_key = f"tracking:chat:{customer_user_id}"
-                            chat_payload_raw = tracking_service.redis.get(chat_key)
-                            if chat_payload_raw:
-                                try:
-                                    chat_payload = json.loads(chat_payload_raw)
-                                    recovered_token_from_chat = chat_payload.get('tracking_token')
-                                    if recovered_token_from_chat:
-                                        tracking_token = recovered_token_from_chat
-                                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                        logger.info(f"Tracking token recuperado de tracking:chat:{customer_user_id}: {token_log}...")
-                                        recovered_payload_from_chat = tracking_service.recover_tracking_data(tracking_token) or {}
-                                        if recovered_payload_from_chat:
-                                            tracking_data_v4 = recovered_payload_from_chat
-                                            logger.info(f"Tracking payload recuperado via chat: fbp={'ok' if recovered_payload_from_chat.get('fbp') else 'missing'}, fbc={'ok' if recovered_payload_from_chat.get('fbc') else 'missing'}, ip={'ok' if recovered_payload_from_chat.get('client_ip') else 'missing'}, ua={'ok' if recovered_payload_from_chat.get('client_user_agent') else 'missing'}, pageview_event_id={'ok' if recovered_payload_from_chat.get('pageview_event_id') else 'missing'}")
-                                            if bot_user and tracking_token:
-                                                is_generated_token = tracking_token.startswith('tracking_')
-                                                normalized_token_check3 = tracking_token.replace('-', '').lower()
-                                                is_uuid_token = len(normalized_token_check3) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check3)
-
-                                                if is_generated_token:
-                                                    token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                                    logger.error(f"[GENERATE PIX] Token recuperado via chat e GERADO: {token_log_30}... - NAO atualizar bot_user.tracking_session_id")
-                                                elif is_uuid_token:
-                                                    if bot_user.tracking_session_id != tracking_token:
-                                                        bot_user.tracking_session_id = tracking_token
-                                                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                                        logger.info(f"bot_user.tracking_session_id atualizado com token recuperado via chat: {token_log}...")
-                                                else:
-                                                    token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
-                                                    len_log = len(tracking_token) if tracking_token else 'N/A'
-                                                    logger.warning(f"[GENERATE PIX] Token recuperado via chat tem formato invalido: {token_log_30}... (len={len_log})")
-                                except Exception as e:
-                                    logger.warning(f"Erro ao parsear chat_payload: {e}")
-                        except Exception as e:
-                            logger.warning(f"Erro ao recuperar tracking_token de tracking:chat: {e}")
-
-                    if not tracking_token:
-                        if pix_result and pix_result.get('transaction_id'):
-                            gateway_transaction_id_temp = pix_result.get('transaction_id')
-                            logger.warning(f"[TOKEN AUSENTE] tracking_token AUSENTE - PIX ja foi gerado (transaction_id: {gateway_transaction_id_temp})")
-                            logger.warning(f"   Isso indica que o usuario NAO passou pelo redirect ou tracking_session_id nao foi salvo")
-                            logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
-                            logger.warning(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
-                            logger.warning(f"   Payment sera criado mesmo sem tracking_token para evitar perder venda")
-                            logger.warning(f"   Meta Pixel Purchase tera atribuicao reduzida (sem pageview_event_id)")
-                        else:
-                            error_msg = f"[TOKEN AUSENTE] tracking_token AUSENTE e PIX nao foi gerado para BotUser {bot_user.id if bot_user else 'N/A'} (customer_user_id: {customer_user_id})"
-                            logger.error(error_msg)
-                            logger.error(f"   Isso indica que o usuario NAO passou pelo redirect ou tracking_session_id nao foi salvo")
-                            logger.error(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
-                            logger.error(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
-                            logger.error(f"   SOLUCAO: Usuario deve acessar link de redirect primeiro: /go/{slug}?grim=...&fbclid=...")
-                            logger.error(f"   Payment NAO sera criado sem tracking_token valido e sem PIX gerado")
-
-                            raise ValueError(
-                                f"tracking_token ausente e PIX nao gerado - usuario deve acessar link de redirect primeiro. "
-                                f"BotUser {bot_user.id if bot_user else 'N/A'} nao tem tracking_session_id. "
-                                f"SOLUCAO: Acessar /go/{slug}?grim=...&fbclid=... antes de gerar PIX"
-                            )
-                if not tracking_data_v4:
-                    tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
-
-                enrichment_source = {
-                    "fbclid": fbclid,
-                    "utm_source": utm_source,
-                    "utm_medium": utm_medium,
-                    "utm_campaign": utm_campaign,
-                    "utm_content": utm_content,
-                    "utm_term": utm_term,
-                    "grim": getattr(bot_user, 'campaign_code', None) if bot_user else None,
-                }
-                for key, value in enrichment_source.items():
-                    if value and key not in tracking_data_v4:
-                        tracking_data_v4[key] = value
-
-                if tracking_data_v4.get('fbclid'):
-                    fbclid = tracking_data_v4['fbclid']
-                if tracking_data_v4.get('utm_source'):
-                    utm_source = tracking_data_v4['utm_source']
-                if tracking_data_v4.get('utm_medium'):
-                    utm_medium = tracking_data_v4['utm_medium']
-                if tracking_data_v4.get('utm_campaign'):
-                    utm_campaign = tracking_data_v4['utm_campaign']
-                if tracking_data_v4.get('utm_content'):
-                    fbp_log = fbp[:30] if fbp and isinstance(fbp, str) else 'N/A'
-                    logger.info(f"fbp recuperado do tracking_data_v4: {fbp_log}...")
-
-                if fbc is not None:
-                    fbc_log = fbc[:30] if fbc and isinstance(fbc, str) else 'N/A'
-                    logger.info(f"fbc recuperado do tracking_data_v4: {fbc_log}...")
-                else:
-                    logger.warning(f"fbc nao encontrado no tracking_data_v4 - NAO gerando sintetico (preservando atribuicao)")
-
-                if pageview_event_id:
-                    logger.info(f"pageview_event_id recuperado do tracking_data_v4: {pageview_event_id}")
-                else:
-                    if bot_user and bot_user.tracking_session_id:
-                        try:
-                            fallback_tracking = tracking_service.recover_tracking_data(bot_user.tracking_session_id)
-                            pageview_event_id = fallback_tracking.get('pageview_event_id')
-                            if pageview_event_id:
-                                logger.info(f"pageview_event_id recuperado do bot_user.tracking_session_id: {pageview_event_id}")
-                        except Exception as e:
-                            logger.warning(f"Erro ao recuperar pageview_event_id do bot_user: {e}")
-
-                    if not pageview_event_id:
-                        logger.warning(f"pageview_event_id nao encontrado no tracking_data_v4 nem no bot_user - Purchase pode nao fazer dedup perfeito")
+                    fbc = tracking_data_v4.get("fbc") or fbc
+                    fbp = tracking_data_v4.get("fbp") or fbp
+                    fbclid = tracking_data_v4.get("fbclid") or fbclid
+                    pageview_event_id = tracking_data_v4.get("pageview_event_id") or pageview_event_id
 
                 external_ids = tracking_service.build_external_id_array(
                     fbclid=fbclid,
@@ -1153,15 +941,11 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                                     elif customer_user_id:
                                         telegram_user_id_for_enrich = str(customer_user_id).replace('user_', '')
 
-                                    external_id_list = []
-                                    if fbclid_for_enrich and isinstance(fbclid_for_enrich, str) and fbclid_for_enrich.strip():
-                                        external_id_list.append(fbclid_for_enrich.strip())
-                                    if telegram_user_id_for_enrich and telegram_user_id_for_enrich.strip():
-                                        external_id_list.append(telegram_user_id_for_enrich.strip())
+                                    external_id_value = (fbclid_for_enrich or '').strip()
 
                                     user_data_enriched = MetaPixelAPI._build_user_data(
                                         customer_user_id=telegram_user_id_for_enrich,
-                                        external_id=external_id_list,
+                                        external_id=external_id_value or None,
                                         email=customer_email if _is_high_confidence_email(customer_email) else None,
                                         phone=customer_phone if _is_high_confidence_phone(customer_phone) else None,
                                         client_ip=ip_value_for_enrich,

@@ -74,6 +74,7 @@ def _ensure_periodic_reconciliations_scheduled() -> None:
         schedule_specs = [
             ('reconcile:paradise', reconcile_paradise_payments, 60, 60),
             ('reconcile:atomopay', reconcile_atomopay_payments, 60, 60),
+            ('reconcile:purchase_capi', reconcile_server_purchases, 60, 60),
         ]
 
         for key, func, interval_seconds, runs_ahead in schedule_specs:
@@ -95,6 +96,24 @@ def _ensure_periodic_reconciliations_scheduled() -> None:
                 pass
     except Exception:
         pass
+
+
+def reconcile_server_purchases() -> int:
+    """RQ job: envia Purchase via CAPI para pools em SERVER MODE.
+
+    SÓ processa pools que estão em SERVER MODE (access_token presente).
+    Pools HTML-ONLY são ignorados — o browser Pixel no delivery.html assume.
+
+    Agendado a cada 60s pela _ensure_periodic_reconciliations_scheduled().
+    """
+    try:
+        app = _get_rq_app()
+        with app.app_context():
+            from internal_logic.services.server_tracking.purchase_reconciler import reconcile_purchases
+            return reconcile_purchases()
+    except Exception as e:
+        logger.error(f"❌ [RECONCILER] Erro no reconcile_server_purchases: {e}", exc_info=True)
+        return 0
 
 
 _ensure_periodic_reconciliations_scheduled()

@@ -28,10 +28,10 @@ def get_user_ip():
 
 @auth_bp.route('/')
 def index():
-    """Página inicial"""
+    """Página inicial - Landing Page"""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.dashboard'))
-    return redirect(url_for('auth.login'))
+    return render_template('landing.html')
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])

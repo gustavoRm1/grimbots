@@ -41,74 +41,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     
-    <!-- TailwindCSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        // PALETA V2.0 - PROFISSIONAL (PNL + Persuasão)
-                        // DOURADO - Dinheiro e Sucesso
-                        gold: {
-                            900: 'var(--brand-gold-600)',
-                            700: 'var(--brand-gold-500)',
-                            500: 'var(--brand-gold-500)', // Principal
-                            300: 'var(--brand-gold-400)',
-                            100: 'var(--brand-gold-200)',
-                        },
-                        // VERDE ESMERALDA - Crescimento e Aprovação
-                        emerald: {
-                            900: 'var(--brand-emerald-700)',
-                            700: 'var(--brand-emerald-600)',
-                            500: 'var(--brand-emerald-500)', // Principal
-                            300: 'var(--brand-emerald-400)',
-                            100: 'var(--brand-emerald-300)',
-                        },
-                        // PRETO PREMIUM - Base
-                        dark: {
-                            primary: 'var(--dark-950)',
-                            secondary: 'var(--dark-950)',
-                            tertiary: 'var(--dark-900)',
-                            surface: 'var(--dark-900)',
-                            surfaceMid: 'var(--dark-800)',
-                            surfaceHigh: 'var(--dark-800)',
-                        },
-                        // AZUL CONFIANÇA
-                        trust: {
-                            900: 'var(--trust-800)',
-                            700: 'var(--trust-700)',
-                            500: 'var(--trust-500)',
-                            300: 'var(--trust-400)',
-                            100: 'var(--trust-300)',
-                        },
-                        // VERMELHO CORAL
-                        alert: {
-                            900: 'var(--alert-800)',
-                            700: 'var(--alert-700)',
-                            500: 'var(--alert-500)',
-                            300: 'var(--alert-400)',
-                            100: 'var(--alert-300)',
-                        },
-                        // TEXTOS
-                        txt: {
-                            primary: 'var(--txt-primary)',
-                            secondary: 'var(--txt-secondary)',
-                            tertiary: 'var(--txt-tertiary)',
-                            muted: 'var(--txt-muted)',
-                        },
-                    },
-                    boxShadow: {
-                        'gold-glow': '0 0 20px rgba(255, 184, 0, 0.3), 0 0 40px rgba(255, 184, 0, 0.1)',
-                        'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.3)',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- TailwindCSS (build estático) -->
+    <link rel="stylesheet" href="/static/css/tailwind.css">
     
     <!-- jsPlumb Community Edition - Editor Visual de Fluxo -->
     <!-- CDN confiável do jsPlumb 2.x (carregar ANTES do Alpine.js) -->
@@ -120,8 +54,9 @@
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Font Awesome (async) -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
     
     <!-- PALETA V2.0 - Profissional (PNL + Persuasão) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/brand-colors-v2.css') }}?v=2.0">

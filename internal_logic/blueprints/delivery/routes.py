@@ -1,12 +1,18 @@
 """
 Delivery Routes
 ===============
-Rota de entrega de produtos com injeção de variáveis para Meta Pixel Client-Side.
+Rota de entrega com redirect link para o lead acessar o produto.
 
-ARQUITETURA: Client-Side (HTML-Only)
-- NÃO dispara Purchase no backend
-- Apenas recupera dados e injeta no template delivery.html
-- JavaScript no template dispara o Pixel e chama API de deduplicação
+DUAL-MODE TRACKING ARCHITECTURE:
+────────────────────────────────
+HTML-ONLY (pool com pixel_id, SEM access_token):
+  Purchase via browser Pixel no delivery.html
+  Server-side não envia Purchase
+
+SERVER MODE (pool com pixel_id + access_token):
+  Purchase via RQ job (server_tracking.purchase_reconciler)
+  pixel_id = None → template NÃO renderiza Pixel
+  Tracking independente do lead abrir o delivery
 """
 
 import logging
@@ -42,7 +48,7 @@ def delivery_page(token):
     try:
         # Imports adaptados para arquitetura atual
         from internal_logic.core.models import Payment, PoolBot, BotUser, Gateway
-        from internal_logic.services.tracking_service import TrackingService
+        from utils.tracking_service import TrackingServiceV4 as TrackingService
         from internal_logic.core.models import get_brazil_time
         from gateways import GatewayFactory
         import time
@@ -200,17 +206,7 @@ def delivery_page(token):
             })()
         
         pool = pool_bot.pool
-        # Inicialização defensiva para evitar UnboundLocalError em caminhos de retorno antecipado
-        redirect_url = None
-        # LINK DE ACESSO: sempre definir antes de qualquer retorno, mesmo sem pixel
-        if pool_bot and pool_bot.bot and pool_bot.bot.config and pool_bot.bot.config.access_link:
-            redirect_url = pool_bot.bot.config.access_link
-            logger.info(f" Delivery - Usando access_link personalizado: {redirect_url}")
-        elif pool_bot and pool_bot.bot and pool_bot.bot.username:
-            redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
-            logger.info(f" Delivery - Usando fallback genérico (access_link não configurado): {redirect_url}")
-        else:
-            logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
+        # LINK DE ACESSO: postergado para definição única antes do render_template (ver seção CORREÇÃO CRÍTICA)
 
         # ✅ CLEAN ARCHITECTURE: 'Fio Invisível' - extrair tracking do BotUser
         # A tabela Payment é 100% financeira - tracking vem do perfil do usuário
@@ -231,12 +227,28 @@ def delivery_page(token):
             pixel_source = 'BotUser'
         logger.info(f"[FILO_INVISIVEL] Pixel: {pixel_id}, source: {pixel_source}")
         
-        # C. Validação de pixel_id
+        # C. DUAL-MODE CHECK: SERVER MODE desabilita o Pixel no delivery
+        from internal_logic.services.server_tracking import is_server_mode
+        pool_obj = pool_bot.pool if pool_bot else None
+        if is_server_mode(pool_obj):
+            logger.info(
+                f"[TRACKING_MODE=SERVER] Pool {pool_obj.id}: "
+                f"Purchase no delivery DESABILITADO. "
+                f"RQ job 'purchase_reconciler' assume."
+            )
+            pixel_id = None
+        else:
+            logger.info(
+                f"[TRACKING_MODE=HTML_ONLY] Pool {pool_obj.id}: "
+                f"Purchase via browser Pixel no delivery."
+            )
+
+        # D. Validação de pixel_id
         has_meta_pixel = bool(pixel_id)
         if not has_meta_pixel:
             logger.warning("[FILO_INVISIVEL] pixel_id ausente - Purchase não será disparado")
         
-        # D. Validação de FBC sintético (se houver tracking_data para verificar)
+        # E. Validação de FBC sintético (se houver tracking_data para verificar)
         fbc_origin = None
         if bot_user and bot_user.tracking_session_id:
             temp_tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
@@ -245,7 +257,7 @@ def delivery_page(token):
                 fbc = None  # Ignorar FBC sintético
                 logger.warning("[FILO_INVISIVEL] fbc IGNORADO (origem: synthetic)")
         
-        # E. Valores finais para template
+        # F. Valores finais para template
         fbclid_to_use = fbclid or ''
         fbp_value = fbp or ''
         fbc_value = fbc or ''
@@ -268,22 +280,6 @@ def delivery_page(token):
             value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
             return value[:255]
         
-        # CORREÇÃO CRÍTICA: Normalizar external_id para garantir matching
-        # Se external_id existir, normalizar (MD5 se > 80 chars, ou original se <= 80)
-        # Isso garante que browser e server usem EXATAMENTE o mesmo formato
-        external_id_normalized = None
-        if external_id:
-            try:
-                # Implementar normalização local se não existir util
-                if len(str(external_id)) > 80:
-                    import hashlib
-                    external_id_normalized = hashlib.sha256(str(external_id).encode()).hexdigest()
-                else:
-                    external_id_normalized = str(external_id)
-            except Exception as e:
-                logger.warning(f"Erro ao normalizar external_id: {e}")
-                external_id_normalized = str(external_id)
-
         # event_id para Purchase: usar ID exclusivo do pagamento (dedup client/server)
         purchase_event_id = f"purchase_{payment.id}"
         payment.meta_event_id = purchase_event_id
@@ -293,15 +289,12 @@ def delivery_page(token):
         # ✅ CLEAN ARCHITECTURE: Injetar dados do BotUser no template
         # Sem dependência do Payment para tracking
         
-        # Normalizar external_id para JavaScript
+        # Normalizar external_id para JavaScript (SHA-256 sempre, para match com server-side)
         external_id_normalized = None
         if external_id:
             try:
-                if len(str(external_id)) > 80:
-                    import hashlib
-                    external_id_normalized = hashlib.sha256(str(external_id).encode()).hexdigest()
-                else:
-                    external_id_normalized = str(external_id)
+                import hashlib
+                external_id_normalized = hashlib.sha256(str(external_id).encode()).hexdigest()
             except Exception as e:
                 logger.warning(f"Erro ao normalizar external_id: {e}")
                 external_id_normalized = str(external_id)
@@ -342,6 +335,11 @@ def delivery_page(token):
         else:
             logger.error(f" Delivery - Nenhum redirect_url disponível para payment {payment.id}")
         
+        # DEFENSIVO: Se redirect_url continuar None, abortar com erro (evita renderizar "None" no template)
+        if not redirect_url:
+            logger.critical(f" Delivery - BLOQUEADO: Nenhum redirect_url disponível para payment {payment.id}")
+            return render_template('delivery_error.html', error='Link de entrega inválido. Entre em contato com o suporte.'), 500
+
         # LOG: pixel_id veio exclusivamente da query (funil). Nenhuma inferência.
         logger.info(f" Delivery - pixel_id via query param px: {' ' if pixel_id else ' '}")
         
@@ -353,9 +351,11 @@ def delivery_page(token):
             pageview_event_id=getattr(payment, 'pageview_event_id', None),
             purchase_event_id=purchase_event_id,
             fbclid=fbclid_to_use,  # Do BotUser
+            fbclid_hash=external_id_normalized or '',  # SHA-256 hash para match com server-side
             fbc=fbc_value,  # Do BotUser
             fbp=fbp_value,  # Do BotUser
-            fbc_origin=fbc_origin  # Para validação no template
+            fbc_origin=fbc_origin,  # Para validação no template
+            purchase_already_sent=purchase_already_sent
         )
         
         # DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)

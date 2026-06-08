@@ -25,37 +25,16 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+from utils.ip_utils import normalize_ip_to_ipv6
 
 logger = logging.getLogger(__name__)
 
 def normalize_external_id(fbclid: str) -> str:
-    """
-    Normaliza external_id (fbclid) para garantir matching consistente entre PageView, ViewContent e Purchase.
-    
-    ✅ CRÍTICO: Todos os eventos DEVEM usar o MESMO algoritmo de normalização!
-    
-    Regras:
-    - Se fbclid > 80 chars: retorna hash MD5 (32 chars) - mesmo critério usado em todos os eventos
-    - Se fbclid <= 80 chars: retorna fbclid original
-    - Se fbclid é None/vazio: retorna None
-    
-    Isso garante que todos os eventos usem o mesmo external_id, permitindo matching perfeito no Meta.
-    """
     if not fbclid or not isinstance(fbclid, str):
         return None
-    
     fbclid = fbclid.strip()
     if not fbclid:
         return None
-    
-    # ✅ CRÍTICO: Mesmo critério usado em todos os eventos (80 chars)
-    # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars)
-    if len(fbclid) > 80:
-        normalized = hashlib.md5(fbclid.encode('utf-8')).hexdigest()
-        logger.debug(f"🔑 External ID normalizado (MD5): {normalized} (original len={len(fbclid)})")
-        return normalized
-    
-    # Se <= 80 chars, usar original
     return fbclid
 
 
@@ -152,18 +131,7 @@ def process_meta_parameters(
                 # Prioridade 3: Fallback para timestamp atual (não ideal, mas melhor que nada)
                 creation_time_ms = None
                 
-                # ✅ PRIORIDADE 1: Extrair creationTime do cookie _fbc (se existir)
-                if fbc_cookie and fbc_cookie.startswith(('fb.1.', 'fb.2.')):
-                    # Cookie _fbc existe - extrair creationTime do formato: fb.1.{creationTime_ms}.{fbclid}
-                    parts = fbc_cookie.split('.')
-                    if len(parts) >= 4:
-                        try:
-                            creation_time_ms = int(parts[2])  # Índice 2 = creationTime_ms
-                            logger.info(f"[PARAM BUILDER] ✅ creationTime extraído do cookie _fbc: {creation_time_ms}")
-                        except (ValueError, IndexError):
-                            logger.warning(f"[PARAM BUILDER] ⚠️ Não foi possível extrair creationTime do cookie _fbc")
-                
-                # ✅ PRIORIDADE 2: Usar timestamp quando fbclid foi primeiro observado (pageview_ts)
+                # ✅ PRIORIDADE 1: Usar timestamp quando fbclid foi primeiro observado (pageview_ts)
                 # Meta diz: "use the timestamp in milliseconds when you first observed or received this fbclid value"
                 if creation_time_ms is None and fbclid_first_seen_ts is not None:
                     # fbclid_first_seen_ts pode estar em segundos ou milissegundos
@@ -222,7 +190,7 @@ def process_meta_parameters(
     
     # ✅ CLIENT_IP_ADDRESS: Prioridade 2 - X-Forwarded-For header
     if not result['client_ip_address']:
-        x_forwarded_for = request_headers.get('X-Forwarded-For', '').strip()
+        x_forwarded_for = str(request_headers.get('X-Forwarded-For', request_headers.get('x-forwarded-for', ''))).strip()
         if x_forwarded_for:
             # X-Forwarded-For pode conter múltiplos IPs (ex: 'client, proxy1, proxy2')
             # Pegar o primeiro IP (IP do cliente original)
@@ -246,7 +214,6 @@ def process_meta_parameters(
     # Converter IPv4 para IPv6 mapeado quando possível
     if result.get('client_ip_address'):
         try:
-            from utils.ip_utils import normalize_ip_to_ipv6
             original_ip = result['client_ip_address']
             normalized_ip = normalize_ip_to_ipv6(original_ip)
             if original_ip != normalized_ip:
@@ -321,51 +288,36 @@ class MetaPixelAPI:
         user_data = {}
         
         # ✅ CRÍTICO: External ID (obrigatório para Conversions API)
-        # ✅ SOLUÇÃO SÊNIOR QI 300: external_id IMUTÁVEL e CONSISTENTE
-        # Se external_id já for um array (do TrackingService), usar diretamente
-        # Caso contrário, construir array com ordem correta: fbclid primeiro, telegram_user_id segundo
+        # Consistente com user_data.py: apenas fbclid como external_id (único ID)
         
         external_ids = []
         
-        # ✅ Se external_id já é um array (do TrackingService), usar diretamente
         if isinstance(external_id, list):
             external_ids = external_id
             logger.debug(f"✅ External ID já é array (do TrackingService): {len(external_ids)} ID(s)")
         else:
-            # ✅ Construir array com ordem correta
-            # PRIORIDADE 1: external_id (fbclid) - SEMPRE PRIMEIRO para matching com PageView
             if external_id and isinstance(external_id, str) and external_id.strip():
                 external_ids.append(MetaPixelAPI._hash_data(external_id.strip()))
-            
-            # ✅ PRIORIDADE 2: customer_user_id (telegram_user_id) - adicionar depois do fbclid
-            # Só adicionar se for diferente do external_id (evitar duplicação)
-            if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
-                customer_id_clean = customer_user_id.strip()
-                # Verificar se não é o mesmo que external_id (para evitar duplicação)
-                external_id_clean = external_id.strip() if external_id and isinstance(external_id, str) else None
-                if customer_id_clean != external_id_clean:
-                    customer_id_hash = MetaPixelAPI._hash_data(customer_id_clean)
-                    # Verificar se já não está no array (evitar duplicatas)
-                    if customer_id_hash not in external_ids:
-                        external_ids.append(customer_id_hash)
         
-        # Só adicionar se tiver pelo menos um external_id válido
         if external_ids:
             user_data['external_id'] = external_ids
         
-        # ✅ Email (hashed) - validar antes de processar
+        # ✅ Email (hashed) - apenas emails reais (não sintéticos)
         if email and isinstance(email, str) and email.strip():
             email_clean = email.lower().strip()
-            # Validação básica de email (deve ter @ e pelo menos 3 caracteres)
-            if '@' in email_clean and len(email_clean) >= 3:
+            synthetic_domains = ['@telegram.user', '@user.telegram', '@example.com']
+            if any(d in email_clean for d in synthetic_domains):
+                logger.debug(f"Email sintético ignorado: {email_clean}")
+            elif '@' in email_clean and len(email_clean) >= 3:
                 user_data['em'] = [MetaPixelAPI._hash_data(email_clean)]
         
-        # ✅ Telefone (hashed) - limpar e validar antes de processar
+        # ✅ Telefone (hashed) - normalizar com country code 55 (consistente com user_data.py)
         if phone and isinstance(phone, str):
-            # Remove caracteres não numéricos
             phone_clean = ''.join(filter(str.isdigit, phone))
-            # Validação: telefone deve ter pelo menos 10 dígitos (formato mínimo)
+            phone_clean = phone_clean.lstrip('0')
             if phone_clean and len(phone_clean) >= 10:
+                if not phone_clean.startswith('55'):
+                    phone_clean = '55' + phone_clean
                 user_data['ph'] = [MetaPixelAPI._hash_data(phone_clean)]
         
         # ✅ Dados técnicos (IP e User Agent) - validar formato básico
@@ -413,7 +365,7 @@ class MetaPixelAPI:
                 response = requests.post(
                     url,
                     json=payload,
-                    timeout=15,
+                    timeout=3,
                     headers={
                         'Content-Type': 'application/json',
                         'User-Agent': 'GrimPay-MetaPixel/1.0'
@@ -443,14 +395,26 @@ class MetaPixelAPI:
                 if response.status_code == 200:
                     logger.info(f"✅ Meta API sucesso: {response_data}")
                     return True, response_data, None
+                elif 400 <= response.status_code < 500 and response.status_code != 429:
+                    error_msg = response_data.get('error', {}).get('message', 'Unknown error')
+                    logger.error(f"❌ Meta API error {response.status_code}: {error_msg} — não retentando")
+                    last_error = error_msg
+                    break
+                elif response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait = 60 * (2 ** attempt)
+                        logger.warning(f"⏳ 429 rate limit | tentativa {attempt + 1}/{max_retries} | retry em {wait}s")
+                        last_error = "429 rate limit"
+                        time.sleep(wait)
+                        continue
+                    else:
+                        logger.error(f"❌ 429 esgotou retries | pixel_id extraído da URL")
+                        last_error = "429 rate limit exhausted"
+                        break
                 else:
                     error_msg = response_data.get('error', {}).get('message', 'Unknown error')
                     logger.warning(f"⚠️ Meta API error {response.status_code}: {error_msg}")
                     last_error = error_msg
-                    
-                    # Se é erro de autenticação, não retry
-                    if response.status_code in [401, 403]:
-                        break
                     
             except requests.exceptions.Timeout:
                 last_error = f"Timeout na tentativa {attempt + 1}"
@@ -562,6 +526,7 @@ class MetaPixelAPI:
         client_user_agent: str = None,
         fbp: str = None,
         fbc: str = None,
+        event_source_url: str = None,
         utm_source: str = None,
         utm_campaign: str = None,
         campaign_code: str = None
@@ -613,6 +578,8 @@ class MetaPixelAPI:
             }],
             'access_token': access_token
         }
+        if event_source_url:
+            payload['data'][0]['event_source_url'] = event_source_url
         
         # Enviar com retry
         success, response_data, error = MetaPixelAPI._send_event_with_retry(url, payload)
@@ -645,6 +612,7 @@ class MetaPixelAPI:
         client_user_agent: str = None,
         fbp: str = None,
         fbc: str = None,
+        event_source_url: str = None,
         utm_source: str = None,
         utm_campaign: str = None,
         campaign_code: str = None,
@@ -719,6 +687,8 @@ class MetaPixelAPI:
             }],
             'access_token': access_token
         }
+        if event_source_url:
+            payload['data'][0]['event_source_url'] = event_source_url
         
         # Enviar com retry
         success, response_data, error = MetaPixelAPI._send_event_with_retry(url, payload)

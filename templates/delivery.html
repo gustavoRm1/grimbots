@@ -42,7 +42,7 @@
               content_type: 'product'
           };
 
-          {% if fbclid %} purchaseData.external_id = '{{ fbclid }}'; {% endif %}
+          {% if fbclid_hash %} purchaseData.external_id = '{{ fbclid_hash }}'; {% endif %}
 
           var purchaseParams = {};
           {% if fbp %} purchaseParams.fbp = '{{ fbp }}'; {% endif %}
@@ -86,7 +86,7 @@
         
         <div class="amount">R$ {{ payment.amount }}</div>
         
-        <a href="{{ redirect_url }}" id="redirect-link" class="redirect-button">
+        <a href="{{ redirect_url or '#' }}" id="redirect-link" class="redirect-button">
             Acessar Agora
         </a>
         <div class="loading" id="loading">Redirecionando...</div>
@@ -96,7 +96,7 @@
         // --- CONFIGURAÇÃO DE REDIRECIONAMENTO ---
         const REDIRECT_DELAY_MS = 4000; // 4 segundos é suficiente e melhor UX
         const redirectAllowedAt = Date.now() + REDIRECT_DELAY_MS;
-        const redirectUrl = '{{ redirect_url }}'; // Vem do Flask
+        const redirectUrl = '{{ redirect_url | replace("'", "\\'") or "" }';
         const loadingEl = document.getElementById('loading');
         const linkEl = document.getElementById('redirect-link');
 

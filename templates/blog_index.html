@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog - Grimbots | Automação de Vendas no Telegram</title>
+    <meta name="description" content="Aprenda tudo sobre automação de vendas no Telegram: bots, order bump, downsell, Meta Pixel, gateways de pagamento e muito mais.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://grimbots.com.br/blog">
+
+    <meta property="og:title" content="Blog - Grimbots | Automação de Vendas no Telegram">
+    <meta property="og:description" content="Aprenda tudo sobre automação de vendas no Telegram.">
+    <meta property="og:url" content="https://grimbots.com.br/blog">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Grimbots">
+    <meta property="og:image" content="https://grimbots.com.br/static/img/og-image.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blog - Grimbots | Automação de Vendas no Telegram">
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/tailwind.css">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        :root {
+            --brand-gold-500: #FFB800;
+            --brand-gold-300: #FFC933;
+            --brand-gold-700: #DAA520;
+            --brand-green-500: #10B981;
+            --brand-blue-500: #3B82F6;
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #141414;
+            --text-primary: #FFFFFF;
+            --text-secondary: #D1D1D1;
+            --text-tertiary: #9CA3AF;
+            --text-muted: #6B7280;
+            --border-subtle: rgba(255,255,255,0.06);
+            --border-medium: rgba(255,255,255,0.1);
+            --glow-gold: 0 0 30px rgba(255, 184, 0, 0.3);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+        .grid-texture { background-image: linear-gradient(rgba(255,184,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,184,0,0.03) 1px, transparent 1px); background-size: 60px 60px; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); border-color: rgba(255,184,0,0.15); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .card-hover h3 { transition: color 0.3s ease; }
+        .card-hover:hover h3 { color: var(--brand-gold-500) !important; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeInUp { animation: fadeInUp 0.6s ease forwards; opacity: 0; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .post-card { background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--border-subtle); border-radius: 16px; overflow: hidden; }
+        .post-card:hover { border-color: rgba(255,184,0,0.15); }
+        .tag-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: rgba(255,184,0,0.1); color: var(--brand-gold-300); border: 1px solid rgba(255,184,0,0.2); }
+    </style>
+</head>
+<body class="grid-texture">
+    <nav class="fixed top-0 left-0 right-0 z-50" style="background: rgba(10,10,10,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-subtle);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <a href="/" class="flex items-center gap-2 text-lg font-black" style="color: var(--brand-gold-500);">
+                    <i class="fas fa-robot"></i>
+                    grim<span style="color: var(--text-primary);">bots</span>
+                </a>
+                <div class="flex items-center gap-4">
+                    <a href="/blog" class="text-sm font-semibold transition-opacity" style="color: var(--brand-gold-500);">Blog</a>
+                    <a href="/#funcionalidades" class="text-sm font-medium transition-opacity" style="color: var(--text-tertiary);">Funcionalidades</a>
+                    <a href="/register" class="px-5 py-2.5 text-sm font-bold rounded-lg" style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-700)); color: #000;">Começar Grátis</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-24 pb-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <span class="inline-block px-4 py-1.5 rounded-full text-sm font-semibold mb-4" style="background: rgba(255,184,0,0.1); color: var(--brand-gold-300); border: 1px solid rgba(255,184,0,0.2);">
+                    <i class="fas fa-book mr-2"></i>Blog
+                </span>
+                <h1 class="text-4xl sm:text-5xl font-black mb-4">Automação de Vendas no Telegram</h1>
+                <p class="text-lg" style="color: var(--text-tertiary);">Guias, tutoriais e estratégias para escalar suas vendas com bots.</p>
+            </div>
+
+            <div class="space-y-6">
+                {% for slug, article in articles %}
+                <a href="/blog/{{ slug }}" class="block post-card card-hover p-6 no-underline">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div class="flex-1">
+                            <span class="tag-pill mb-3 inline-block">{{ article.date }}</span>
+                            <h2 class="text-xl font-bold mb-2" style="color: var(--text-primary);">{{ article.title }}</h2>
+                            <p class="text-sm" style="color: var(--text-tertiary);">{{ article.description[:120] }}{% if article.description|length > 120 %}...{% endif %}</p>
+                        </div>
+                        <div class="shrink-0">
+                            <span class="inline-flex items-center gap-2 text-sm font-semibold" style="color: var(--brand-gold-500);">
+                                Ler mais <i class="fas fa-arrow-right text-xs"></i>
+                            </span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+
+    <footer style="background: var(--bg-primary); border-top: 1px solid var(--border-subtle);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-robot text-lg" style="color: var(--brand-gold-500);"></i>
+                    <span class="text-base font-black" style="color: var(--brand-gold-500);">grim<span style="color: var(--text-primary);">bots</span></span>
+                    <span class="text-sm" style="color: var(--text-muted);">&copy; 2026</span>
+                </div>
+                <div class="flex items-center gap-6 text-sm" style="color: var(--text-muted);">
+                    <a href="/termos-de-uso" class="hover:underline">Termos</a>
+                    <a href="/politica-privacidade" class="hover:underline">Privacidade</a>
+                    <a href="/pricing.md" class="hover:underline">Preços</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

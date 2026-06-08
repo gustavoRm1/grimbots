@@ -52,28 +52,32 @@
                     });
                 }
                 
-                // ✅ Enviar cookies para servidor (incluindo _fbi para client_ip_address)
+                // ✅ Enviar dados para servidor via Beacon API (não bloqueia)
                 const trackingToken = '{{ tracking_token }}';
-                if (trackingToken && (updated_cookies['_fbc'] || updated_cookies['_fbp'] || updated_cookies['_fbi'])) {
-                    const cookiePayload = JSON.stringify({
-                        tracking_token: trackingToken,
-                        _fbp: updated_cookies['_fbp'] || null,
-                        _fbc: updated_cookies['_fbc'] || null,
-                        _fbi: updated_cookies['_fbi'] || null  // ✅ client_ip_address
-                    });
-                    
-                    // ✅ Enviar via Beacon API (não bloqueia)
-                    if (navigator.sendBeacon) {
-                        const blob = new Blob([cookiePayload], { type: 'application/json' });
-                        navigator.sendBeacon('/api/tracking/cookies', blob);
-                    } else {
-                        fetch('/api/tracking/cookies', {
-                            method: 'POST',
-                            body: cookiePayload,
-                            headers: {'Content-Type': 'application/json'},
-                            keepalive: true
-                        }).catch(err => console.error('[META PARAM BUILDER] Erro ao enviar cookies:', err));
-                    }
+                const cookiePayload = JSON.stringify({
+                    tracking_token: trackingToken,
+                    _fbp: updated_cookies['_fbp'] || null,
+                    _fbc: updated_cookies['_fbc'] || null,
+                    _fbi: updated_cookies['_fbi'] || null,
+                    fbclid: '{{ fbclid or "" }}',
+                    utm_source: '{{ utm_source or "" }}',
+                    utm_campaign: '{{ utm_campaign or "" }}',
+                    utm_medium: '{{ utm_medium or "" }}',
+                    utm_content: '{{ utm_content or "" }}',
+                    utm_term: '{{ utm_term or "" }}',
+                    grim: '{{ grim or "" }}'
+                });
+
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([cookiePayload], { type: 'application/json' });
+                    navigator.sendBeacon('/api/tracking/cookies', blob);
+                } else {
+                    fetch('/api/tracking/cookies', {
+                        method: 'POST',
+                        body: cookiePayload,
+                        headers: {'Content-Type': 'application/json'},
+                        keepalive: true
+                    }).catch(err => console.error('[META PARAM BUILDER] Erro ao enviar cookies:', err));
                 }
             } catch (e) {
                 console.error('[META PARAM BUILDER] Erro ao processar parâmetros:', e);
@@ -92,39 +96,14 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_id }}');
         fbq('track', 'PageView', {
-            external_id: '{{ fbclid or "" }}',
-            event_id: 'pageview_{{ tracking_token }}'
-        });
+            external_id: '{{ fbclid_hash or "" }}'
+        }, { eventID: 'pageview_{{ tracking_token }}' });
         
         console.log('✅ V4.1 - PageView disparado:', {
             pixel_id: '{{ pixel_id }}',
             event_id: 'pageview_{{ tracking_token }}',
             fbclid: '{{ fbclid }}'
         });
-        
-        // V4.1: Capturar cookies gerados pelo Meta Pixel
-        setTimeout(function() {
-            var fbp = document.cookie.match('(^|;)\\s*_fbp\\s*=\\s*([^;]+)');
-            var fbc = document.cookie.match('(^|;)\\s*_fbc\\s*=\\s*([^;]+)');
-            
-            var data = {
-                tracking_token: '{{ tracking_token }}',
-                fbp: fbp ? fbp[2] : null,
-                fbc: fbc ? fbc[2] : null,
-                fbclid: '{{ fbclid or "" }}',
-                utm_source: '{{ utm_source or "" }}',
-                utm_campaign: '{{ utm_campaign or "" }}',
-                utm_medium: '{{ utm_medium or "" }}',
-                utm_content: '{{ utm_content or "" }}',
-                utm_term: '{{ utm_term or "" }}',
-                grim: '{{ grim or "" }}'
-            };
-            
-            console.log('🍪 V4.1 - Enviando cookies:', data);
-            
-            // Enviar via Beacon API (V4.1)
-            navigator.sendBeacon('/api/tracking/cookies', JSON.stringify(data));
-        }, 1000);
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"

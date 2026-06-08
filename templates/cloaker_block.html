@@ -6,34 +6,32 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Acesso Restrito - GrimBots</title>
     
+    {% if pixel_id %}
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '{{ pixel_id }}');
+        fbq('track', 'PageView');
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/>
+    </noscript>
+    {% endif %}
+    
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        bg950: '#0d0d0d', bg900: '#161616', bg850: '#1e1e1e',
-                        surface800: '#262626', surface700: '#2d2d2d', surface600: '#353535',
-                        textPrimary: '#FAFAFA', textSecondary: '#B8B8B8',
-                        textTertiary: '#8A8A8A', textDisabled: '#5A5A5A',
-                        accent500: '#FFBA08', accent600: '#E6A800',
-                        accent400: '#FFD23F', accent300: '#FFE180',
-                        danger500: '#EF4444', danger600: '#DC2626',
-                        success500: '#22C55E', success600: '#16A34A',
-                        warning500: '#F59E0B', info500: '#60A5FA',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <link rel="stylesheet" href="/static/css/tailwind.css">
     <style>
         :root {
             --bg-950: #0d0d0d; --bg-900: #161616; --bg-850: #1e1e1e;

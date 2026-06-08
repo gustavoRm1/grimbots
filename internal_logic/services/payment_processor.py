@@ -151,7 +151,7 @@ def _send_payment_delivery_v41_unused(payment: Payment, bot_manager=None, socket
         # 7.2 - V4.1: Recuperar dados de tracking
         tracking_data = {}
         if payment.tracking_token:
-            from internal_logic.services.tracking_service_v4 import TrackingServiceV4
+            from utils.tracking_service import TrackingServiceV4
             tracking_service_v4 = TrackingServiceV4()
             tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
         

@@ -41,7 +41,7 @@ def send_meta_event_task(pixel_id, access_token, event_data, test_code=None):
     Returns:
         Response da Meta API
     """
-    url = f'https://graph.facebook.com/v18.0/{pixel_id}/events'
+    url = f'https://graph.facebook.com/v19.0/{pixel_id}/events'
     
     payload = {
         'data': [event_data],

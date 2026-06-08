@@ -1,0 +1,31 @@
+{
+  "name": "grimbots",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:css": "npx tailwindcss -i static/css/tailwind.src.css -o static/css/tailwind.css --minify",
+    "watch:css": "npx tailwindcss -i static/css/tailwind.src.css -o static/css/tailwind.css --watch",
+    "build": "npm run build:css"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gustavoRm1/grimbots.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/gustavoRm1/grimbots/issues"
+  },
+  "homepage": "https://github.com/gustavoRm1/grimbots#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

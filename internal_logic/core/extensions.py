@@ -43,6 +43,14 @@ def create_app(skip_sync_thread: bool = False):
     app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
     
     # ============================================================================
+    # JINJA FILTERS
+    # ============================================================================
+    import markdown as md_lib
+    @app.template_filter('markdown')
+    def markdown_filter(text):
+        return md_lib.markdown(text, extensions=['fenced_code', 'tables'])
+    
+    # ============================================================================
     # APLICAR CONFIGURAÇÕES CENTRALIZADAS
     # ============================================================================
     from internal_logic.core.config import Config
@@ -75,7 +83,9 @@ def create_app(skip_sync_thread: bool = False):
     from internal_logic.blueprints.remarketing.routes import remarketing_bp
     from internal_logic.blueprints.bots.routes import bots_bp
     from internal_logic.blueprints.api.routes import api_bp
+    from internal_logic.blueprints.blog.routes import blog_bp
     
+    app.register_blueprint(blog_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(webhooks_bp)
@@ -153,6 +163,19 @@ def create_app(skip_sync_thread: bool = False):
         except Exception as e:
             logger.warning(f"Não foi possível agendar reconciliações periódicas: {e}")
     
+    # ============================================================================
+    # 🔥 SEGURANÇA: HSTS HEADER (Strict-Transport-Security)
+    # ============================================================================
+    @app.after_request
+    def add_security_headers(response):
+        """Adiciona cabeçalhos de segurança em todas as respostas."""
+        if app.config.get('SESSION_COOKIE_SECURE', False):
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+            response.headers['X-Frame-Options'] = 'DENY'
+            response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
+
     # ============================================================================
     # 🔥 CRÍTICO: TEARDOWN HANDLER PARA LIMPAR TRANSAÇÕES BLOQUEADAS
     # ============================================================================

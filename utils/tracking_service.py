@@ -16,6 +16,7 @@ import json
 import logging
 import random
 import uuid
+import hashlib
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -44,41 +45,6 @@ class TrackingServiceV4:
 
     def _legacy_key(self, token: str) -> str:
         return f"tracking:token:{token}"
-
-    def generate_tracking_token(
-        self,
-        bot_id: int,
-        customer_user_id: str,
-        payment_id: Optional[int] = None,
-        fbclid: Optional[str] = None,
-        utm_source: Optional[str] = None,
-        utm_medium: Optional[str] = None,
-        utm_campaign: Optional[str] = None,
-    ) -> str:
-        """
-        ⚠️ DEPRECATED - NÃO USAR!
-        
-        Este método NÃO DEVE ser usado para gerar tracking_token.
-        tracking_token DEVE ser criado APENAS em /go/{slug} (public_redirect).
-        
-        Se você está chamando este método, há um BUG no seu código.
-        
-        RAZÃO: tracking_token gerado aqui NÃO tem dados do redirect (client_ip, client_user_agent, pageview_event_id).
-        Isso quebra o fluxo PageView → ViewContent → Purchase e impede Meta de atribuir vendas.
-        """
-        import traceback
-        logger.error(f"❌ [DEPRECATED] generate_tracking_token() foi chamado - ISSO É UM BUG!")
-        logger.error(f"   tracking_token DEVE ser criado APENAS em /go/{{slug}} (public_redirect)")
-        logger.error(f"   Stack trace: {''.join(traceback.format_stack()[-5:-1])}")
-        logger.error(f"   Parâmetros: bot_id={bot_id}, customer_user_id={customer_user_id}, payment_id={payment_id}")
-        
-        # ✅ Lançar exceção para forçar correção do bug
-        raise DeprecationWarning(
-            "generate_tracking_token() está DEPRECATED. "
-            "tracking_token deve ser criado APENAS em /go/{slug} (public_redirect). "
-            "Se você está chamando este método, há um BUG no seu código. "
-            "SOLUÇÃO: Usar tracking_token do bot_user.tracking_session_id (vem do redirect)."
-        )
 
     def generate_fbp(self, telegram_user_id: str) -> str:
         """
@@ -206,33 +172,34 @@ class TrackingServiceV4:
             self.redis.setex(key, ttl, json_payload)
             self.redis.setex(legacy, ttl, json_payload)
 
+            is_generated_token = tracking_token.startswith('tracking_')
+            normalized_token = tracking_token.replace('-', '').lower()
+            is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
+
             fbclid = payload.get("fbclid")
             if fbclid:
-                # ✅ CORREÇÃO CRÍTICA V16: Validar tracking_token ANTES de salvar em tracking:fbclid
-                is_generated_token = tracking_token.startswith('tracking_')
-                is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
-                
                 if is_generated_token:
                     logger.error(f"❌ [TRACKING SERVICE] tracking_token é GERADO: {tracking_token[:30]}... - NÃO salvar em tracking:fbclid")
                     logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
-                    # ✅ NÃO salvar token gerado em tracking:fbclid
                 elif is_uuid_token:
-                    # ✅ Token válido - pode salvar
                     try:
                         self.redis.setex(f"tracking:fbclid:{fbclid}", ttl, tracking_token)
+                        self.redis.setex(f"fbclid:{fbclid}", ttl, tracking_token)
                     except Exception:
                         logger.exception("Nao foi possivel indexar fbclid")
                 else:
                     logger.warning(f"⚠️ [TRACKING SERVICE] tracking_token tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)}) - NÃO salvar em tracking:fbclid")
 
+            pixel_id = payload.get("pixel_id")
+            if pixel_id and is_uuid_token:
+                try:
+                    self.redis.setex(f"pixel:{pixel_id}", ttl, tracking_token)
+                except Exception:
+                    logger.exception("Nao foi possivel indexar pixel_id")
+
             customer_user_id = payload.get("customer_user_id")
             if customer_user_id:
                 # ✅ CORREÇÃO CRÍTICA V16: Validar tracking_token ANTES de salvar em tracking:chat e tracking:last_token
-                is_generated_token = tracking_token.startswith('tracking_')
-                # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
-                normalized_token = tracking_token.replace('-', '').lower()
-                is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
-                
                 if is_generated_token:
                     logger.error(f"❌ [TRACKING SERVICE] tracking_token é GERADO: {tracking_token[:30]}... - NÃO salvar em tracking:chat/tracking:last_token")
                     logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
@@ -352,6 +319,91 @@ class TrackingServiceV4:
             logger.exception("Falha ao indexar tracking por payment_id")
         return True
 
+    def fire_pageview(
+        self,
+        pixel_id: str,
+        access_token: str,
+        tracking_token: str,
+        client_ip: str,
+        client_user_agent: str,
+        fbclid: Optional[str] = None,
+        fbp: Optional[str] = None,
+        fbc: Optional[str] = None,
+        pageview_ts: Optional[int] = None,
+        event_source_url: Optional[str] = None,
+        async_mode: bool = True,
+    ) -> Optional[str]:
+        """
+        🔥 Dispara PageView server-side com event_id consistente.
+
+        DIFERENÇAS da implementação legada:
+        - client_ip_address / client_user_agent em PLAIN TEXT (nunca hash)
+        - event_id = pageview_{tracking_token} (match com browser)
+        - Use tracking_data do Redis (não request.cookies — vazios no redirect)
+
+        Meta CAPI para action_source=website exige IP/UA em texto puro.
+        Hashing IP/UA quebra a Match Quality do PageView.
+        """
+        import requests as _requests
+        from datetime import datetime as _dt
+
+        if not pixel_id or not access_token:
+            logger.warning("[PAGEVIEW] pixel_id ou access_token ausente")
+            return None
+
+        event_id = f"pageview_{tracking_token}"
+
+        user_data: Dict[str, Any] = {
+            'client_ip_address': client_ip,
+            'client_user_agent': client_user_agent,
+        }
+        if fbp:
+            user_data['fbp'] = fbp
+        if fbc:
+            user_data['fbc'] = fbc
+        elif fbclid:
+            ts = pageview_ts if pageview_ts else int(_dt.utcnow().timestamp() * 1000)
+            user_data['fbc'] = f"fb.1.{ts}.{fbclid}"
+        if fbclid:
+            user_data['external_id'] = [hashlib.sha256(fbclid.strip().encode('utf-8')).hexdigest()]
+
+        payload = {
+            'event_name': 'PageView',
+            'event_id': event_id,
+            'event_time': int(_dt.utcnow().timestamp()),
+            'action_source': 'website',
+            'user_data': user_data,
+        }
+        if event_source_url:
+            payload['event_source_url'] = event_source_url
+        else:
+            logger.warning(f"[PAGEVIEW] event_source_url ausente para event_id={event_id}")
+
+        if async_mode:
+            try:
+                from celery_app import send_meta_event
+                send_meta_event.delay(pixel_id, access_token, payload)
+            except Exception as e:
+                logger.warning(f"[PAGEVIEW] async fallback sync: {e}")
+                self._send_pageview_sync(pixel_id, access_token, payload)
+        else:
+            self._send_pageview_sync(pixel_id, access_token, payload)
+
+        logger.info(f"[PAGEVIEW] PageView enviado | event_id={event_id} | pixel={pixel_id}")
+        return event_id
+
+    def _send_pageview_sync(self, pixel_id: str, access_token: str, payload: Dict) -> None:
+        """Envia PageView síncrono para Meta CAPI."""
+        import requests as _requests
+        try:
+            url = f"https://graph.facebook.com/v19.0/{pixel_id}/events"
+            data = {'data': [payload], 'access_token': access_token}
+            resp = _requests.post(url, json=data, timeout=2.0)
+            if resp.status_code != 200:
+                logger.warning(f"[PAGEVIEW] CAPI retornou {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"[PAGEVIEW] Erro sync: {e}")
+
 
 class TrackingService:
     """Compat layer para utilitários legados de tracking."""
@@ -426,27 +478,5 @@ class TrackingService:
             logger.exception("Erro ao salvar tracking legacy")
             return False
 
-    @staticmethod
-    def recover_tracking_data(
-        fbclid: Optional[str] = None,
-        telegram_user_id: Optional[str] = None,
-        grim: Optional[str] = None
-    ) -> Optional[Dict[str, str]]:
-        redis_client = _redis_client(decode_responses=True)
-        try:
-            if fbclid:
-                data = redis_client.get(f"tracking:fbclid:{fbclid}")
-                if data:
-                    return json.loads(data)
-            if telegram_user_id:
-                data = redis_client.get(f"tracking:chat:{telegram_user_id}")
-                if data:
-                    return json.loads(data)
-            if grim:
-                data = redis_client.get(f"tracking_grim:{grim}")
-                if data:
-                    return json.loads(data)
-        except Exception:
-            logger.exception("Erro ao recuperar tracking legacy")
-        return None
+
 

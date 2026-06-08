@@ -48,50 +48,7 @@ celery_app.conf.update(
 # HELPER FUNCTIONS
 # ============================================================================
 
-def _validate_meta_token(access_token: str) -> bool:
-    """
-    Valida token de acesso do Meta usando endpoint debug_token
-    
-    ✅ PRODUCTION-READY:
-    - Usa endpoint oficial de debug
-    - Validação robusta
-    - Timeout configurado
-    """
-    try:
-        import requests
-        
-        # Usar endpoint oficial de debug do Meta
-        url = f"https://graph.facebook.com/v18.0/debug_token"
-        
-        params = {
-            'input_token': access_token,
-            'access_token': access_token
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            token_data = data.get('data', {})
-            
-            # Verificar se token é válido
-            is_valid = token_data.get('is_valid', False)
-            expires_at = token_data.get('expires_at', 0)
-            
-            # Verificar se não expirou
-            import time
-            if expires_at > 0 and expires_at < time.time():
-                return False
-            
-            return is_valid
-        else:
-            return False
-            
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Erro ao validar token Meta: {e}")
-        return False
+from utils.meta_token_validator import validate_meta_token as _validate_meta_token
 
 def _send_token_alert(pixel_id: str, message: str):
     """
@@ -198,7 +155,7 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
         
         raise Exception(f"Falha na validação do token: {e}")
     
-    url = f'https://graph.facebook.com/v18.0/{pixel_id}/events'
+    url = f'https://graph.facebook.com/v19.0/{pixel_id}/events'
     
     payload = {
         'data': [event_data],
@@ -211,17 +168,19 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     try:
         start = time.time()
         
-        # ✅ LOG CRÍTICO: Mostrar payload completo ANTES de enviar (AUDITORIA)
-        # Formatar para fácil leitura
-        payload_formatted = json.dumps(payload, indent=2, ensure_ascii=False)
-        logger.info(f"📤 META PAYLOAD COMPLETO ({event_data.get('event_name')}):\n{payload_formatted}")
+        payload_log = {k: v for k, v in payload.items() if k != 'access_token'}
+        logger.info(
+            f"📤 META PAYLOAD ({event_data.get('event_name')}): "
+            f"event_id={event_data.get('event_id')} "
+            f"action_source={event_data.get('action_source')} "
+            f"data={json.dumps(payload_log.get('data', []), default=str)[:500]}"
+        )
         
-        # ✅ LOG CRÍTICO: Mostrar user_data separadamente para análise
         user_data = event_data.get('user_data', {})
-        user_data_formatted = json.dumps(user_data, indent=2, ensure_ascii=False)
-        logger.info(f"👤 USER_DATA ({event_data.get('event_name')}):\n{user_data_formatted}")
+        user_data_log = {k: ('<redacted>' if k == 'access_token' else v) for k, v in user_data.items()}
+        logger.debug(f"👤 USER_DATA ({event_data.get('event_name')}): keys={list(user_data_log.keys())}")
         
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=3)
 
         try:
             raw_body = response.json()
@@ -376,16 +335,39 @@ def reconcile_meta_purchases(days: int = 7, limit: int = 200):
 
 @celery_app.task
 def check_health():
-    """Health check do sistema"""
+    """Health check do sistema: Redis + Database + Celery"""
     import logging
     logger = logging.getLogger(__name__)
-    
+
+    checks = {}
+    all_ok = True
+
+    # 1. Redis
     try:
-        import redis
-        r = redis.Redis(host='localhost', port=6379, db=0)
+        redis_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+        import redis as _redis
+        r = _redis.from_url(redis_url)
         r.ping()
-        logger.info("✅ Health check OK")
-        return {'status': 'ok'}
+        checks['redis'] = 'ok'
     except Exception as e:
-        logger.error(f"❌ Health check falhou: {e}")
-        return {'status': 'error', 'error': str(e)}
+        checks['redis'] = str(e)
+        all_ok = False
+
+    # 2. Database
+    try:
+        from internal_logic.core.models import db
+        from app import app
+        with app.app_context():
+            db.session.execute(db.text('SELECT 1'))
+            db.session.commit()
+        checks['database'] = 'ok'
+    except Exception as e:
+        checks['database'] = str(e)
+        all_ok = False
+
+    if all_ok:
+        logger.info(f"✅ Health check OK | checks={checks}")
+        return {'status': 'ok', 'checks': checks}
+
+    logger.error(f"❌ Health check falhou: {checks}")
+    return {'status': 'error', 'checks': checks}
