@@ -21,7 +21,7 @@ ExecStartPre=/bin/bash -c 'mkdir -p /root/grimbots/logs && chmod 755 /root/grimb
 # ✅ Gunicorn com logs configurados em /root/grimbots/logs/
 ExecStart=/root/grimbots/venv/bin/gunicorn \
     --bind 127.0.0.1:5000 \
-    --workers 4 \
+    --workers 1 \
     --worker-class eventlet \
     --worker-connections 1000 \
     --timeout 120 \
@@ -52,6 +52,8 @@ TimeoutStopSec=30
 # ✅ Limites de recursos (ajustar conforme VPS)
 LimitNOFILE=65535
 LimitNPROC=4096
+MemoryMax=2G
+MemorySwapMax=0
 
 # ✅ Isolamento de segurança (permissivo para root em /root)
 PrivateTmp=no

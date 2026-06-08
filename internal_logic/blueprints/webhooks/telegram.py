@@ -89,7 +89,7 @@ def telegram_webhook(bot_id):
                 try:
                     # Verificar tamanho da fila - se > 10, workers provavelmente estão parados
                     queue_length = task_queue.count
-                    if queue_length > 10:
+                    if queue_length > 100:
                         logger.critical(f"🚨 FILA BACKLOGADA! {queue_length} jobs pendentes. Workers provavelmente PARADOS!")
                         use_sync_fallback = True
                 except Exception as qe:

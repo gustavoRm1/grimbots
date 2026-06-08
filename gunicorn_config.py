@@ -33,8 +33,8 @@ workers = 1
 worker_class = "eventlet"
 
 worker_connections = 1000
-max_requests = 1000  # Restart worker após N requests (previne memory leak)
-max_requests_jitter = 50
+max_requests = 5000  # Restart worker após N requests (previne memory leak)
+max_requests_jitter = 500
 timeout = 120
 keepalive = 5
 graceful_timeout = 30
