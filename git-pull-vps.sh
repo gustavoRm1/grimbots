@@ -15,4 +15,10 @@ git clean -fd -e logs/ -e .env -e venv/
 echo "⬇️ Passo 4: Fazendo pull do repositório principal..."
 git pull origin main
 
-echo "✅ PRONTO! Repositório atualizado com sucesso!"
+echo "📦 Passo 5: Instalando dependências (inclui novas adições ao requirements.txt)..."
+/root/grimbots/venv/bin/pip install -r requirements.txt
+
+echo "🔄 Passo 6: Rodando migrações de banco de dados..."
+/root/grimbots/venv/bin/python init_db.py 2>/dev/null || echo "⚠️ init_db.py não encontrado ou falhou — migrações devem ser manuais"
+
+echo "✅ PRONTO! Repositório atualizado e dependências instaladas com sucesso!"

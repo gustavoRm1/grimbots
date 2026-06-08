@@ -19,7 +19,7 @@ public_bp = Blueprint('public', __name__, url_prefix='')
 
 
 @public_bp.route('/go/<slug>')
-@limiter.limit("60 per minute", key_func=lambda: request.remote_addr)
+@limiter.limit("600 per minute")
 def public_redirect(slug):
     """
     🚀 Endpoint PROFISSIONAL de Redirecionamento

@@ -20,7 +20,7 @@ ExecStartPre=/bin/bash -c 'mkdir -p /root/grimbots/logs && chmod 755 /root/grimb
 
 # ✅ Gunicorn com logs configurados em /root/grimbots/logs/
 ExecStart=/root/grimbots/venv/bin/gunicorn \
-    --bind 0.0.0.0:5000 \
+    --bind 127.0.0.1:5000 \
     --workers 4 \
     --worker-class eventlet \
     --worker-connections 1000 \

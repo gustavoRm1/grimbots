@@ -3,6 +3,7 @@ Bot Manager - Gerenciador de Bots do Telegram
 Responsável por validar tokens, iniciar/parar bots e processar webhooks
 """
 
+import eventlet
 import requests
 from requests.adapters import HTTPAdapter
 import threading
@@ -407,33 +408,9 @@ class BotManager:
         
         self.bot_threads: Dict[int, threading.Thread] = {}
         
-        # ✅ CACHE DE RATE LIMITING (em memória - por worker)
-        self.rate_limit_cache = {}  # {user_key: timestamp}
-        
-        # ✅ SESSÕES DE ORDER BUMP MIGRADAS PARA REDIS (multi-worker)
-        # Chaves: gb:ob_session:{user_key} (TTL 10 min)
-        # Chaves: gb:pix_cache:{user_key} (TTL 5 min)
+        # ✅ CACHE DE RATE LIMITING MIGRADO PARA REDIS (multi-worker, TTL automático)
+        # Chaves: gb:rate_limit:{user_key} (TTL 300s)
         # Redis TTL faz cleanup automático - sem threads necessárias
-        
-        # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
-        def cleanup_cache():
-            while True:
-                time.sleep(300)  # 5 minutos
-                from internal_logic.core.models import get_brazil_time
-                now = get_brazil_time()
-                expired_keys = []
-                for user_key, timestamp in self.rate_limit_cache.items():
-                    if (now - timestamp).total_seconds() > 300:  # 5 minutos
-                        expired_keys.append(user_key)
-                
-                for key in expired_keys:
-                    del self.rate_limit_cache[key]
-                
-                if expired_keys:
-                    logger.info(f"🧹 Rate limiting cache limpo: {len(expired_keys)} entradas removidas")
-        
-        cleanup_thread = threading.Thread(target=cleanup_cache, daemon=True)
-        cleanup_thread.start()
         
         # ✅ REMARKETING SENDER: Serviço de remarketing extraído
         from internal_logic.services.remarketing_sender import RemarketingSender
@@ -1200,9 +1177,9 @@ class BotManager:
                 # ✅ ISOLAMENTO: Verificar se outro worker está tentando auto-start (namespace isolado)
                 if bot_state.is_autostart_locked(bot_id):
                     logger.info(f"🔒 Outro worker está iniciando bot {bot_id} (user_id={user_id}) - aguardando")
-                    import time
+                    import eventlet as _eventlet
                     for _ in range(10):
-                        time.sleep(0.5)
+                        _eventlet.sleep(0.5)
                         if bot_state.is_bot_active(bot_id):
                             logger.info(f"✅ Bot {bot_id} foi iniciado por outro worker")
                             break
@@ -1952,24 +1929,34 @@ class BotManager:
                     return
                 
                 # ✅ SEM CONVERSA ATIVA: Usuário retornando após muito tempo
-                # Verificar rate limiting para evitar spam de reinicialização
-                user_key = f"{bot_id}_{telegram_user_id}"
+                # Verificar rate limiting para evitar spam de reinicialização (Redis, multi-worker)
+                user_key = f"gb:rate_limit:{bot_id}_{telegram_user_id}"
                 
-                if user_key in self.rate_limit_cache:
-                    last_time = self.rate_limit_cache[user_key]
-                    time_diff = (now - last_time).total_seconds()
-                    if time_diff < 300:  # 5 minutos entre reinicializações
-                        logger.info(f"⏱️ Rate limiting: Usuário {first_name} tentou reiniciar funil muito recente ({time_diff:.1f}s atrás)")
-                        # Apenas atualizar interação, não reiniciar funil
-                        bot_user.last_interaction = now
-                        db.session.commit()
-                        return
+                try:
+                    redis_rl = get_redis_connection()
+                    if redis_rl:
+                        last_time_ts = redis_rl.get(user_key)
+                        if last_time_ts is not None:
+                            last_time_ts = float(last_time_ts)
+                            time_diff = time.time() - last_time_ts
+                            if time_diff < 300:  # 5 minutos entre reinicializações
+                                logger.info(f"⏱️ Rate limiting: Usuário {first_name} tentou reiniciar funil muito recente ({time_diff:.1f}s atrás)")
+                                bot_user.last_interaction = now
+                                db.session.commit()
+                                return
+                except Exception:
+                    pass  # Redis indisponível — fail-open
                 
                 # ✅ REINICIAR FUNIL: Usuário retornou após muito tempo sem conversa
                 logger.info(f"💬 Reiniciando funil para usuário retornado: {first_name} (sem conversa ativa há 30+ min)")
                 
-                # Atualizar cache de rate limiting
-                self.rate_limit_cache[user_key] = now
+                # Atualizar cache de rate limiting no Redis com TTL automático
+                try:
+                    redis_rl = get_redis_connection()
+                    if redis_rl:
+                        redis_rl.setex(user_key, 300, time.time())
+                except Exception:
+                    pass
                 
                 # Atualizar última interação no banco
                 bot_user.last_interaction = now
@@ -4121,11 +4108,14 @@ class BotManager:
             if deleted_session or deleted_cache:
                 logger.info(f"🧹 Sessão de order bump limpa no Redis: {user_key_orderbump} (session={deleted_session}, cache={deleted_cache})")
             
-            # Limpar cache de rate limiting (em memória - por worker)
-            user_key_rate = f"{bot_id}_{telegram_user_id}"
-            if user_key_rate in self.rate_limit_cache:
-                del self.rate_limit_cache[user_key_rate]
-                logger.info(f"🧹 Rate limit cache limpo: {user_key_rate}")
+            # Limpar cache de rate limiting (Redis)
+            try:
+                user_key_rate = f"gb:rate_limit:{bot_id}_{telegram_user_id}"
+                redis_rl = get_redis_connection()
+                if redis_rl and redis_rl.delete(user_key_rate):
+                    logger.info(f"🧹 Rate limit cache limpo (Redis): {user_key_rate}")
+            except Exception:
+                pass
             
             # ✅ QI 500: RESET COMPLETO NO BANCO (ESSENCIAL)
             from flask import current_app

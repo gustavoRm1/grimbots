@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LIBERE SEU ACESSO</title>
     
+    <!-- ✅ Preconnect hints — reduz latência de conexão em ~300ms -->
+    <link rel="preconnect" href="https://connect.facebook.net">
+    <link rel="preconnect" href="https://capi-automation.s3.us-east-2.amazonaws.com">
+    <link rel="preconnect" href="https://t.me">
+    <link rel="dns-prefetch" href="//connect.facebook.net">
+    <link rel="dns-prefetch" href="//t.me">
+    
     <!-- ✅ Meta Parameter Builder Library (Client-Side) -->
     <!-- CRÍTICO: Carregar ANTES do Meta Pixel JS para capturar fbc/fbp corretamente -->
     <script src="https://capi-automation.s3.us-east-2.amazonaws.com/public/client_js/capiParamBuilder/clientParamBuilder.bundle.js"></script>
@@ -268,7 +275,7 @@
         let redirectTimer = null;
         let pixelCheckInterval = null;
         const PAGELOAD_TS = Date.now();
-        const MIN_DWELL_MS = 1500; // ✅ Garantir pelo menos 1.5s de página aberta antes do redirect
+        const MIN_DWELL_MS = 800; // ✅ Garantir pelo menos 0.8s de página aberta antes do redirect
         
         // ✅ Função para enviar cookies para servidor via Beacon API
         function sendCookiesToServer() {

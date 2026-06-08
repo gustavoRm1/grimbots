@@ -50,8 +50,11 @@ if __name__ == '__main__':
         print("="*70)
         print(" RQ Worker QI 500 - Usina de Disparos Ativa")
         print("="*70)
-        worker = Worker(queues, connection=redis_conn)
-        worker.work()
+        worker = Worker(queues, connection=redis_conn, default_worker_ttl=300)
+        worker.work(
+            max_jobs=1000,    # Reiniciar worker a cada 1000 jobs (memory leak prevention)
+            burst=False
+        )
     except KeyboardInterrupt:
         print("\n⚠️ Worker interrompido")
         sys.exit(0)
