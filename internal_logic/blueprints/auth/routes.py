@@ -35,7 +35,8 @@ def index():
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
-@limiter.limit("3 per hour")  # ✅ PROTEÇÃO: Spam de registro
+@limiter.limit("30 per minute", methods=['GET'])  # ✅ Navegação normal
+@limiter.limit("3 per hour", methods=['POST'])    # ✅ Proteção: Spam de registro
 def register():
     """Registro de novo usuário"""
     if current_user.is_authenticated:
