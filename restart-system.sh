@@ -66,13 +66,23 @@ if ! curl -sf http://127.0.0.1:5000/health > /dev/null 2>&1; then
 fi
 
 echo "🤖 [5/7] Levantando Workers RQ via systemd..."
+# tasks=5, gateway=3, webhook=3, marathon=1 — escala para 200k visitas/dia
+declare -A WORKER_COUNTS=(
+    ["tasks"]=5
+    ["gateway"]=3
+    ["webhook"]=3
+    ["marathon"]=1
+)
 QUEUES=("tasks" "gateway" "webhook" "marathon")
 for q in "${QUEUES[@]}"; do
-    sudo systemctl start "rq-worker@${q}-1" 2>/dev/null || {
-        echo "   ⚠️  rq-worker@${q}-1 não encontrado como template — subindo via nohup..."
-        nohup "$VENV_PYTHON" start_rq_worker.py "$q" > "worker_${q}.log" 2>&1 &
-    }
-    echo "   ✅ Worker: $q online."
+    count=${WORKER_COUNTS[$q]}
+    for i in $(seq 1 $count); do
+        sudo systemctl start "rq-worker@${q}-${i}" 2>/dev/null || {
+            echo "   ⚠️  rq-worker@${q}-${i} não encontrado como template — subindo via nohup..."
+            nohup "$VENV_PYTHON" start_rq_worker.py "$q" > "worker_${q}_${i}.log" 2>&1 &
+        }
+    done
+    echo "   ✅ Worker: $q ($count instâncias)."
 done
 
 echo "📅 [6/7] Reiniciando RQ Scheduler..."
