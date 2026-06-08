@@ -149,44 +149,46 @@ def logout():
     logger.info(f"Logout: {current_user.email}")
     logger.debug(f"Cookies recebidos no logout: {request.cookies}")
     
-    # Encerrar sessão Flask-Login
-    logout_user()
-    
-    # Limpar sessão e cookies
-    session.clear()
-    
-    response = redirect(url_for('auth.login'))
-    
-    session_cookie_name = current_app.config.get('SESSION_COOKIE_NAME', 'session')
-    session_cookie_domain = current_app.config.get('SESSION_COOKIE_DOMAIN')
-    session_cookie_path = current_app.config.get('SESSION_COOKIE_PATH', '/')
-    
-    host_domain = request.host.split(':')[0]
-    domain_candidates = {
-        session_cookie_domain,
-        current_app.config.get('SERVER_NAME'),
-        host_domain,
-        f".{host_domain}" if not host_domain.startswith('.') else host_domain
-    }
+    try:
+        logout_user()
+        session.clear()
 
-    for domain in domain_candidates:
-        response.delete_cookie(
+        response = redirect(url_for('auth.login'))
+
+        session_cookie_name = current_app.config.get('SESSION_COOKIE_NAME', 'session')
+        session_cookie_domain = current_app.config.get('SESSION_COOKIE_DOMAIN')
+        session_cookie_path = current_app.config.get('SESSION_COOKIE_PATH', '/')
+
+        host_domain = request.host.split(':')[0]
+        domain_candidates = {
+            session_cookie_domain,
+            current_app.config.get('SERVER_NAME'),
+            host_domain,
+            f".{host_domain}" if not host_domain.startswith('.') else host_domain
+        }
+
+        for domain in domain_candidates:
+            if domain:
+                response.delete_cookie(
+                    session_cookie_name,
+                    domain=domain,
+                    path=session_cookie_path,
+                )
+
+        response.set_cookie(
             session_cookie_name,
-            domain=domain or None,
+            value='',
+            expires=0,
+            max_age=0,
+            domain=session_cookie_domain,
             path=session_cookie_path,
+            secure=current_app.config.get('SESSION_COOKIE_SECURE', False),
+            httponly=True,
+            samesite=current_app.config.get('SESSION_COOKIE_SAMESITE', 'Lax')
         )
 
-    response.set_cookie(
-        session_cookie_name,
-        value='',
-        expires=0,
-        max_age=0,
-        domain=session_cookie_domain or None,
-        path=session_cookie_path,
-        secure=current_app.config.get('SESSION_COOKIE_SECURE', False),
-        httponly=True,
-        samesite=current_app.config.get('SESSION_COOKIE_SAMESITE', 'Lax')
-    )
-    
-    logger.info("✅ Logout completo: cookies limpos, sessão encerrada")
-    return response
+        logger.info("✅ Logout completo: cookies limpos, sessão encerrada")
+        return response
+    except Exception as e:
+        logger.error(f"Erro no logout: {e}", exc_info=True)
+        return redirect(url_for('auth.login'))
