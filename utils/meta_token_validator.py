@@ -43,12 +43,19 @@ def validate_meta_token(access_token: str) -> bool:
                 return False
 
             return is_valid
-        else:
-            return False
+
+        # Tokens de Pixel não têm permissão pra debug_token (retornam 4xx).
+        # Assumir válido — Meta rejeita na hora do evento se for inválido.
+        logger.warning(
+            "[META] debug_token retornou %s para pixel — assumindo válido "
+            "(Pixel tokens não têm permissão de auto-inspeção)",
+            response.status_code,
+        )
+        return True
 
     except Exception as e:
-        logger.error(f"Erro ao validar token Meta: {e}")
-        return False
+        logger.warning(f"[META] Erro ao validar token (assumindo válido): {e}")
+        return True
 
 
 REQUIRED_EVENT_FIELDS = ['event_name', 'event_time', 'action_source']

@@ -63,7 +63,7 @@ def send_event(
     access_token: str,
     event: Dict[str, Any],
     test_event_code: Optional[str] = None,
-    validate_token: bool = True,
+    validate_token: bool = False,
 ) -> bool:
     """Envia um evento para a Meta CAPI.
 
