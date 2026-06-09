@@ -140,7 +140,7 @@
                                 <span class="text-xs font-normal" style="color: var(--text-muted);">Rotacione bots</span>
                             </div>
                         </a>
-                        <a href="{{ url_for('monitoring_page') }}" class="nav-link {% if request.endpoint == 'monitoring_page' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" title="Monitore o pipeline Meta CAPI em tempo real">
+                        <a href="{{ url_for('dashboard.monitoring_page') }}" class="nav-link {% if request.endpoint == 'dashboard.monitoring_page' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" title="Monitore o pipeline Meta CAPI em tempo real">
                             <i class="fas fa-heartbeat mr-2"></i> Monitoria
                         </a>
                         {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
@@ -202,7 +202,7 @@
                             <span class="text-xs opacity-70">Rotacione bots</span>
                         </div>
                     </a>
-                    <a href="{{ url_for('monitoring_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'monitoring_page' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
+                    <a href="{{ url_for('dashboard.monitoring_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'dashboard.monitoring_page' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
                         <i class="fas fa-heartbeat mr-3"></i> Monitoria
                     </a>
                     <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'settings' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
