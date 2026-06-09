@@ -3525,6 +3525,8 @@ def monitoring_page():
     capi_heartbeat = r.get('gb:heartbeat:capi_sender')
     reconcile_heartbeat = r.get('gb:heartbeat:reconcile')
     last_error = r.get('gb:last_capi_error')
+    if isinstance(last_error, bytes):
+        last_error = last_error.decode('utf-8')
 
     capi_seconds_ago = int(now - float(capi_heartbeat)) if capi_heartbeat else None
     reconcile_seconds_ago = int(now - float(reconcile_heartbeat)) if reconcile_heartbeat else None
