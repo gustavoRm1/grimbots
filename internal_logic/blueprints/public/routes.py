@@ -380,6 +380,7 @@ def sitemap_xml():
 
 @public_bp.route('/api/tracking/cookies', methods=['POST'])
 @csrf.exempt
+@limiter.limit("30 per second")
 def capture_tracking_cookies():
     """
     V4.1: ENDPOINT PARA CAPTURAR COOKIES _FBP E _FBC DO BROWSER
