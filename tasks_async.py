@@ -235,9 +235,9 @@ def _ensure_periodic_reconciliations_scheduled() -> None:
         from internal_logic.services.payment_processor import reconcile_paradise_payments, reconcile_atomopay_payments
 
         schedule_specs = [
-            ('reconcile:paradise', reconcile_paradise_payments, 60, 60),
-            ('reconcile:atomopay', reconcile_atomopay_payments, 60, 60),
-            ('reconcile:purchase_capi', reconcile_server_purchases, 60, 60),
+            ('reconcile:paradise', reconcile_paradise_payments, 60, 5),
+            ('reconcile:atomopay', reconcile_atomopay_payments, 60, 5),
+            ('reconcile:purchase_capi', reconcile_server_purchases, 60, 5),
         ]
 
         for key, func, interval_seconds, runs_ahead in schedule_specs:
@@ -345,7 +345,7 @@ def schedule_archival_jobs():
     """Agenda archival diário na marathon queue (03:00 BRT = 06:00 UTC)."""
     try:
         from redis import Redis as _Redis
-        _r = _Redis.from_url(REDIS_URL)
+        _r = _Redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
         from rq_scheduler import Scheduler
         scheduler = Scheduler(queue_name='marathon', connection=_r)
         scheduler.cron(
@@ -365,7 +365,7 @@ def reconcile_server_purchases() -> int:
     SÓ processa pools que estão em SERVER MODE (access_token presente).
     Pools HTML-ONLY são ignorados — o browser Pixel no delivery.html assume.
 
-    Agendado a cada 60s pela _ensure_periodic_reconciliations_scheduled().
+    Auto-rescheduling: agenda a próxima execução em 60s via finally.
     """
     try:
         app = _get_rq_app()
@@ -375,6 +375,29 @@ def reconcile_server_purchases() -> int:
     except Exception as e:
         logger.error(f"❌ [RECONCILER] Erro no reconcile_server_purchases: {e}", exc_info=True)
         return 0
+    finally:
+        _schedule_next_job('reconcile:purchase_capi', reconcile_server_purchases, 60)
+
+
+def _schedule_next_job(key, func, interval_seconds):
+    """Agenda a próxima execução de um job periódico (auto-rescheduling).
+
+    Usa lock curto (2x interval) para evitar duplicatas entre workers.
+    """
+    try:
+        if not redis_conn or not gateway_queue:
+            return
+        lock_key = f"gb:scheduler:{key}:lock"
+        if redis_conn.set(lock_key, "1", nx=True, ex=interval_seconds * 2):
+            job_id = f"gb:{key}:next"
+            gateway_queue.enqueue_in(
+                timedelta(seconds=interval_seconds),
+                func,
+                job_id=job_id
+            )
+            logger.debug(f"📅 Próximo {key} agendado em {interval_seconds}s")
+    except Exception:
+        logger.exception(f"❌ Falha ao agendar próximo {key}")
 
 
 _ensure_periodic_reconciliations_scheduled()

@@ -226,7 +226,17 @@ def delivery_page(token):
             pixel_id = getattr(bot_user, 'campaign_code', None) if bot_user else None
             pixel_source = 'BotUser'
         logger.info(f"[FILO_INVISIVEL] Pixel: {pixel_id}, source: {pixel_source}")
-        
+
+        # Salvar pixel_id para CAPI ANTES do dual-mode check (server mode zera pixel_id)
+        capi_pixel_id = pixel_id
+        capi_access_token = None
+        if pool and pool.meta_access_token:
+            from utils.encryption import decrypt
+            try:
+                capi_access_token = decrypt(pool.meta_access_token)
+            except Exception as e:
+                logger.warning(f"[META DELIVERY] Falha ao descriptografar access_token: {e}")
+
         # C. DUAL-MODE CHECK: SERVER MODE desabilita o Pixel no delivery
         from internal_logic.services.server_tracking import is_server_mode
         pool_obj = pool_bot.pool if pool_bot else None
@@ -234,7 +244,7 @@ def delivery_page(token):
             logger.info(
                 f"[TRACKING_MODE=SERVER] Pool {pool_obj.id}: "
                 f"Purchase no delivery DESABILITADO. "
-                f"RQ job 'purchase_reconciler' assume."
+                f"CAPI fallback {' ativo' if capi_access_token else ' INDISPONÍVEL (sem token)'}."
             )
             pixel_id = None
         else:
@@ -361,46 +371,42 @@ def delivery_page(token):
         # DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
         # Meta deduplica automaticamente usando eventID/event_id
-        if has_meta_pixel and not purchase_already_sent:
+        # Usa capi_pixel_id salvo ANTES do dual-mode check (server mode zera pixel_id)
+        if capi_pixel_id and capi_access_token and not purchase_already_sent:
             try:
-                from utils.encryption import decrypt
                 from tasks_async import enqueue_meta_event
                 import time
 
-                access_token = decrypt(pool.meta_access_token)
-                if not access_token:
-                    logger.error(f" [META DELIVERY] meta_access_token ausente ou falha na descriptografia | pool {pool.id}")
-                else:
-                    purchase_event = {
-                        'event_name': 'Purchase',
-                        'event_time': int(time.time()),
-                        'event_id': purchase_event_id,
-                        'action_source': 'website',
-                        'event_source_url': redirect_url,
-                        'user_data': {
-                            'fbp': fbp_value,
-                            'fbc': fbc_value,
-                            'external_id': external_id_normalized,
-                            'client_ip_address': request.remote_addr or '',
-                            'client_user_agent': request.headers.get('User-Agent', ''),
-                        },
-                        'custom_data': {
-                            'value': float(payment.amount),
-                            'currency': 'BRL',
-                            'content_id': str(pool.id) if pool else str(payment.bot_id),
-                            'content_name': payment.product_name or payment.bot.name,
-                        }
+                purchase_event = {
+                    'event_name': 'Purchase',
+                    'event_time': int(time.time()),
+                    'event_id': purchase_event_id,
+                    'action_source': 'website',
+                    'event_source_url': redirect_url,
+                    'user_data': {
+                        'fbp': fbp_value,
+                        'fbc': fbc_value,
+                        'external_id': external_id_normalized,
+                        'client_ip_address': request.remote_addr or '',
+                        'client_user_agent': request.headers.get('User-Agent', ''),
+                    },
+                    'custom_data': {
+                        'value': float(payment.amount),
+                        'currency': 'BRL',
+                        'content_id': str(pool.id) if pool else str(payment.bot_id),
+                        'content_name': payment.product_name or payment.bot.name,
                     }
+                }
 
-                    enqueue_meta_event(
-                        pixel_id=pixel_id,
-                        access_token=access_token,
-                        event_data=purchase_event,
-                        test_code=pool.meta_test_event_code
-                    )
-                    logger.info(f" [META DELIVERY] Purchase server-side enfileirado | payment {payment.id} | event_id {purchase_event_id}")
+                enqueue_meta_event(
+                    pixel_id=capi_pixel_id,
+                    access_token=capi_access_token,
+                    event_data=purchase_event,
+                    test_code=pool.meta_test_event_code if pool else None
+                )
+                logger.info(f" [META DELIVERY] Purchase CAPI enfileirado | payment {payment.id} | event_id {purchase_event_id} | pixel={capi_pixel_id}")
             except Exception as e:
-                logger.error(f" [META DELIVERY] Erro ao enfileirar Purchase server-side: {e}", exc_info=True)
+                logger.error(f" [META DELIVERY] Erro ao enfileirar Purchase CAPI: {e}", exc_info=True)
 
         return response
         
