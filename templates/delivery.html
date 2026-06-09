@@ -53,7 +53,7 @@
           console.log('✅ [META] Purchase Disparado pela primeira vez. Trava acionada.');
 
           // O Fetch Fantasma: Avisa o banco apenas como Backup (não bloqueia o frontend)
-          fetch('/api/tracking/mark-purchase-sent', {
+          fetch('{{ url_for("delivery.mark_purchase_sent") }}', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ payment_id: paymentId, event_id: '{{ purchase_event_id }}' })

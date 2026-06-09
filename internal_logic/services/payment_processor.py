@@ -727,41 +727,9 @@ def process_payment_confirmation(payment: Payment, gateway_type: str, bot_manage
         logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
     
     # ============================================================================
-    # ✅ META CAPI: Enfileirar Purchase imediatamente se pool estiver em SERVER MODE
+    # ✅ META PIXEL: Purchase é disparado APENAS na página de entrega (/delivery/)
     # ============================================================================
-    if status == 'paid' and not payment.meta_purchase_sent and payment.pool_id:
-        try:
-            from internal_logic.core.models import RedirectPool, BotUser
-            from tasks_async import enqueue_meta_event
-            from utils.encryption import decrypt
-            pool = RedirectPool.query.get(payment.pool_id)
-            if pool and pool.meta_access_token:
-                access_token = decrypt(pool.meta_access_token)
-                if access_token:
-                    bot_user = None
-                    telegram_user_id = payment.customer_user_id
-                    if isinstance(telegram_user_id, str) and telegram_user_id.startswith('user_'):
-                        telegram_user_id = telegram_user_id.replace('user_', '')
-                    if payment.bot_id and payment.customer_user_id:
-                        bot_user = BotUser.query.filter_by(
-                            bot_id=payment.bot_id,
-                            telegram_user_id=telegram_user_id,
-                        ).first()
-                    from internal_logic.services.server_tracking.payload_builder import build_purchase_payload
-                    payload = build_purchase_payload(payment, bot_user, pool, tracking_data=None)
-                    if payload:
-                        enqueue_meta_event(
-                            pixel_id=pool.meta_pixel_id,
-                            access_token=access_token,
-                            event_data=payload,
-                            test_code=pool.meta_test_event_code or None,
-                        )
-                        logger.info(
-                            f" [META CAPI] Purchase enfileirado via webhook | "
-                            f"payment {payment.id} | pool={pool.id}"
-                        )
-        except Exception as meta_error:
-            logger.error(f"❌ [META CAPI] Erro ao enfileirar Purchase via webhook: {meta_error}", exc_info=True)
+    logger.info(f"✅ Purchase será disparado apenas na página de entrega via Browser Pixel + CAPI redundante")
     
     # ============================================================================
     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
