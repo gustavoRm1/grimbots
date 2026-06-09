@@ -126,7 +126,7 @@ def send_event(
                         f"| event_id={event.get('event_id', '?')} "
                         f"| response={body}"
                     )
-                    return True
+                    return False
 
             # ── 4xx: Erro do cliente — NUNCA retentar ───────
             if 400 <= resp.status_code < 500:

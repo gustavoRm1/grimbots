@@ -77,9 +77,12 @@ def reconcile_purchases() -> int:
                 # ─── Dados do bot_user ─────────────────────────
                 bot_user = None
                 if payment.bot_id and payment.customer_user_id:
+                    telegram_user_id = payment.customer_user_id
+                    if isinstance(telegram_user_id, str) and telegram_user_id.startswith('user_'):
+                        telegram_user_id = telegram_user_id.replace('user_', '')
                     bot_user = BotUser.query.filter_by(
                         bot_id=payment.bot_id,
-                        telegram_user_id=payment.customer_user_id,
+                        telegram_user_id=telegram_user_id,
                     ).first()
 
                 # ─── Tracking data do Redis ────────────────────

@@ -3508,3 +3508,68 @@ def api_delete_pool_bot(pool_bot_id):
         logger.error(f"Erro ao remover bot do pool {pool_bot_id}: {e}")
         return jsonify({'error': 'Erro ao remover bot do pool'}), 500
 
+
+@dashboard_bp.route('/monitoring')
+@login_required
+def monitoring_page():
+    """Painel de monitoria do pipeline Meta CAPI.
+
+    Suporta ?format=json para auto-refresh via Alpine.js.
+    """
+    from internal_logic.core.redis_manager import get_redis_connection
+    from rq import Queue
+
+    r = get_redis_connection()
+
+    now = time.time()
+    capi_heartbeat = r.get('gb:heartbeat:capi_sender')
+    reconcile_heartbeat = r.get('gb:heartbeat:reconcile')
+    last_error = r.get('gb:last_capi_error')
+
+    capi_seconds_ago = int(now - float(capi_heartbeat)) if capi_heartbeat else None
+    reconcile_seconds_ago = int(now - float(reconcile_heartbeat)) if reconcile_heartbeat else None
+
+    rq_conn = get_redis_connection(decode_responses=False)
+    queues = {}
+    for qname in ('tasks', 'tracking', 'marathon', 'gateway', 'webhook'):
+        q = Queue(qname, connection=rq_conn)
+        queues[qname] = q.count
+
+    from internal_logic.core.models import Payment
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    paid_last_hour = Payment.query.filter(
+        Payment.status == 'paid',
+        Payment.paid_at >= one_hour_ago,
+    ).count()
+    with_purchase = Payment.query.filter(
+        Payment.status == 'paid',
+        Payment.paid_at >= one_hour_ago,
+        Payment.meta_purchase_sent == True,
+    ).count()
+
+    fmt = request.args.get('format')
+    if fmt == 'json':
+        return jsonify({
+            'capi_alive': capi_heartbeat is not None,
+            'capi_seconds_ago': capi_seconds_ago,
+            'reconcile_alive': reconcile_heartbeat is not None,
+            'reconcile_seconds_ago': reconcile_seconds_ago,
+            'last_error': last_error,
+            'queues': queues,
+            'paid_last_hour': paid_last_hour,
+            'with_purchase': with_purchase,
+            'pct_purchase': round(with_purchase / paid_last_hour * 100, 1) if paid_last_hour > 0 else None,
+        })
+
+    return render_template('monitoring.html',
+        capi_alive=capi_heartbeat is not None,
+        capi_seconds_ago=capi_seconds_ago,
+        reconcile_alive=reconcile_heartbeat is not None,
+        reconcile_seconds_ago=reconcile_seconds_ago,
+        last_error=last_error,
+        queues=queues,
+        paid_last_hour=paid_last_hour,
+        with_purchase=with_purchase,
+        pct_purchase=round(with_purchase / paid_last_hour * 100, 1) if paid_last_hour > 0 else None,
+    )
+

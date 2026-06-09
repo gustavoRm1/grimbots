@@ -193,6 +193,14 @@ def rq_send_meta_event(pixel_id, access_token, event_data, test_code=None):
                         "⚠️ Falha ao marcar meta_purchase_sent: %s", mark_err
                     )
 
+            # Heartbeat: CAPI sender ativo
+            try:
+                from internal_logic.core.redis_manager import get_redis_connection as _get_redis
+                _r = _get_redis()
+                _r.set('gb:heartbeat:capi_sender', str(_time.time()), ex=300)
+            except Exception:
+                pass
+
             return result
 
         elif response.status_code >= 500 or response.status_code == 429:
@@ -210,6 +218,12 @@ def rq_send_meta_event(pixel_id, access_token, event_data, test_code=None):
                 response.status_code,
                 response.text[:200],
             )
+            try:
+                from internal_logic.core.redis_manager import get_redis_connection as _get_redis
+                _r = _get_redis()
+                _r.set('gb:last_capi_error', f"{event_data.get('event_name')} status={response.status_code}: {response.text[:200]}", ex=3600)
+            except Exception:
+                pass
             return {"error": response.text, "status_code": response.status_code}
 
     except requests.exceptions.Timeout:
@@ -377,6 +391,14 @@ def reconcile_server_purchases() -> int:
         return 0
     finally:
         _schedule_next_job('reconcile:purchase_capi', reconcile_server_purchases, 60)
+        # Heartbeat: reconciler ativo
+        try:
+            from internal_logic.core.redis_manager import get_redis_connection as _get_redis
+            import time as _time
+            _r = _get_redis()
+            _r.set('gb:heartbeat:reconcile', str(_time.time()), ex=180)
+        except Exception:
+            pass
 
 
 def _schedule_next_job(key, func, interval_seconds):

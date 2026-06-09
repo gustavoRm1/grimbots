@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Monitoria - grimbots{% endblock %}
+
+{% block extra_head %}
+<style>
+.m-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 20px; }
+.m-value { font-size: 28px; font-weight: 800; }
+.m-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px; }
+.status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; }
+.status-dot.alive { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.status-dot.stale { background: #eab308; box-shadow: 0 0 8px rgba(234,179,8,0.5); }
+.status-dot.dead { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+.queue-bar { height: 8px; border-radius: 4px; background: var(--bg-surface); overflow: hidden; margin-top: 8px; }
+.queue-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+.queue-bar-fill.low { background: #22c55e; }
+.queue-bar-fill.mid { background: #eab308; }
+.queue-bar-fill.high { background: #ef4444; }
+.last-update { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 16px; }
+.error-msg { font-size: 13px; color: #ef4444; word-break: break-all; max-height: 60px; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+     x-data="monitorApp()"
+     x-cloak>
+    
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">Monitoria</h1>
+            <p class="text-sm mt-1" style="color: var(--text-muted);">Pipeline Meta CAPI em tempo real</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-xs" style="color: var(--text-muted);">Auto-refresh a cada 10s</span>
+            <span class="status-dot" :class="autoRefresh ? 'alive' : 'dead'" x-cloak></span>
+        </div>
+    </div>
+
+    <!-- Linha 1: Heartbeats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- CAPI Sender -->
+        <div class="m-card">
+            <div class="flex items-center justify-between mb-3">
+                <div class="m-label">CAPI Sender</div>
+                <span class="status-dot" :class="capiStatusClass"></span>
+            </div>
+            <div class="m-value" x-text="capiStatusText"></div>
+            <div class="text-sm mt-1" style="color: var(--text-secondary);">
+                <span x-show="capiSecondsAgo !== null" x-cloak>
+                    Último evento há <span x-text="capiSecondsAgo"></span>s
+                </span>
+                <span x-show="capiSecondsAgo === null" x-cloak>Nenhum evento registrado</span>
+            </div>
+        </div>
+
+        <!-- Reconciler -->
+        <div class="m-card">
+            <div class="flex items-center justify-between mb-3">
+                <div class="m-label">Reconciler (CAPI Purchase)</div>
+                <span class="status-dot" :class="reconcileStatusClass"></span>
+            </div>
+            <div class="m-value" x-text="reconcileStatusText"></div>
+            <div class="text-sm mt-1" style="color: var(--text-secondary);">
+                <span x-show="reconcileSecondsAgo !== null" x-cloak>
+                    Última execução há <span x-text="reconcileSecondsAgo"></span>s
+                </span>
+                <span x-show="reconcileSecondsAgo === null" x-cloak>Nunca executou</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Linha 2: Queues + Erro -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        {% for qname, qcount in queues.items() %}
+        <div class="m-card">
+            <div class="m-label">{{ qname }}</div>
+            <div class="m-value" style="color: var(--text-primary);">{{ qcount }}</div>
+            <div class="queue-bar">
+                {% set pct = [qcount / 100 * 100, 100] | min %}
+                <div class="queue-bar-fill {% if qcount > 500 %}high{% elif qcount > 100 %}mid{% else %}low{% endif %}" style="width: {{ pct }}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Linha 3: Payments + Erro -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="m-card">
+            <div class="m-label">Payments (última hora)</div>
+            <div class="flex items-baseline gap-4 mt-2">
+                <div>
+                    <div class="m-value" style="color: var(--text-primary);">{{ paid_last_hour }}</div>
+                    <div class="text-xs" style="color: var(--text-muted);">paid</div>
+                </div>
+                <div>
+                    <div class="m-value" style="color: #22c55e;">{{ with_purchase }}</div>
+                    <div class="text-xs" style="color: var(--text-muted);">com Purchase</div>
+                </div>
+                <div>
+                    <div class="m-value" style="color: var(--brand-gold-500);">{{ pct_purchase or 0 }}%</div>
+                    <div class="text-xs" style="color: var(--text-muted);">cobertura</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="m-card">
+            <div class="m-label">Último erro CAPI</div>
+            <div x-show="lastError" x-cloak>
+                <div class="error-msg" x-text="lastError"></div>
+            </div>
+            <div x-show="!lastError" x-cloak>
+                <div class="text-sm" style="color: #22c55e;">
+                    <i class="fas fa-check-circle mr-1"></i> Nenhum erro registrado
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="last-update">
+        Última atualização: <span x-text="lastUpdate"></span>
+    </div>
+</div>
+
+<script>
+function monitorApp() {
+    return {
+        autoRefresh: true,
+        capiAlive: {{ capi_alive | tojson }},
+        capiSecondsAgo: {{ capi_seconds_ago | tojson }},
+        reconcileAlive: {{ reconcile_alive | tojson }},
+        reconcileSecondsAgo: {{ reconcile_seconds_ago | tojson }},
+        lastError: {{ last_error | tojson }},
+        lastUpdate: new Date().toLocaleTimeString('pt-BR'),
+        refreshTimer: null,
+
+        get capiStatusClass() {
+            if (!this.capiAlive) return 'dead';
+            if (this.capiSecondsAgo > 300) return 'dead';
+            if (this.capiSecondsAgo > 120) return 'stale';
+            return 'alive';
+        },
+        get capiStatusText() {
+            if (!this.capiAlive) return 'Inativo';
+            if (this.capiSecondsAgo > 300) return 'Crítico';
+            if (this.capiSecondsAgo > 120) return 'Atrasado';
+            return 'Ativo';
+        },
+        get reconcileStatusClass() {
+            if (!this.reconcileAlive) return 'dead';
+            if (this.reconcileSecondsAgo > 180) return 'dead';
+            if (this.reconcileSecondsAgo > 120) return 'stale';
+            return 'alive';
+        },
+        get reconcileStatusText() {
+            if (!this.reconcileAlive) return 'Inativo';
+            if (this.reconcileSecondsAgo > 180) return 'Crítico';
+            if (this.reconcileSecondsAgo > 120) return 'Atrasado';
+            return 'Ativo';
+        },
+
+        init() {
+            this.refreshTimer = setInterval(() => this.fetchStatus(), 10000);
+        },
+        fetchStatus() {
+            fetch('/monitoring?format=json')
+                .then(r => r.json())
+                .then(d => {
+                    this.capiAlive = d.capi_alive;
+                    this.capiSecondsAgo = d.capi_seconds_ago;
+                    this.reconcileAlive = d.reconcile_alive;
+                    this.reconcileSecondsAgo = d.reconcile_seconds_ago;
+                    this.lastError = d.last_error;
+                    this.lastUpdate = new Date().toLocaleTimeString('pt-BR');
+                })
+                .catch(() => {});
+        },
+        destroy() {
+            if (this.refreshTimer) clearInterval(this.refreshTimer);
+        }
+    };
+}
+</script>
+{% endblock %}

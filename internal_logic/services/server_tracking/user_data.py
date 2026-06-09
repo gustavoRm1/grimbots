@@ -136,4 +136,26 @@ def build_user_data(
     if fbclid:
         user_data['external_id'] = [sha256(str(fbclid))]
 
+    # ── DEMOGRAPHIC DATA ───────────────────────────────────
+    if payment:
+        if getattr(payment, 'customer_city', None):
+            user_data['ct'] = payment.customer_city
+        if getattr(payment, 'customer_state', None):
+            user_data['st'] = payment.customer_state
+        if getattr(payment, 'customer_country', None):
+            user_data['country'] = payment.customer_country
+        if getattr(payment, 'customer_gender', None):
+            user_data['ge'] = payment.customer_gender
+
+    # Fallback para BotUser se Payment não tiver
+    if bot_user:
+        if 'ct' not in user_data and getattr(bot_user, 'customer_city', None):
+            user_data['ct'] = bot_user.customer_city
+        if 'st' not in user_data and getattr(bot_user, 'customer_state', None):
+            user_data['st'] = bot_user.customer_state
+        if 'country' not in user_data and getattr(bot_user, 'customer_country', None):
+            user_data['country'] = bot_user.customer_country
+        if 'ge' not in user_data and getattr(bot_user, 'customer_gender', None):
+            user_data['ge'] = bot_user.customer_gender
+
     return user_data

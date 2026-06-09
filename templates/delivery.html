@@ -49,7 +49,7 @@
           {% if fbc and fbc_origin != 'synthetic' %} purchaseParams.fbc = '{{ fbc }}'; {% endif %}
 
           // Atira o Pixel
-          fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}' }, purchaseParams);
+          fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}', event_source_url: window.location.href }, purchaseParams);
           console.log('✅ [META] Purchase Disparado pela primeira vez. Trava acionada.');
 
           // O Fetch Fantasma: Avisa o banco apenas como Backup (não bloqueia o frontend)
@@ -122,6 +122,6 @@
         // Já disparado acima (HTML-only). Nada adicional aqui.
     </script>
     
-    <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"cd8c351eac4d4775b8b97afeae6b047a","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+    <!-- Cloudflare RUM removido — injetado automaticamente pelo Cloudflare em produção -->
 </body>
 </html>

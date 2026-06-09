@@ -237,21 +237,17 @@ def delivery_page(token):
             except Exception as e:
                 logger.warning(f"[META DELIVERY] Falha ao descriptografar access_token: {e}")
 
-        # C. DUAL-MODE CHECK: SERVER MODE desabilita o Pixel no delivery
-        from internal_logic.services.server_tracking import is_server_mode
+        # C. MODO REDUNDANTE: Browser Pixel + CAPI sempre ativos quando configurados
+        # Meta deduplica automaticamente via event_id (mesmo ID em ambos os lados)
+        # Recomendação oficial Meta: "redundant setup" → Pixel + CAPI simultâneos
         pool_obj = pool_bot.pool if pool_bot else None
-        if is_server_mode(pool_obj):
-            logger.info(
-                f"[TRACKING_MODE=SERVER] Pool {pool_obj.id}: "
-                f"Purchase no delivery DESABILITADO. "
-                f"CAPI fallback {' ativo' if capi_access_token else ' INDISPONÍVEL (sem token)'}."
-            )
-            pixel_id = None
-        else:
-            logger.info(
-                f"[TRACKING_MODE=HTML_ONLY] Pool {pool_obj.id}: "
-                f"Purchase via browser Pixel no delivery."
-            )
+        from internal_logic.services.server_tracking import is_server_mode
+        tracking_mode = 'SERVER' if is_server_mode(pool_obj) else 'HTML_ONLY'
+        logger.info(
+            f"[TRACKING_MODE={tracking_mode}] Pool {pool_obj.id}: "
+            f"Browser Pixel {'✅ ativo' if pixel_id else '❌ sem pixel_id'}  "
+            f"| CAPI {'✅ ativo' if capi_access_token else '❌ sem token'}"
+        )
 
         # D. Validação de pixel_id
         has_meta_pixel = bool(pixel_id)
@@ -375,20 +371,41 @@ def delivery_page(token):
         if capi_pixel_id and capi_access_token and not purchase_already_sent:
             try:
                 from tasks_async import enqueue_meta_event
-                import time
+                import time, hashlib, re
+
+                # Hashear email para CAPI (ignorar emails sintéticos do sistema)
+                customer_email_hash = None
+                if payment.customer_email:
+                    email_clean = payment.customer_email.strip().lower()
+                    if not any(d in email_clean for d in ['@telegram.user', '@user.telegram', '@example.com']):
+                        customer_email_hash = hashlib.sha256(email_clean.encode('utf-8')).hexdigest()
+
+                # Hashear phone para CAPI
+                customer_phone_hash = None
+                if payment.customer_phone:
+                    phone_clean = re.sub(r'[^\d]', '', payment.customer_phone)
+                    if phone_clean:
+                        phone_clean = phone_clean.lstrip('0')
+                        if not phone_clean.startswith('55'):
+                            phone_clean = '55' + phone_clean
+                        customer_phone_hash = hashlib.sha256(phone_clean.encode('utf-8')).hexdigest()
 
                 purchase_event = {
                     'event_name': 'Purchase',
-                    'event_time': int(time.time()),
+                    'event_time': int(payment.paid_at.timestamp()) if payment.paid_at else int(time.time()),
                     'event_id': purchase_event_id,
                     'action_source': 'website',
                     'event_source_url': redirect_url,
                     'user_data': {
                         'fbp': fbp_value,
                         'fbc': fbc_value,
-                        'external_id': external_id_normalized,
+                        'external_id': [external_id_normalized] if external_id_normalized else [],
                         'client_ip_address': request.remote_addr or '',
                         'client_user_agent': request.headers.get('User-Agent', ''),
+                        'ct': payment.customer_city or None,
+                        'st': payment.customer_state or None,
+                        'country': payment.customer_country or 'BR',
+                        'ge': payment.customer_gender or None,
                     },
                     'custom_data': {
                         'value': float(payment.amount),
@@ -398,13 +415,23 @@ def delivery_page(token):
                     }
                 }
 
+                # Incluir email/phone hash se disponíveis
+                if customer_email_hash:
+                    purchase_event['user_data']['em'] = [customer_email_hash]
+                if customer_phone_hash:
+                    purchase_event['user_data']['ph'] = [customer_phone_hash]
+
+                # Remover campos None do user_data (Meta rejeita nulls)
+                purchase_event['user_data'] = {k: v for k, v in purchase_event['user_data'].items() if v is not None}
+
                 enqueue_meta_event(
                     pixel_id=capi_pixel_id,
                     access_token=capi_access_token,
                     event_data=purchase_event,
                     test_code=pool.meta_test_event_code if pool else None
                 )
-                logger.info(f" [META DELIVERY] Purchase CAPI enfileirado | payment {payment.id} | event_id {purchase_event_id} | pixel={capi_pixel_id}")
+                test_mode = 'SIM' if (pool and pool.meta_test_event_code) else 'NÃO'
+                logger.info(f" [META DELIVERY] Purchase CAPI enfileirado | payment {payment.id} | event_id {purchase_event_id} | pixel={capi_pixel_id} | test_mode={test_mode}")
             except Exception as e:
                 logger.error(f" [META DELIVERY] Erro ao enfileirar Purchase CAPI: {e}", exc_info=True)
 
