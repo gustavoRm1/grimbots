@@ -1816,7 +1816,7 @@ if (typeof window.botStatsApp === 'undefined') {
                             <th>Cliente</th>
                             <th>Produto</th>
                             <th>Valor</th>
-                            <th>Delivery</th>
+                            <th>Link</th>
                             <th>Dispositivo</th>
                             <th>Data</th>
                             <th>Ações</th>
@@ -1838,29 +1838,15 @@ if (typeof window.botStatsApp === 'undefined') {
                                 <td class="text-gray-300" x-text="sale.product_name || 'Produto'"></td>
                                 <td class="font-bold whitespace-nowrap" style="color: var(--brand-gold-300);" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
                                 <td>
-                                    <div class="flex items-center gap-1 flex-wrap">
-                                        <span x-show="sale.meta_purchase_sent"
-                                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                                              style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
-                                            <i class="fas fa-check-circle text-[10px]"></i>
-                                            Enviado
-                                        </span>
-                                        <span x-show="!sale.meta_purchase_sent"
-                                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                                              style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3);">
-                                            <i class="fas fa-clock text-[10px]"></i>
-                                            Pendente
-                                        </span>
-                                        <a x-show="sale.delivery_token"
-                                           :href="'/delivery/' + sale.delivery_token"
-                                           target="_blank"
-                                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ml-1"
-                                           style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.25);"
-                                           title="Abrir página de entrega">
-                                            <i class="fas fa-external-link-alt text-[10px]"></i>
-                                            Link
-                                        </a>
-                                    </div>
+                                    <a x-show="sale.delivery_token"
+                                       :href="'/delivery/' + sale.delivery_token"
+                                       target="_blank"
+                                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                       style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.25);"
+                                       title="Abrir página de entrega">
+                                        <i class="fas fa-external-link-alt text-[10px]"></i>
+                                        Link
+                                    </a>
                                 </td>
                                 <td class="text-gray-400 text-sm">
                                     <template x-if="sale.device_model">
@@ -2184,8 +2170,8 @@ window.botStatsApp = function botStatsApp() {
                         completed_campaigns: data.remarketing?.completed_campaigns || 0,
                         total_sent: data.remarketing?.total_sent || 0,
                         total_clicks: data.remarketing?.total_clicks || 0,
-                        total_sales: data.remarketing?.total_sales || 0,
-                        total_revenue: data.remarketing?.total_revenue || 0,
+                        total_sales: data.remarketing?.sales || 0,
+                        total_revenue: data.remarketing?.revenue || 0,
                         conversion_rate: data.remarketing?.conversion_rate || 0,
                         click_rate: data.remarketing?.click_rate || 0,
                         avg_ticket: data.remarketing?.avg_ticket || 0,
@@ -2488,40 +2474,36 @@ window.botStatsApp = function botStatsApp() {
         
         updateDemographicCharts() {
             const deviceDist = this.stats.device_distribution;
-            const osDist = this.stats.os_distribution;
-            
-            if (!deviceDist || Object.keys(deviceDist).length === 0) {
-                console.log('⏳ Aguardando dados demográficos...');
-                return;
-            }
             
             // ===== DISTRIBUIÇÃO POR DEVICE =====
-            if (this.deviceChart) this.deviceChart.destroy();
-            const deviceCtx = document.getElementById('deviceChart');
-            if (deviceCtx) {
-                const labels = Object.keys(deviceDist);
-                const data = Object.values(deviceDist);
-                const colors = [
-                    'rgba(16, 185, 129, 0.8)',
-                    'rgba(59, 130, 246, 0.8)',
-                    'rgba(239, 68, 68, 0.8)',
-                    'rgba(168, 85, 247, 0.8)',
-                    'rgba(251, 146, 60, 0.8)',
-                ];
-                this.deviceChart = new Chart(deviceCtx, {
-                    type: 'pie',
-                    data: {
-                        labels: labels,
-                        datasets: [{ data: data, backgroundColor: colors.slice(0, labels.length) }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
+            if (deviceDist && Object.keys(deviceDist).length > 0) {
+                if (this.deviceChart) this.deviceChart.destroy();
+                const deviceCtx = document.getElementById('deviceChart');
+                if (deviceCtx) {
+                    const labels = Object.keys(deviceDist);
+                    const data = Object.values(deviceDist);
+                    const colors = [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(239, 68, 68, 0.8)',
+                        'rgba(168, 85, 247, 0.8)',
+                        'rgba(251, 146, 60, 0.8)',
+                    ];
+                    this.deviceChart = new Chart(deviceCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{ data: data, backgroundColor: colors.slice(0, labels.length) }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
             
             // ===== TOP CIDADES (Responsivo) =====
