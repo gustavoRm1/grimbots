@@ -39,17 +39,15 @@
               currency: 'BRL',
               content_ids: ['{{ payment.payment_id }}'],
               content_name: '{{ payment.product_name | default("Acesso Premium") | replace("'", "\\'") }}',
-              content_type: 'product'
+              content_type: 'product',
+              {% if fbp %}fbp: '{{ fbp }}',{% endif %}
+              {% if fbc and fbc_origin != 'synthetic' %}fbc: '{{ fbc }}',{% endif %}
           };
 
           {% if fbclid_hash %} purchaseData.external_id = '{{ fbclid_hash }}'; {% endif %}
 
-          var purchaseParams = {};
-          {% if fbp %} purchaseParams.fbp = '{{ fbp }}'; {% endif %}
-          {% if fbc and fbc_origin != 'synthetic' %} purchaseParams.fbc = '{{ fbc }}'; {% endif %}
-
-          // Atira o Pixel
-          fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}', event_source_url: window.location.href }, purchaseParams);
+          // Atira o Pixel (fbp/fbc no 3º arg = purchaseData, conforme doc Meta)
+          fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}', event_source_url: window.location.href });
           console.log('✅ [META] Purchase Disparado pela primeira vez. Trava acionada.');
 
           // O Fetch Fantasma: Avisa o banco apenas como Backup (não bloqueia o frontend)

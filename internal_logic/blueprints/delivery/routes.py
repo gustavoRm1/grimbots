@@ -254,7 +254,7 @@ def delivery_page(token):
         if not has_meta_pixel:
             logger.warning("[FILO_INVISIVEL] pixel_id ausente - Purchase não será disparado")
         
-        # E. Validação de FBC sintético (se houver tracking_data para verificar)
+        # E. Validação de FBC sintético + fallback Redis (se houver tracking_data para verificar)
         fbc_origin = None
         if bot_user and bot_user.tracking_session_id:
             temp_tracking_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
@@ -262,6 +262,19 @@ def delivery_page(token):
             if fbc and fbc_origin == 'synthetic':
                 fbc = None  # Ignorar FBC sintético
                 logger.warning("[FILO_INVISIVEL] fbc IGNORADO (origem: synthetic)")
+            # ✅ FALLBACK: Se BotUser não tiver fbc/fbp (gap Redis → BotUser),
+            # tentar direto da temp_tracking_data (Redis) que tem os valores reais do navegador
+            # Meta doc: "We recommend that you always send _fbc and _fbp browser cookie values"
+            if not fbc:
+                redis_fbc = temp_tracking_data.get('fbc')
+                if redis_fbc and fbc_origin != 'synthetic':
+                    fbc = redis_fbc
+                    logger.info(f"[META] fbc recuperado do Redis (tracking_data): {fbc[:20]}...")
+            if not fbp:
+                redis_fbp = temp_tracking_data.get('fbp')
+                if redis_fbp:
+                    fbp = redis_fbp
+                    logger.info(f"[META] fbp recuperado do Redis (tracking_data): {fbp[:20]}...")
         
         # F. Valores finais para template
         fbclid_to_use = fbclid or ''
@@ -465,10 +478,12 @@ def mark_purchase_sent():
         from internal_logic.core.models import Payment
         payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
         
-        # V4.1: Defensivo - só marcar se pagamento estiver confirmado
-        if payment.status != 'paid':
-            logger.warning(f"⚠️ V4.1 - Tentativa de marcar Purchase para pagamento não confirmado: {payment_id}")
-            return jsonify({'error': 'Pagamento não confirmado'}), 400
+        # V4.1: Marcar Purchase como enviado (aceita 'pending' também para evitar race condition
+        # entre confirmação do gateway e redirect do delivery. O CAPI já foi enfileirado na rota
+        # de delivery, então este é apenas um backup para o reconciler não re-enviar.
+        if payment.status not in ('paid', 'pending'):
+            logger.warning(f"⚠️ V4.1 - Tentativa de marcar Purchase para status inválido: {payment.status} (payment_id={payment_id})")
+            return jsonify({'error': f'Status inválido: {payment.status}'}), 400
         
         # V4.1: Marcar como enviado
         payment.meta_purchase_sent = True

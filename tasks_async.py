@@ -409,7 +409,7 @@ def _schedule_next_job(key, func, interval_seconds):
     try:
         if not redis_conn or not gateway_queue:
             return
-        lock_key = f"gb:scheduler:{key}:lock"
+        lock_key = f"gb:scheduler:{key}:cycle_lock"
         if redis_conn.set(lock_key, "1", nx=True, ex=interval_seconds * 2):
             job_id = f"gb:{key}:next"
             gateway_queue.enqueue_in(
