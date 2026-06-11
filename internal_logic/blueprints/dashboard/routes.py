@@ -1869,16 +1869,16 @@ def add_bot_to_pool(pool_id):
         return jsonify({'error': 'Erro ao adicionar bot ao pool'}), 500
 
 
-@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/bots/<int:bot_id>', methods=['DELETE'])
+@dashboard_bp.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['DELETE'])
 @login_required
 @csrf.exempt
-def remove_bot_from_pool(pool_id, bot_id):
-    """Remove bot do pool"""
+def remove_bot_from_pool(pool_id, pool_bot_id):
+    """Remove bot do pool usando o ID da associação PoolBot"""
     from internal_logic.core.models import RedirectPool, PoolBot
     
     pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
     
-    pool_bot = PoolBot.query.filter_by(pool_id=pool_id, bot_id=bot_id).first()
+    pool_bot = PoolBot.query.filter_by(pool_id=pool_id, id=pool_bot_id).first()
     if not pool_bot:
         return jsonify({'error': 'Bot não está no pool'}), 404
     
@@ -1886,7 +1886,7 @@ def remove_bot_from_pool(pool_id, bot_id):
         db.session.delete(pool_bot)
         db.session.commit()
         
-        logger.info(f"Bot {bot_id} removido do pool {pool_id}")
+        logger.info(f"PoolBot {pool_bot_id} removido do pool {pool_id}")
         return jsonify({'success': True})
     except Exception as e:
         db.session.rollback()
