@@ -17,7 +17,14 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
 
-      fbq('init', '{{ pixel_id }}');
+      {% if fbp %}
+      document.cookie = '_fbp={{ fbp }}; path=/; max-age=7776000; SameSite=Lax';
+      {% endif %}
+      {% if fbc and fbc_origin != 'synthetic' %}
+      document.cookie = '_fbc={{ fbc }}; path=/; max-age=7776000; SameSite=Lax';
+      {% endif %}
+
+      fbq('init', '{{ pixel_id }}'{% if fbclid_hash %}, {external_id: '{{ fbclid_hash }}'}{% endif %});
       
       // ✅ 1. TRAVA DE TITÂNIO: LocalStorage baseada no ID Único do Pagamento
       const paymentId = '{{ payment.id }}';
@@ -44,9 +51,7 @@
               {% if fbc and fbc_origin != 'synthetic' %}fbc: '{{ fbc }}',{% endif %}
           };
 
-          {% if fbclid_hash %} purchaseData.external_id = '{{ fbclid_hash }}'; {% endif %}
-
-          // Atira o Pixel (fbp/fbc no 3º arg = purchaseData, conforme doc Meta)
+          // Atira o Pixel (cookies _fbc/_fbp já foram setados — fbevents.js lê automaticamente)
           fbq('track', 'Purchase', purchaseData, { eventID: '{{ purchase_event_id }}', event_source_url: window.location.href });
           console.log('✅ [META] Purchase Disparado pela primeira vez. Trava acionada.');
 

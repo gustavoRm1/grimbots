@@ -1071,7 +1071,7 @@ function poolsApp() {
                 if (response.ok) {
                     this.poolBots = data.bots || [];
                     const botIdsInPool = this.poolBots.map(pb => pb.bot.id);
-                    this.availableBots = this.allBots.filter(b => !botIdsInPool.includes(b.id));
+                    this.availableBots = this.allBots.filter(b => b.is_active && !botIdsInPool.includes(b.id));
                     this.showManageBotsModal = true;
                 }
             } catch (error) {
@@ -1096,6 +1096,7 @@ function poolsApp() {
 
                 const data = await response.json();
                 if (response.ok) {
+                    await this.loadBots();
                     await this.openManageBotsModal(this.selectedPool);
                     await this.loadPools();
                     this.showNotification(`✅ Bot "${bot.name}" adicionado!`);
@@ -1118,6 +1119,7 @@ function poolsApp() {
                 });
 
                 if (response.ok) {
+                    await this.loadBots();
                     await this.openManageBotsModal(this.selectedPool);
                     await this.loadPools();
                     this.showNotification('✅ Bot removido!');

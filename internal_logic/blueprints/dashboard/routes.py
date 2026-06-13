@@ -2228,7 +2228,7 @@ def api_get_bots():
     from sqlalchemy import func
     from internal_logic.core.models import BotUser, Payment
     
-    bots = Bot.query.filter_by(user_id=current_user.id).limit(200).all()
+    bots = Bot.query.filter_by(user_id=current_user.id, is_active=True).limit(200).all()
     bot_ids = [b.id for b in bots]
     
     user_count_rows = db.session.query(

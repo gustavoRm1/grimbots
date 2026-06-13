@@ -278,8 +278,8 @@ def delivery_page(token):
         
         # F. Valores finais para template
         fbclid_to_use = fbclid or ''
-        fbp_value = fbp or ''
-        fbc_value = fbc or ''
+        fbp_value = fbp
+        fbc_value = fbc
         external_id = fbclid
         
         # CRÍTICO: Validar fbc_origin (ignorar fbc sintético)
@@ -434,8 +434,8 @@ def delivery_page(token):
                 if customer_phone_hash:
                     purchase_event['user_data']['ph'] = [customer_phone_hash]
 
-                # Remover campos None do user_data (Meta rejeita nulls)
-                purchase_event['user_data'] = {k: v for k, v in purchase_event['user_data'].items() if v is not None}
+                # Remover campos None/vazios do user_data (Meta rejeita nulls)
+                purchase_event['user_data'] = {k: v for k, v in purchase_event['user_data'].items() if v not in (None, '')}
 
                 enqueue_meta_event(
                     pixel_id=capi_pixel_id,
