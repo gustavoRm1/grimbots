@@ -18,6 +18,8 @@
 
       fbq('init', '{{ pixel_id }}'{% if fbclid_hash %}, {external_id: '{{ fbclid_hash }}'}{% endif %});
 
+      fbq('track', 'PageView');
+
       const paymentId = '{{ payment.id }}';
       const purchaseKey = 'grimbots_purchase_' + paymentId;
 
