@@ -361,9 +361,6 @@ class TrackingServiceV4:
             user_data['fbp'] = fbp
         if fbc:
             user_data['fbc'] = fbc
-        elif fbclid:
-            ts = pageview_ts if pageview_ts else int(_dt.utcnow().timestamp() * 1000)
-            user_data['fbc'] = f"fb.1.{ts}.{fbclid}"
         if fbclid:
             user_data['external_id'] = [hashlib.sha256(fbclid.strip().encode('utf-8')).hexdigest()]
 
