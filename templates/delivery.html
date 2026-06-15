@@ -16,6 +16,28 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
 
+      // 🔧 FIX 2: Restaurar cookies Meta do servidor
+      // O servidor conhece fbp/fbc do BotUser/Redis — restaura os cookies
+      // para que fbevents.js leia os valores corretos, mesmo se perdidos
+      {% if fbp and fbp != 'None' %}
+      (function() {
+        var v = '{{ fbp | e }}';
+        if (v.length > 0) {
+          document.cookie = '_fbp=' + v + '; path=/; max-age=' + (90*24*60*60) + '; SameSite=Lax';
+          console.log('[META FIX] _fbp cookie restaurado:', v.substring(0, 30) + '...');
+        }
+      })();
+      {% endif %}
+      {% if fbc and fbc != 'None' %}
+      (function() {
+        var v = '{{ fbc | e }}';
+        if (v.length > 0) {
+          document.cookie = '_fbc=' + v + '; path=/; max-age=' + (90*24*60*60) + '; SameSite=Lax';
+          console.log('[META FIX] _fbc cookie restaurado:', v.substring(0, 50) + '...');
+        }
+      })();
+      {% endif %}
+
       fbq('init', '{{ pixel_id }}'{% if fbclid_hash %}, {external_id: '{{ fbclid_hash }}'}{% endif %});
 
       fbq('track', 'PageView');

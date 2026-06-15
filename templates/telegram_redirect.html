@@ -92,6 +92,21 @@
             }
         })();
         
+        // 🔧 FIX 1: Setar _fbc cookie SÍNCRONO antes do Pixel
+        // O Parameter Builder é async — pode não terminar antes do fbq('init')
+        // Isso garante que _fbc exista quando o PageView disparar
+        (function() {
+          var p = new URLSearchParams(window.location.search);
+          var fbclid = p.get('fbclid');
+          if (fbclid) {
+            var fbc = 'fb.1.' + Date.now() + '.' + fbclid;
+            document.cookie = '_fbc=' + fbc + '; path=/; max-age=' + (90*24*60*60) + '; SameSite=Lax';
+            console.log('[META FIX] _fbc cookie setado síncrono:', fbc.substring(0, 50) + '...');
+          } else {
+            console.log('[META FIX] fbclid não encontrado na URL, _fbc não gerado');
+          }
+        })();
+        
         // ✅ Meta Pixel JS (carregar após Parameter Builder processar)
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -330,6 +345,14 @@
             }
         }
         
+        // 🔧 FIX 4: Delay mínimo antes do redirect para dar tempo do beacon completar
+        function doRedirectWithDelay() {
+            sendCookiesToServer();
+            setTimeout(function() {
+                redirectToTelegram();
+            }, 300);
+        }
+        
         // ✅ Função helper para enviar cookies via fetch (fallback)
         function sendCookiesViaFetch(payload) {
             fetch('/api/tracking/cookies', {
@@ -380,8 +403,7 @@
             }
             
             // Scripts carregaram ou Utmify não configurado, fazer redirect
-            sendCookiesToServer();
-            redirectToTelegram();
+            doRedirectWithDelay();
         }
         
         // ✅ Verificar se Pixel carregou e aguardar cookies serem gerados
@@ -413,26 +435,22 @@
             }
         }, 100);
         
-        // ✅ Fallback: Se Pixel não carregou em 3s, enviar cookies (se existirem) e redirect
+        // ✅ Fallback: Se Pixel não carregou em 3.5s, enviar cookies (se existirem) e redirect
         redirectTimer = setTimeout(() => {
             clearInterval(pixelCheckInterval);
             
             // ✅ Tentar enviar cookies mesmo se Pixel não carregou (podem existir de visita anterior)
-            sendCookiesToServer();
-            
-            // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
-            checkUtmifyAndRedirect();
-        }, Math.max(3000, MIN_DWELL_MS + 1200)); // garantia de dwell mínimo mesmo no fallback
+            // E dar delay para beacon completar
+            doRedirectWithDelay();
+        }, Math.max(3500, MIN_DWELL_MS + 1200)); // garantia de dwell mínimo mesmo no fallback
         
         // Click no botão também faz redirect (enviar cookies antes)
         document.getElementById('start-bot-link').addEventListener('click', (e) => {
             e.preventDefault();
             clearInterval(pixelCheckInterval);
             if (redirectTimer) clearTimeout(redirectTimer);
-            // ✅ Enviar cookies antes do redirect (se ainda não foram enviados)
-            sendCookiesToServer();
-            // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
-            checkUtmifyAndRedirect();
+            // ✅ Enviar cookies + delay para beacon completar
+            doRedirectWithDelay();
         });
     </script>
     

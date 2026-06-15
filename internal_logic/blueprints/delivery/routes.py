@@ -276,6 +276,15 @@ def delivery_page(token):
                     fbp = redis_fbp
                     logger.info(f"[META] fbp recuperado do Redis (tracking_data): {fbp[:20]}...")
         
+        # 🔧 FIX 3: Fallback — gerar fbc de fbclid se ainda não tem
+        # Diferente do CAPI (que rejeita synthetic), o browser Pixel aceita
+        # fbc gerado de fbclid — Meta só valida se o fbclid é um clique real
+        if not fbc and fbclid:
+            import time as _time
+            fbc = f"fb.1.{int(_time.time() * 1000)}.{fbclid}"
+            fbc_origin = 'generated_from_fbclid'
+            logger.info(f"[META FIX] fbc gerado de fbclid (fallback delivery): {fbc[:50]}...")
+        
         # F. Valores finais para template
         fbclid_to_use = fbclid or ''
         fbp_value = fbp
