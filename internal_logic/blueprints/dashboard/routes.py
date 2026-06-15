@@ -3459,7 +3459,15 @@ def api_update_bot_token(bot_id):
         
         bot.total_users = 0
         db.session.commit()
-        
+
+        # ✅ REINICIAR BOT SE ESTAVA RODANDO ANTES
+        if was_running:
+            try:
+                bot_manager.start_bot(bot_id)
+                logger.info(f"Bot {bot_id} reiniciado após atualização de token")
+            except Exception as e:
+                logger.error(f"Erro ao reiniciar bot {bot_id} após troca de token: {e}")
+
         return jsonify({
             'message': f'Token atualizado! {archived_count} usuários arquivados.',
             'bot': bot.to_dict(),
