@@ -37,10 +37,13 @@ class SigiloPayGateway(PaymentGateway):
 
             raw_phone = customer_data.get("phone", "") if customer_data else ""
             clean_phone = re.sub(r'\D', '', raw_phone)
-            if not clean_phone.startswith("55"):
+            if clean_phone.startswith("55"):
+                clean_phone = clean_phone
+            elif len(clean_phone) >= 10:
                 clean_phone = "55" + clean_phone
-            if len(clean_phone) < 12 or len(clean_phone) > 13:
+            else:
                 clean_phone = "5511999999999"
+            clean_phone = "+" + clean_phone
 
             if customer_data:
                 client = {
