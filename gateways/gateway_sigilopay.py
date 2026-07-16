@@ -45,18 +45,27 @@ class SigiloPayGateway(PaymentGateway):
                 clean_phone = "5511999999999"
             clean_phone = "+" + clean_phone
 
+            raw_doc = (customer_data.get("document") or "") if customer_data else ""
+            clean_doc = re.sub(r'\D', '', raw_doc)
+            if len(clean_doc) == 11:
+                formatted_doc = f"{clean_doc[:3]}.{clean_doc[3:6]}.{clean_doc[6:9]}-{clean_doc[9:]}"
+            elif len(clean_doc) == 14:
+                formatted_doc = f"{clean_doc[:2]}.{clean_doc[2:5]}.{clean_doc[5:8]}/{clean_doc[8:12]}-{clean_doc[12:]}"
+            else:
+                formatted_doc = raw_doc or "000.000.000-00"
+
             if customer_data:
                 client = {
                     "name": customer_data.get("name", "Cliente Grimbots"),
                     "email": customer_data.get("email", "cliente@grimbots.com"),
-                    "document": customer_data.get("document", "00000000000"),
+                    "document": formatted_doc,
                     "phone": clean_phone
                 }
             else:
                 client = {
                     "name": "Cliente Grimbots",
                     "email": "cliente@grimbots.com",
-                    "document": "00000000000",
+                    "document": "000.000.000-00",
                     "phone": clean_phone
                 }
 
