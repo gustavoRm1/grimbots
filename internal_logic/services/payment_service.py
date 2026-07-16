@@ -363,33 +363,30 @@ class PaymentService:
             )
             
             # 4. Log do resultado da API externa
-            if result and result.get('status') != 'error':
-                self.logger.info(f"PIX gerado com sucesso via {gateway_config.gateway_type}")
-                # O gateway legado retorna um dict com 'pix_code'. O DTO espera 'qr_code'.
-                if isinstance(result, dict):
-                    response = PixPaymentResponse(
-                        success=True,
-                        qr_code=result.get('pix_code') or result.get('qr_code'),
-                        qr_code_url=result.get('qr_code_url'),
-                        transaction_id=result.get('transaction_id') or result.get('payment_id'),
-                        reference=result.get('reference') or result.get('external_reference'), # ✅ Capturar reference
-                        status="pending",
-                        raw_response=result
-                    )
-                else:
-                    response = PixPaymentResponse(
-                        success=True,
-                        qr_code=None,
-                        qr_code_url=None,
-                        transaction_id=None,
-                        status="pending",
-                        raw_response=result
-                    )
-            else:
-                self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {result.get('error', 'Unknown error')}")
+            if result is None:
+                self.logger.error(f"Gateway {gateway_config.gateway_type} retornou None")
                 response = PixPaymentResponse(
                     success=False,
-                    error_message=result.get('error', 'Erro desconhecido no gateway'),
+                    error_message=f"Gateway {gateway_config.gateway_type} retornou None",
+                    raw_response=None
+                )
+            elif isinstance(result, dict) and result.get('status') != 'error':
+                self.logger.info(f"PIX gerado com sucesso via {gateway_config.gateway_type}")
+                response = PixPaymentResponse(
+                    success=True,
+                    qr_code=result.get('pix_code') or result.get('qr_code'),
+                    qr_code_url=result.get('qr_code_url'),
+                    transaction_id=result.get('transaction_id') or result.get('payment_id'),
+                    reference=result.get('reference') or result.get('external_reference'),
+                    status="pending",
+                    raw_response=result
+                )
+            else:
+                err_msg = result.get('error', 'Unknown error') if isinstance(result, dict) else 'Resultado inválido'
+                self.logger.error(f"Erro na API do Gateway {gateway_config.gateway_type}: {err_msg}")
+                response = PixPaymentResponse(
+                    success=False,
+                    error_message=err_msg,
                     raw_response=result
                 )
             

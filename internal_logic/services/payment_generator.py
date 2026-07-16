@@ -47,63 +47,65 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
             logger.error(f"Bot {bot_id} nao encontrado para geracao de PIX")
             return None
 
-        gateway = Gateway.query.filter_by(
+        gateways = Gateway.query.filter_by(
             user_id=bot.user_id,
             is_active=True,
             is_verified=True
-        ).first()
+        ).all()
 
-        if not gateway:
+        if not gateways:
             logger.error(f"Nenhum gateway ativo encontrado para usuario {bot.user_id}")
             return None
 
         from internal_logic.services.payment_service import get_payment_service
         payment_service = get_payment_service(db.session)
 
-        response = payment_service.generate_pix(
-            bot_id=bot_id,
-            gateway_id=gateway.id,
-            amount=amount,
-            description=description,
-            customer_name=customer_name or 'Cliente',
-            customer_email=f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
-            customer_cpf=customer_user_id,
-            external_id=customer_user_id,
-            order_bump_shown=order_bump_shown,
-            order_bump_accepted=order_bump_accepted,
-            order_bump_value=order_bump_value,
-            is_downsell=is_downsell,
-            downsell_index=downsell_index,
-            is_upsell=is_upsell,
-            upsell_index=upsell_index,
-            is_remarketing=is_remarketing,
-            remarketing_campaign_id=remarketing_campaign_id,
-            button_index=button_index,
-            button_config=json.dumps(button_config) if button_config else None
-        )
+        for gateway in gateways:
+            response = payment_service.generate_pix(
+                bot_id=bot_id,
+                gateway_id=gateway.id,
+                amount=amount,
+                description=description,
+                customer_name=customer_name or 'Cliente',
+                customer_email=f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
+                customer_cpf=customer_user_id,
+                external_id=customer_user_id,
+                order_bump_shown=order_bump_shown,
+                order_bump_accepted=order_bump_accepted,
+                order_bump_value=order_bump_value,
+                is_downsell=is_downsell,
+                downsell_index=downsell_index,
+                is_upsell=is_upsell,
+                upsell_index=upsell_index,
+                is_remarketing=is_remarketing,
+                remarketing_campaign_id=remarketing_campaign_id,
+                button_index=button_index,
+                button_config=json.dumps(button_config) if button_config else None
+            )
 
-        if response.success:
-            logger.info(f"PIX gerado via PaymentService - Transaction ID: {response.transaction_id}")
-            payment_ref = response.reference or str(customer_user_id)
-            transaction_hash = None
-            try:
-                if isinstance(response.raw_response, dict):
-                    transaction_hash = response.raw_response.get('transaction_hash') or response.raw_response.get('gateway_transaction_hash')
-            except Exception:
+            if response.success:
+                logger.info(f"PIX gerado via PaymentService - Transaction ID: {response.transaction_id}")
+                payment_ref = response.reference or str(customer_user_id)
                 transaction_hash = None
-            return {
-                'pix_code': response.qr_code,
-                'pix_code_base64': None,
-                'qr_code_url': response.qr_code_url,
-                'transaction_id': response.transaction_id,
-                'transaction_hash': transaction_hash,
-                'payment_id': payment_ref,
-                'expires_at': None,
-                'status': response.status
-            }
-        else:
-            logger.error(f"Falha ao gerar PIX via PaymentService: {response.error_message}")
-            return None  # Não cair no fallback legado — gateway já rejeitou os dados
+                try:
+                    if isinstance(response.raw_response, dict):
+                        transaction_hash = response.raw_response.get('transaction_hash') or response.raw_response.get('gateway_transaction_hash')
+                except Exception:
+                    transaction_hash = None
+                return {
+                    'pix_code': response.qr_code,
+                    'pix_code_base64': None,
+                    'qr_code_url': response.qr_code_url,
+                    'transaction_id': response.transaction_id,
+                    'transaction_hash': transaction_hash,
+                    'payment_id': payment_ref,
+                    'expires_at': None,
+                    'status': response.status
+                }
+            else:
+                logger.error(f"Falha ao gerar PIX via PaymentService ({gateway.gateway_type}): {response.error_message}")
+
+        logger.info("PaymentService falhou em todos gateways, tentando fallback legado...")
     except Exception as e:
         logger.error(f"Erro na integracao PaymentService: {e}")
         logger.info("Fallback para logica legada de PIX...")
