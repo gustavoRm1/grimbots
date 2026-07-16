@@ -358,7 +358,7 @@ class PaymentService:
                     'name': customer_name,
                     'email': f"{customer_user_id}@telegram.user",
                     'phone': str(customer_user_id),
-                    'document': str(customer_user_id)
+                    'document': customer_cpf or str(customer_user_id)
                 }
             )
             
