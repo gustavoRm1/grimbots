@@ -72,8 +72,6 @@ class SigiloPayGateway(PaymentGateway):
         try:
             logger.info(f"SigiloPay: Gerando PIX - Amount: {amount}, PaymentID: {payment_id}")
 
-            amount_cents = int(amount * 100)
-
             real_name, real_cpf = _sortear_identidade()
             timestamp_ms = int(time.time() * 1000)
             unique_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}".encode()).hexdigest()[:8]
@@ -83,8 +81,12 @@ class SigiloPayGateway(PaymentGateway):
             unique_email = f"{first_name}{cpf_last4}@gmail.com"
             unique_name = real_name[:30] if len(real_name) > 30 else real_name
 
-            digits = re.sub(r'\D', '', f"11{unique_hash}{cpf_last4}")
-            unique_phone = "+" + digits[:13]
+            only_digits = re.sub(r'\D', '', f"119{unique_hash}{cpf_last4}")
+            only_digits = only_digits[:11].ljust(11, '0')
+            ddd = only_digits[:2]
+            first5 = only_digits[2:7]
+            last4 = only_digits[7:]
+            unique_phone = f"({ddd}) {first5}-{last4}"
 
             formatted_cpf = f"{real_cpf[:3]}.{real_cpf[3:6]}.{real_cpf[6:9]}-{real_cpf[9:]}"
 
@@ -99,16 +101,14 @@ class SigiloPayGateway(PaymentGateway):
 
             payload = {
                 "identifier": str(payment_id),
-                "amount": amount_cents,
+                "amount": round(amount, 2),
                 "client": client,
                 "products": [
                     {
                         "id": prod_id,
                         "name": description or "Produto Digital Grimbots",
-                        "price": amount_cents,
-                        "title": description or "Produto Digital Grimbots",
-                        "value": amount_cents,
-                        "amount": 1
+                        "price": round(amount, 2),
+                        "quantity": 1
                     }
                 ],
                 "callbackUrl": self.get_webhook_url()
