@@ -2930,6 +2930,7 @@ def api_create_gateway():
         
         # ✅ FIX: GRAVAR DADOS NOVOS NO BANCO ANTES DE TESTAR (evita persistir dados corrompidos antigos)
         credentials = {
+            'api_key': data.get('api_key', gateway.api_key),
             'client_id': data.get('client_id', gateway.client_id),
             'client_secret': data.get('client_secret', gateway.client_secret),
             'product_hash': data.get('product_hash', gateway.product_hash),

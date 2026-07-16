@@ -13,7 +13,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any, Callable
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, update as sql_update
+from sqlalchemy import and_, or_, update as sql_update, func
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +375,7 @@ class BotIntelligenceService:
                     .values(
                         is_active=False,
                         health_status='offline',
-                        error_count=Bot.error_count + 1,
+                        error_count=func.coalesce(Bot.error_count, 0) + 1,
                         last_error=f"BOT_FATAL: {error_description[:500]}"
                     )
                 )

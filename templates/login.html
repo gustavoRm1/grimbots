@@ -2,51 +2,116 @@
 
 {% block title %}Login - grimbots{% endblock %}
 
+{% block extra_head %}
+<style>
+    :root {
+        --brand-gold-500: #FFB800;
+        --brand-gold-300: #FFC933;
+        --brand-gold-700: #DAA520;
+        --brand-green-500: #10B981;
+        --brand-green-300: #34D399;
+        --brand-blue-500: #3B82F6;
+        --brand-red-500: #EF4444;
+        --brand-red-300: #FCA5A5;
+        --bg-primary: #0A0A0A;
+        --bg-secondary: #141414;
+        --bg-tertiary: #1A1A1A;
+        --surface-low: #1F1F1F;
+        --surface-mid: #262626;
+        --text-primary: #FFFFFF;
+        --text-secondary: #D1D1D1;
+        --text-tertiary: #9CA3AF;
+        --text-muted: #6B7280;
+        --border-subtle: rgba(255, 184, 0, 0.08);
+        --border-medium: rgba(255, 184, 0, 0.15);
+        --glow-gold: 0 0 20px rgba(255, 184, 0, 0.3), 0 0 40px rgba(255, 184, 0, 0.1);
+    }
+
+    .grid-texture {
+        background-image: linear-gradient(rgba(255, 184, 0, 0.03) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255, 184, 0, 0.03) 1px, transparent 1px);
+        background-size: 60px 60px;
+    }
+
+    .login-glow {
+        position: absolute;
+        top: -20%;
+        right: -10%;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(255, 184, 0, 0.10) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .login-card-hover {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .login-card-hover:hover {
+        border-color: var(--brand-gold-500);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(255, 184, 0, 0.1);
+    }
+
+    .btn-glow {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-glow:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(255, 184, 0, 0.35);
+    }
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--text-primary);
+        -webkit-box-shadow: 0 0 0px 1000px var(--surface-low) inset;
+        transition: background-color 5000s ease-in-out 0s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<!-- Login Page Redesign - Senior UX -->
-<div class="min-h-screen flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8" 
-     style="background: 
-        radial-gradient(circle at 15% 15%, rgba(255,186,8,0.08), transparent 35%),
-        radial-gradient(circle at 85% 85%, rgba(255,186,8,0.05), transparent 35%),
-        linear-gradient(180deg, var(--bg-950), var(--bg-900));">
-    
-    <div class="max-w-md w-full space-y-8">
-        
-        <!-- Hero Section -->
+<div class="min-h-screen flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8 relative overflow-hidden grid-texture"
+     style="background-color: var(--bg-primary);">
+    <div class="login-glow"></div>
+
+    <div class="max-w-md w-full space-y-8 relative z-10">
+
+        <!-- Logo + Brand -->
         <div class="text-center">
-            <!-- Logo Estilizado -->
-            <div class="inline-block relative">
-                <div class="absolute -inset-4 bg-gradient-to-r from-accent500 to-accent600 rounded-full opacity-10 blur-2xl"></div>
-                <div class="relative bg-surface800 rounded-2xl p-5 border border-accent500 border-opacity-20" 
-                     style="box-shadow: 0 8px 24px rgba(255,186,8,0.15);">
-                    <i class="fas fa-robot text-5xl text-accent500" style="filter: drop-shadow(0 2px 8px rgba(255,186,8,0.4));"></i>
-                </div>
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6"
+                 style="background: linear-gradient(135deg, rgba(255,184,0,0.15), rgba(255,184,0,0.05)); border: 2px solid var(--brand-gold-500); box-shadow: 0 0 30px rgba(255,184,0,0.15);">
+                <i class="fas fa-robot text-4xl" style="color: var(--brand-gold-500); filter: drop-shadow(0 2px 8px rgba(255,184,0,0.3));"></i>
             </div>
-            
-            <!-- Brand Name -->
-            <h1 class="mt-8 text-center text-4xl font-bold tracking-tight">
-                <span class="text-accent500">grim</span><span class="text-textPrimary">bots</span>
+            <h1 class="text-4xl font-black tracking-tight">
+                <span style="color: var(--brand-gold-500);">grim</span><span style="color: var(--text-primary);">bots</span>
             </h1>
-            
-            <!-- Value Proposition -->
-            <p class="mt-3 text-center text-base text-textSecondary font-medium">
+            <p class="mt-3 text-base font-medium" style="color: var(--text-secondary);">
                 Automatize vendas no Telegram
             </p>
-            <p class="mt-1 text-center text-sm text-muted">
+            <p class="mt-1 text-sm" style="color: var(--text-muted);">
                 Gerencie múltiplos bots com order bump e downsell
             </p>
         </div>
-        
+
         <!-- Login Card -->
-        <div class="bg-surface800 rounded-2xl shadow-lg border border-white border-opacity-10 overflow-hidden"
-             style="box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,186,8,0.08);">
-            
-            <!-- Card Header -->
+        <div class="login-card-hover rounded-2xl overflow-hidden"
+             style="background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--border-medium);">
+
             <div class="px-8 pt-8 pb-2">
-                <h2 class="text-xl font-bold text-textPrimary">
+                <h2 class="text-xl font-bold" style="color: var(--text-primary);">
                     Entrar na sua conta
                 </h2>
-                <p class="mt-1 text-sm text-textSecondary">
+                <p class="mt-1 text-sm" style="color: var(--text-secondary);">
                     Acesse seu painel de gerenciamento
                 </p>
             </div>
@@ -56,10 +121,10 @@
                 {% if messages %}
                 <div class="px-8 pt-4">
                     {% for category, message in messages %}
-                    <div class="rounded-xl p-4 mb-3 animate-fadeInDown" 
-                         style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.12); border: 2px solid var(--alert-500);{% elif category == 'success' %}background: rgba(34, 197, 94, 0.12); border: 2px solid var(--brand-emerald-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.12); border: 2px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.12); border: 2px solid var(--trust-500);{% endif %}"
-                         x-data="{show: true}" 
-                         x-show="show" 
+                    <div class="rounded-xl p-4 mb-3"
+                         style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.12); border: 1px solid var(--brand-red-500);{% elif category == 'success' %}background: rgba(16, 185, 129, 0.12); border: 1px solid var(--brand-green-500);{% elif category == 'warning' %}background: rgba(255, 184, 0, 0.12); border: 1px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.12); border: 1px solid var(--brand-blue-500);{% endif %}"
+                         x-data="{show: true}"
+                         x-show="show"
                          x-init="setTimeout(() => show = false, 5000)"
                          x-transition:enter="transition ease-out duration-300"
                          x-transition:enter-start="opacity-0 transform scale-95"
@@ -67,20 +132,17 @@
                          x-transition:leave="transition ease-in duration-200"
                          x-transition:leave-start="opacity-100 transform scale-100"
                          x-transition:leave-end="opacity-0 transform scale-95">
-                        <div class="flex items-start">
-                            <div class="flex-shrink-0">
-                                <i class="{% if category == 'error' %}fas fa-times-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-xl"
-                                   style="{% if category == 'error' %}color: var(--alert-300); filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));{% elif category == 'success' %}color: var(--brand-emerald-300); filter: drop-shadow(0 0 6px rgba(110, 231, 183, 0.5));{% elif category == 'warning' %}color: var(--brand-gold-300); filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));{% else %}color: var(--trust-300); filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.5));{% endif %}"></i>
-                            </div>
-                            <div class="ml-3 flex-1">
-                                <p class="text-sm font-bold" 
-                                   style="{% if category == 'error' %}color: var(--alert-300);{% elif category == 'success' %}color: var(--brand-emerald-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--trust-300);{% endif %}">
+                        <div class="flex items-start gap-3">
+                            <i class="{% if category == 'error' %}fas fa-times-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} mt-0.5"
+                               style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-500);{% endif %}"></i>
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold"
+                                   style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--text-secondary);{% endif %}">
                                     {{ message }}
                                 </p>
                             </div>
-                            <button @click="show = false" 
-                                    class="ml-3 flex-shrink-0 hover:scale-110 transition-transform"
-                                    style="{% if category == 'error' %}color: var(--alert-300);{% elif category == 'success' %}color: var(--brand-emerald-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--trust-300);{% endif %}">
+                            <button @click="show = false" class="flex-shrink-0 hover:scale-110 transition-transform"
+                                    style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--text-muted);{% endif %}">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -89,98 +151,77 @@
                 </div>
                 {% endif %}
             {% endwith %}
-            
+
             <!-- Form -->
             <form class="px-8 pb-8 pt-6 space-y-6" method="POST" action="{{ url_for('auth.login') }}" x-data="{ showPassword: false }">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                
-                <!-- Email Field -->
+
+                <!-- Email -->
                 <div class="space-y-2">
-                    <label for="email" class="block text-sm font-semibold text-textSecondary">
+                    <label for="email" class="block text-sm font-semibold" style="color: var(--text-secondary);">
                         Endereço de email
                     </label>
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <i class="fas fa-envelope text-muted group-hover:text-textSecondary transition-colors"></i>
+                            <i class="fas fa-envelope" style="color: var(--text-muted);"></i>
                         </div>
-                        <input 
-                            id="email" 
-                            name="email" 
-                            type="email" 
-                            required 
-                            autocomplete="email"
-                            class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl text-textPrimary placeholder-muted focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all"
-                            placeholder="exemplo@email.com">
+                        <input
+                            id="email" name="email" type="email" required autocomplete="email"
+                            class="appearance-none block w-full pl-11 pr-4 py-3.5 rounded-xl text-sm transition-all outline-none"
+                            style="background: var(--surface-low); border: 1px solid var(--border-subtle); color: var(--text-primary);"
+                            placeholder="exemplo@email.com"
+                            onfocus="this.style.borderColor='var(--brand-gold-500)'; this.style.boxShadow='0 0 0 2px rgba(255,184,0,0.15)'"
+                            onblur="this.style.borderColor='var(--border-subtle)'; this.style.boxShadow='none'">
                     </div>
                 </div>
 
-                <!-- Password Field -->
+                <!-- Password -->
                 <div class="space-y-2">
-                    <label for="password" class="block text-sm font-semibold text-textSecondary">
+                    <label for="password" class="block text-sm font-semibold" style="color: var(--text-secondary);">
                         Senha
                     </label>
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <i class="fas fa-lock text-muted group-hover:text-textSecondary transition-colors"></i>
+                            <i class="fas fa-lock" style="color: var(--text-muted);"></i>
                         </div>
-                        <input 
-                            id="password" 
-                            name="password" 
+                        <input
+                            id="password" name="password"
                             :type="showPassword ? 'text' : 'password'"
-                            required
-                            autocomplete="current-password"
-                            class="appearance-none block w-full pl-11 pr-12 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl text-textPrimary placeholder-muted focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all"
-                            placeholder="••••••••">
-                        <!-- Show/Hide Password Toggle -->
-                        <button 
-                            type="button"
-                            @click="showPassword = !showPassword"
-                            class="absolute inset-y-0 right-0 pr-4 flex items-center text-muted hover:text-accent500 transition-colors focus:outline-none"
-                            tabindex="-1">
+                            required autocomplete="current-password"
+                            class="appearance-none block w-full pl-11 pr-12 py-3.5 rounded-xl text-sm transition-all outline-none"
+                            style="background: var(--surface-low); border: 1px solid var(--border-subtle); color: var(--text-primary);"
+                            placeholder="Senha"
+                            onfocus="this.style.borderColor='var(--brand-gold-500)'; this.style.boxShadow='0 0 0 2px rgba(255,184,0,0.15)'"
+                            onblur="this.style.borderColor='var(--border-subtle)'; this.style.boxShadow='none'">
+                        <button type="button" @click="showPassword = !showPassword"
+                                class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors outline-none"
+                                style="color: var(--text-muted);">
                             <i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'" class="text-base"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- Remember Me + Forgot Password -->
+                <!-- Remember Me + Forgot -->
                 <div class="flex items-center justify-between">
-                    <label for="remember" class="flex items-center cursor-pointer group">
-                        <div class="relative">
-                            <input 
-                                id="remember" 
-                                name="remember" 
-                                type="checkbox" 
-                                class="peer sr-only">
-                            <div class="w-5 h-5 rounded transition-all duration-200 peer-checked:scale-110"
-                                 style="background: var(--dark-900); border: 2px solid rgba(245, 158, 11, 0.3);">
-                            </div>
-                            <div class="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                <i class="fas fa-check text-xs font-black" style="color: var(--brand-gold-200); filter: drop-shadow(0 0 4px rgba(253, 230, 138, 0.6));"></i>
-                            </div>
+                    <label for="remember" class="flex items-center gap-3 cursor-pointer select-none">
+                        <input id="remember" name="remember" type="checkbox" class="sr-only peer">
+                        <div class="w-5 h-5 rounded transition-all duration-200 flex items-center justify-center"
+                             style="background: var(--surface-low); border: 2px solid rgba(255, 184, 0, 0.3);">
+                            <i class="fas fa-check text-xs opacity-0 peer-checked:opacity-100 transition-opacity" style="color: var(--brand-gold-500);"></i>
                         </div>
-                        <span class="ml-3 text-sm font-semibold select-none transition-colors group-hover:scale-105 transition-transform" 
-                              style="color: var(--txt-secondary);">
-                            Lembrar-me
-                        </span>
+                        <span class="text-sm font-medium" style="color: var(--text-tertiary);">Lembrar-me</span>
                     </label>
-
-                    <div class="text-sm">
-                        <a href="{{ url_for('auth.forgot_password') }}" class="font-semibold hover:scale-105 transition-transform inline-block"
-                           style="color: var(--brand-gold-200);">
-                            Esqueceu a senha?
-                        </a>
-                    </div>
+                    <a href="{{ url_for('auth.forgot_password') }}" class="text-sm font-semibold transition-colors" style="color: var(--brand-gold-500);">
+                        Esqueceu a senha?
+                    </a>
                 </div>
 
-                <!-- Submit Button -->
+                <!-- Submit -->
                 <div class="pt-2">
-                    <button 
-                        type="submit" 
-                        class="group relative w-full flex justify-center items-center py-4 px-6 border border-transparent rounded-xl text-base font-bold text-black bg-gradient-to-r from-accent500 to-accent600 hover:from-accent400 hover:to-accent500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface800 focus:ring-accent500 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-                        style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
-                        <span class="absolute left-6 inset-y-0 flex items-center">
-                            <i class="fas fa-sign-in-alt text-black opacity-80 group-hover:opacity-100 transition-opacity"></i>
-                        </span>
+                    <button type="submit"
+                            class="btn-glow w-full flex items-center justify-center gap-3 py-4 px-6 rounded-xl text-base font-bold transition-all"
+                            style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-700)); color: #000; box-shadow: var(--glow-gold);">
+                        <i class="fas fa-sign-in-alt"></i>
                         Acessar Painel
                     </button>
                 </div>
@@ -189,10 +230,10 @@
             <!-- Divider -->
             <div class="relative px-8 pb-6">
                 <div class="absolute inset-0 flex items-center px-8">
-                    <div class="w-full border-t border-white border-opacity-8"></div>
+                    <div class="w-full border-t" style="border-color: var(--border-subtle);"></div>
                 </div>
-                <div class="relative flex justify-center text-sm">
-                    <span class="px-4 bg-surface800 text-textSecondary font-medium">
+                <div class="relative flex justify-center">
+                    <span class="px-4 text-sm font-medium" style="background: var(--bg-primary); color: var(--text-muted);">
                         Novo por aqui?
                     </span>
                 </div>
@@ -200,12 +241,13 @@
 
             <!-- Secondary CTA -->
             <div class="px-8 pb-8">
-                <a
-                    href="{{ url_for('auth.register') }}"
-                    class="group w-full flex justify-center items-center py-3.5 px-6 border-2 border-accent500 border-opacity-30 rounded-xl text-sm font-semibold text-accent500 bg-transparent hover:bg-accent500 hover:bg-opacity-12 hover:border-opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface800 focus:ring-accent500 transition-all">
-                    <i class="fas fa-user-plus mr-2 group-hover:scale-110 transition-transform"></i>
+                <a href="{{ url_for('auth.register') }}"
+                   class="group w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl text-sm font-semibold transition-all"
+                   style="border: 2px solid var(--border-medium); color: var(--text-secondary);">
+                    <i class="fas fa-user-plus group-hover:scale-110 transition-transform"></i>
                     Criar conta grátis
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-accent500 bg-opacity-20 text-accent400 border border-accent500 border-opacity-30">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold"
+                          style="background: rgba(255,184,0,0.15); color: var(--brand-gold-500); border: 1px solid rgba(255,184,0,0.3);">
                         FREE
                     </span>
                 </a>
@@ -214,21 +256,17 @@
 
         <!-- Footer Info -->
         <div class="text-center space-y-3">
-            <p class="text-xs text-textSecondary">
-                Ao continuar, você concorda com os 
-                <a href="/termos-de-uso" target="_blank" class="text-accent500 hover:text-accent400 underline">Termos de Uso</a>
+            <p class="text-xs" style="color: var(--text-muted);">
+                Ao continuar, você concorda com os
+                <a href="/termos-de-uso" target="_blank" style="color: var(--brand-gold-500);" class="hover:underline">Termos de Uso</a>
                 e
-                <a href="/politica-privacidade" target="_blank" class="text-accent500 hover:text-accent400 underline">Política de Privacidade</a>
+                <a href="/politica-privacidade" target="_blank" style="color: var(--brand-gold-500);" class="hover:underline">Política de Privacidade</a>
             </p>
-            
-            <!-- Social Proof Sutil -->
-            <div class="flex items-center justify-center space-x-2 text-xs text-muted">
-                <i class="fas fa-shield-alt text-success-500"></i>
+            <div class="flex items-center justify-center gap-2 text-xs" style="color: var(--text-muted);">
+                <i class="fas fa-shield-alt" style="color: var(--brand-green-500);"></i>
                 <span>Plataforma segura com criptografia SSL</span>
             </div>
         </div>
     </div>
 </div>
-
-<!-- Alpine.js para show/hide password -->
 {% endblock %}

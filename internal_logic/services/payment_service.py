@@ -24,6 +24,7 @@ from gateways.gateway_orionpay import OrionPayGateway
 from gateways.gateway_pushyn import PushynGateway
 from gateways.gateway_umbrellapag import UmbrellaPagGateway
 from gateways.gateway_babylon import BabylonGateway
+from gateways.gateway_sigilopay import SigiloPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ class GatewayFactory:
         'pushyn': PushynGateway,
         'umbrellapag': UmbrellaPagGateway,
         'babylon': BabylonGateway,
+        'sigilopay': SigiloPayGateway,
     }
     
     @classmethod
@@ -186,6 +188,11 @@ class GatewayFactory:
                     api_key=credentials.get('api_key', ''), 
                     split_user_id=credentials.get('split_user_id'), 
                     split_percentage=credentials.get('split_percentage')
+                )
+            elif gateway_type == 'sigilopay':
+                gateway_instance = gateway_class(
+                    api_key=credentials.get('api_key', ''),
+                    secret_key=credentials.get('client_secret', '')
                 )
             else:
                 # Para outros (OrionPay, Pushyn, UmbrellaPag)

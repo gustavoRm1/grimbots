@@ -16,6 +16,7 @@ from .gateway_orionpay import OrionPayGateway
 from .gateway_babylon import BabylonGateway
 from .gateway_bolt import BoltGateway
 from .gateway_aguia import AguiaGateway
+from .gateway_sigilopay import SigiloPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class GatewayFactory:
         'babylon': BabylonGateway,  # Babylon
         'bolt': BoltGateway,  # Bolt Pagamentos
         'aguia': AguiaGateway,  # ÁguiaPags
+        'sigilopay': SigiloPayGateway,  # SigiloPay
     }
     
     @classmethod
@@ -262,6 +264,24 @@ class GatewayFactory:
                 
                 gateway = gateway_class(
                     api_key=api_key
+                )
+            
+            elif gateway_type == 'sigilopay':
+                # ✅ SigiloPay requer: api_key (x-public-key) e client_secret (x-secret-key)
+                api_key = credentials.get('api_key')
+                secret_key = credentials.get('client_secret')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] SigiloPay requer api_key (x-public-key)")
+                    return None
+                
+                if not secret_key:
+                    logger.error(f"❌ [Factory] SigiloPay requer client_secret (x-secret-key)")
+                    return None
+                
+                gateway = gateway_class(
+                    api_key=api_key,
+                    secret_key=secret_key
                 )
             
             else:

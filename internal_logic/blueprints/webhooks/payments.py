@@ -198,6 +198,8 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
         dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
     elif gateway_type == 'aguia':
         dummy_credentials = {'api_key': 'dummy'}
+    elif gateway_type == 'sigilopay':
+        dummy_credentials = {'api_key': 'dummy', 'client_secret': 'dummy'}
 
     # 2. Instanciamento via Factory (Adapter Pattern)
     gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)

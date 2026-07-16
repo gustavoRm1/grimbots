@@ -223,34 +223,12 @@ class Bot(db.Model):
     is_running = db.Column(db.Boolean, default=False, index=True)  # Indexado para filtrar bots em execução
     last_error = db.Column(db.Text)
     
-    # ✅ COLUNAS REMOVIDAS (não existem no banco legado):
-    # Circuit Breaker - Controle de saúde e falhas (DESATIVADO para compatibilidade legacy)
-    # error_count = db.Column(db.Integer, default=0)
-    # consecutive_failures = db.Column(db.Integer, default=0)
-    # circuit_breaker_until = db.Column(db.DateTime, index=True)
-    # health_status = db.Column(db.String(20), default='online')
-    # last_health_check = db.Column(db.DateTime)
-    
-    # Para compatibilidade com código que ainda referencia esses campos:
-    @property
-    def error_count(self):
-        return 0
-    
-    @property
-    def consecutive_failures(self):
-        return 0
-    
-    @property
-    def circuit_breaker_until(self):
-        return None
-    
-    @property
-    def health_status(self):
-        return 'online'
-    
-    @property
-    def last_health_check(self):
-        return None
+    # Circuit Breaker - Controle de saúde e falhas (colunas existem no banco)
+    error_count = db.Column(db.Integer, default=0)
+    consecutive_failures = db.Column(db.Integer, default=0)
+    circuit_breaker_until = db.Column(db.DateTime, index=True)
+    health_status = db.Column(db.String(20), default='healthy')
+    last_health_check = db.Column(db.DateTime)
     
     # Estatísticas
     total_users = db.Column(db.Integer, default=0)
@@ -1047,6 +1025,9 @@ class Gateway(db.Model):
         elif self.gateway_type == 'aguia':
             result['api_key'] = self.api_key  # API Key (criptografada)
             # ÁguiaPags não usa webhook_secret (webhook stateless)
+        elif self.gateway_type == 'sigilopay':
+            result['api_key'] = self.api_key  # Public Key (x-public-key)
+            result['client_secret'] = self.client_secret  # Secret Key (x-secret-key)
         
         return result
 
