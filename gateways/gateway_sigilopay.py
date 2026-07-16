@@ -1,4 +1,5 @@
 import logging
+import re
 import requests
 from typing import Dict, Optional, Any
 from .gateway_interface import PaymentGateway
@@ -34,19 +35,24 @@ class SigiloPayGateway(PaymentGateway):
 
             amount_cents = int(amount * 100)
 
+            raw_phone = customer_data.get("phone", "") if customer_data else ""
+            clean_phone = re.sub(r'\D', '', raw_phone)
+            if len(clean_phone) < 10 or len(clean_phone) > 13:
+                clean_phone = "5511999999999"
+
             if customer_data:
                 client = {
                     "name": customer_data.get("name", "Cliente Grimbots"),
                     "email": customer_data.get("email", "cliente@grimbots.com"),
                     "document": customer_data.get("document", "00000000000"),
-                    "phone": customer_data.get("phone", "00000000000")
+                    "phone": clean_phone
                 }
             else:
                 client = {
                     "name": "Cliente Grimbots",
                     "email": "cliente@grimbots.com",
                     "document": "00000000000",
-                    "phone": "00000000000"
+                    "phone": clean_phone
                 }
 
             prod_id = str(payment_id)[:20] or "prod-grimbots"
