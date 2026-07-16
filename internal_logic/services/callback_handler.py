@@ -683,12 +683,6 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             
             logger.info(f"🎁 Order Bump Downsell ACEITO | Downsell: {downsell_idx} | Valor Total: R$ {total_price:.2f}")
             
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
             # Gerar PIX com valor total (downsell + order bump)
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -703,6 +697,15 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 is_downsell=True,
                 downsell_index=downsell_idx
             )
+            
+            # Responder callback (cosmético, não crítico — NUNCA bloqueia PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
             
             if pix_data and pix_data.get('pix_code'):
                 payment_message = f"""🎯 <b>Produto:</b> Oferta Especial + Bônus
@@ -746,12 +749,6 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             
             logger.info(f"🎁 Order Bump Downsell RECUSADO | Downsell: {downsell_idx} | Valor: R$ {downsell_price:.2f}")
             
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
             # Gerar PIX apenas com valor do downsell (sem order bump)
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -766,6 +763,15 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 is_downsell=True,
                 downsell_index=downsell_idx
             )
+            
+            # Responder callback (cosmético, não crítico — NUNCA bloqueia PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
             
             if pix_data and pix_data.get('pix_code'):
                 payment_message = f"""🎯 <b>Produto:</b> Oferta Especial
@@ -829,12 +835,6 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             
             logger.info(f"💜 DOWNSELL PERCENTUAL CLICADO | Downsell: {downsell_idx} | Produto: {product_name} | Valor: R$ {price:.2f}")
             
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
             # Gerar PIX do downsell
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -846,6 +846,15 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 is_downsell=True,
                 downsell_index=downsell_idx
             )
+            
+            # Responder callback (cosmético, não crítico — NUNCA bloqueia PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
             
             if pix_data and pix_data.get('pix_code'):
                 payment_message = f"""🎯 <b>Produto:</b> {description}
@@ -1013,12 +1022,6 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 return  # Aguarda resposta do order bump
             
             # SEM ORDER BUMP - Gerar PIX direto
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
             # Gerar PIX do downsell
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -1030,6 +1033,15 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 is_downsell=True,
                 downsell_index=downsell_idx
             )
+            
+            # Responder callback (cosmético, não crítico — NUNCA bloqueia PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
             
             if pix_data and pix_data.get('pix_code'):
                 # ✅ PIX em linha única dentro de <code> para copiar com um toque
@@ -1198,12 +1210,6 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 logger.warning(f"⚠️ Order bump para upsell ainda não implementado, processando direto")
             
             # SEM ORDER BUMP - Gerar PIX direto
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
             # Gerar PIX do upsell
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -1215,6 +1221,16 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 is_upsell=True,  # ✅ Marcar como upsell
                 upsell_index=upsell_idx  # ✅ Passar índice do upsell
             )
+            
+            # Responder callback (cosmético, não crítico — NUNCA bloqueia PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
+            
             # ✅ UX FIX: Tratamento Amigável de Rate Limit
             if pix_data and pix_data.get('rate_limit'):
                 wait_time_msg = pix_data.get('wait_time', 'alguns segundos')

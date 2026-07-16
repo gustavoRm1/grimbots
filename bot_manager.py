@@ -1618,9 +1618,8 @@ class BotManager:
                     self._handle_callback_query(bot_id, token, config, callback)
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao processar update do bot {bot_id}: {e}")
             import traceback
-            traceback.print_exc()
+            logger.error(f"❌ Erro ao processar update do bot {bot_id}: {e}\n{traceback.format_exc()}")
     
     def _process_telegram_update_direct(self, bot_id: int, token: str, config: Dict[str, Any], 
                                          update: Dict[str, Any]) -> None:
@@ -1701,15 +1700,14 @@ class BotManager:
             logger.info(f"✅ [FALLBACK DIRECT] Update {update_id} processado com sucesso")
             
         except Exception as e:
-            logger.error(f"❌ [FALLBACK DIRECT] Erro ao processar: {e}")
+            import traceback
+            logger.error(f"❌ [FALLBACK DIRECT] Erro ao processar: {e}\n{traceback.format_exc()}")
             # 🔥 CRÍTICO: Limpar transação suja antes de propagar erro
             try:
                 from internal_logic.core.extensions import db
                 db.session.rollback()
             except Exception:
                 pass
-            import traceback
-            traceback.print_exc()
             raise  # Propagar erro para que o caller saiba que falhou
     
     def _handle_text_message(self, bot_id: int, token: str, config: Dict[str, Any], 
