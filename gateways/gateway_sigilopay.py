@@ -72,30 +72,40 @@ class SigiloPayGateway(PaymentGateway):
         try:
             logger.info(f"SigiloPay: Gerando PIX - Amount: {amount}, PaymentID: {payment_id}")
 
-            real_name, real_cpf = _sortear_identidade()
-            timestamp_ms = int(time.time() * 1000)
-            unique_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}".encode()).hexdigest()[:8]
-
-            first_name = real_name.split()[0].lower() if ' ' in real_name else real_name.lower()
-            cpf_last4 = real_cpf[-4:]
-            unique_email = f"{first_name}{cpf_last4}@gmail.com"
-            unique_name = real_name[:30] if len(real_name) > 30 else real_name
-
-            only_digits = re.sub(r'\D', '', f"119{unique_hash}{cpf_last4}")
-            only_digits = only_digits[:11].ljust(11, '0')
-            ddd = only_digits[:2]
-            first5 = only_digits[2:7]
-            last4 = only_digits[7:]
-            unique_phone = f"({ddd}) {first5}-{last4}"
-
-            formatted_cpf = f"{real_cpf[:3]}.{real_cpf[3:6]}.{real_cpf[6:9]}-{real_cpf[9:]}"
-
-            client = {
-                "name": unique_name,
-                "email": unique_email,
-                "cpf": formatted_cpf,
-                "phone": unique_phone
-            }
+            # Use customer_data if provided, otherwise generate random KYC identity
+            if customer_data and customer_data.get('document'):
+                raw_cpf = re.sub(r'\D', '', str(customer_data['document']))
+                client_name = str(customer_data.get('name', 'Cliente'))[:30]
+                client_email = str(customer_data.get('email', raw_cpf[-4:] + '@gmail.com'))
+                client_phone = str(customer_data.get('phone', '(11) 99999-9999'))
+                formatted_cpf = f"{raw_cpf[:3]}.{raw_cpf[3:6]}.{raw_cpf[6:9]}-{raw_cpf[9:]}"
+                client = {
+                    "name": client_name,
+                    "email": client_email,
+                    "document": formatted_cpf,
+                    "phone": client_phone
+                }
+            else:
+                real_name, real_cpf = _sortear_identidade()
+                formatted_cpf = f"{real_cpf[:3]}.{real_cpf[3:6]}.{real_cpf[6:9]}-{real_cpf[9:]}"
+                first_name = real_name.split()[0].lower() if ' ' in real_name else real_name.lower()
+                cpf_last4 = real_cpf[-4:]
+                client_email = first_name + cpf_last4 + '@gmail.com'
+                client_name = real_name[:30] if len(real_name) > 30 else real_name
+                timestamp_ms = int(time.time() * 1000)
+                unique_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}".encode()).hexdigest()[:8]
+                only_digits = re.sub(r'\D', '', '119' + unique_hash + cpf_last4)
+                only_digits = only_digits[:11].ljust(11, '0')
+                ddd = only_digits[:2]
+                first5 = only_digits[2:7]
+                last4 = only_digits[7:]
+                client_phone = f"({ddd}) {first5}-{last4}"
+                client = {
+                    "name": client_name,
+                    "email": client_email,
+                    "document": formatted_cpf,
+                    "phone": client_phone
+                }
 
             prod_id = str(payment_id)[:20] or "prod-grimbots"
 
