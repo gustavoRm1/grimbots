@@ -38,14 +38,18 @@ class SigiloPayGateway(PaymentGateway):
                 client = {
                     "name": customer_data.get("name", "Cliente Grimbots"),
                     "email": customer_data.get("email", "cliente@grimbots.com"),
-                    "document": customer_data.get("document", "00000000000")
+                    "document": customer_data.get("document", "00000000000"),
+                    "phone": customer_data.get("phone", "00000000000")
                 }
             else:
                 client = {
                     "name": "Cliente Grimbots",
                     "email": "cliente@grimbots.com",
-                    "document": "00000000000"
+                    "document": "00000000000",
+                    "phone": "00000000000"
                 }
+
+            prod_id = str(payment_id)[:20] or "prod-grimbots"
 
             payload = {
                 "identifier": str(payment_id),
@@ -53,6 +57,9 @@ class SigiloPayGateway(PaymentGateway):
                 "client": client,
                 "products": [
                     {
+                        "id": prod_id,
+                        "name": description or "Produto Digital Grimbots",
+                        "price": amount_cents,
                         "title": description or "Produto Digital Grimbots",
                         "value": amount_cents,
                         "amount": 1
