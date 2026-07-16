@@ -103,6 +103,7 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
             }
         else:
             logger.error(f"Falha ao gerar PIX via PaymentService: {response.error_message}")
+            return None  # Não cair no fallback legado — gateway já rejeitou os dados
     except Exception as e:
         logger.error(f"Erro na integracao PaymentService: {e}")
         logger.info("Fallback para logica legada de PIX...")
@@ -442,8 +443,8 @@ def generate_pix_payment(bot_id: int, amount: float, description: str,
                 'name': customer_name or 'Cliente',
                 'email': f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
                 'phone': customer_user_id,
-                'document': customer_user_id
             }
+            # document NÃO é enviado — SigiloPayGateway já sorteia CPF do CSV KYC internamente
             pix_result = payment_gateway.generate_pix(
                 amount=amount,
                 description=description,

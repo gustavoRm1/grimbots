@@ -245,9 +245,6 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
             # 5. Processar Confirmação via Service (Centralizado)
             try:
                 from internal_logic.services.payment_processor import process_payment_confirmation
-                
-                # ✅ SENIOR: O processador é quem deve gerenciar o status e o commit
-                # para garantir que estatísticas, comissões e entrega ocorram em uma única transação atômica.
                 result_proc = process_payment_confirmation(payment, gateway_type)
                 
                 if result_proc.get('status') == 'processed':
@@ -263,6 +260,17 @@ def _process_payment_webhook_sync(gateway_type: str, data: dict) -> bool:
             except Exception as proc_error:
                 logger.error(f"❌ [ERROR] Erro ao processar confirmação de pagamento: {proc_error}", exc_info=True)
                 return False
+
+        # Status de falha/cancelamento — atualizar o payment sem entregar produto
+        elif status_recebido in ['failed', 'cancelled', 'refunded', 'chargedback']:
+            if payment.status not in ('paid', 'failed', 'refunded'):
+                if status_recebido in ('refunded', 'chargedback'):
+                    payment.status = 'refunded'
+                else:
+                    payment.status = 'failed'
+                db.session.commit()
+                logger.info(f"[AUDIT] Payment {payment.id} atualizado para {payment.status} via webhook")
+            return True
     
     logger.warning(f"[AUDIT] Falha: Pagamento {event_ref or event_id} não localizado no banco.")
     return False

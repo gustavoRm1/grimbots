@@ -1,10 +1,49 @@
 import logging
 import re
+import random
+import hashlib
+import time
+import csv
+import os
 import requests
 from typing import Dict, Optional, Any
 from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
+
+# ===== KYC: Cache de identidades do CSV (mesmo padrão Paradise) =====
+_VALID_IDENTITIES_CACHE = []
+_VALID_CPFS_FALLBACK = [
+    '56657477007', '06314127513', '25214446772',
+    '27998261321', '09553238602', '48317801896',
+    '21540970817', '21996866900', '15721994746'
+]
+
+
+def _load_identities_if_needed():
+    global _VALID_IDENTITIES_CACHE
+    if not _VALID_IDENTITIES_CACHE:
+        try:
+            csv_path = os.path.join(os.path.dirname(__file__), 'cpf_nome_formatado.csv')
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if len(row) >= 2:
+                        _VALID_IDENTITIES_CACHE.append({'cpf': row[0].strip(), 'nome': row[1].strip()})
+            logger.info(f"KYC SigiloPay: {len(_VALID_IDENTITIES_CACHE)} identidades carregadas")
+        except Exception as e:
+            logger.error(f"KYC SigiloPay erro: {e}")
+
+
+def _sortear_identidade() -> tuple:
+    """Retorna (nome, cpf_somente_digitos)."""
+    _load_identities_if_needed()
+    if _VALID_IDENTITIES_CACHE:
+        identity = random.choice(_VALID_IDENTITIES_CACHE)
+        return identity['nome'], re.sub(r'\D', '', identity['cpf'])
+    cpf = random.choice(_VALID_CPFS_FALLBACK)
+    return "Cliente Padrão", cpf
 
 
 class SigiloPayGateway(PaymentGateway):
@@ -35,39 +74,26 @@ class SigiloPayGateway(PaymentGateway):
 
             amount_cents = int(amount * 100)
 
-            raw_phone = customer_data.get("phone", "") if customer_data else ""
-            clean_phone = re.sub(r'\D', '', raw_phone)
-            if clean_phone.startswith("55"):
-                clean_phone = clean_phone
-            elif len(clean_phone) >= 10:
-                clean_phone = "55" + clean_phone
-            else:
-                clean_phone = "5511999999999"
-            clean_phone = "+" + clean_phone
+            real_name, real_cpf = _sortear_identidade()
+            timestamp_ms = int(time.time() * 1000)
+            unique_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}".encode()).hexdigest()[:8]
 
-            raw_doc = (customer_data.get("document") or "") if customer_data else ""
-            clean_doc = re.sub(r'\D', '', raw_doc)
-            if len(clean_doc) == 11:
-                formatted_doc = f"{clean_doc[:3]}.{clean_doc[3:6]}.{clean_doc[6:9]}-{clean_doc[9:]}"
-            elif len(clean_doc) == 14:
-                formatted_doc = f"{clean_doc[:2]}.{clean_doc[2:5]}.{clean_doc[5:8]}/{clean_doc[8:12]}-{clean_doc[12:]}"
-            else:
-                formatted_doc = raw_doc or "000.000.000-00"
+            first_name = real_name.split()[0].lower() if ' ' in real_name else real_name.lower()
+            cpf_last4 = real_cpf[-4:]
+            unique_email = f"{first_name}{cpf_last4}@gmail.com"
+            unique_name = real_name[:30] if len(real_name) > 30 else real_name
 
-            if customer_data:
-                client = {
-                    "name": customer_data.get("name", "Cliente Grimbots"),
-                    "email": customer_data.get("email", "cliente@grimbots.com"),
-                    "document": formatted_doc,
-                    "phone": clean_phone
-                }
-            else:
-                client = {
-                    "name": "Cliente Grimbots",
-                    "email": "cliente@grimbots.com",
-                    "document": "000.000.000-00",
-                    "phone": clean_phone
-                }
+            digits = re.sub(r'\D', '', f"11{unique_hash}{cpf_last4}")
+            unique_phone = "+" + digits[:13]
+
+            formatted_cpf = f"{real_cpf[:3]}.{real_cpf[3:6]}.{real_cpf[6:9]}-{real_cpf[9:]}"
+
+            client = {
+                "name": unique_name,
+                "email": unique_email,
+                "cpf": formatted_cpf,
+                "phone": unique_phone
+            }
 
             prod_id = str(payment_id)[:20] or "prod-grimbots"
 
@@ -295,14 +321,26 @@ class SigiloPayGateway(PaymentGateway):
 
             logger.info(f"SigiloPay Webhook: Processado - PaymentID: {payment_id}, Event: {event}, Status: {status}")
 
+            amount_raw = transaction.get('amount')
+            amount = float(amount_raw) / 100.0 if amount_raw is not None else None
+
+            client_info = data.get('client') or transaction.get('client') or {}
+            payer_name = client_info.get('name') if isinstance(client_info, dict) else None
+            payer_doc = None
+            if isinstance(client_info, dict):
+                payer_doc = client_info.get('cpf') or client_info.get('cnpj')
+            end_to_end = None
+            if isinstance(transaction.get('pixInformation'), dict):
+                end_to_end = transaction['pixInformation'].get('endToEndId')
+
             return {
                 'payment_id': payment_id,
                 'status': status,
                 'gateway_transaction_id': transaction_id,
-                'amount': None,
-                'payer_name': None,
-                'payer_document': None,
-                'end_to_end_id': None
+                'amount': amount,
+                'payer_name': payer_name,
+                'payer_document': payer_doc,
+                'end_to_end_id': end_to_end
             }
 
         except Exception as e:

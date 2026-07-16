@@ -1399,6 +1399,104 @@ def reconcile_bolt_payments():
         logger.error(f"❌ Reconciliador Bolt: erro: {e}", exc_info=True)
 
 
+# ==================== RECONCILIADOR SIGILOPAY ====================
+
+
+def reconcile_sigilopay_payments():
+    """
+    Reconciliação SigiloPay — batch de 3, intervalo 5min (respeitar anti-polling).
+    Pagamentos que ficaram em pending/pending_verification são verificados.
+    """
+    try:
+        with current_app.app_context():
+            from internal_logic.core.models import Payment, Gateway, get_brazil_time, User
+
+            pending = Payment.query.filter(
+                Payment.gateway_type == 'sigilopay',
+                Payment.status.in_(['pending', 'pending_verification'])
+            ).order_by(Payment.created_at.desc()).limit(3).all()
+
+            if not pending:
+                logger.debug("Reconciliador SigiloPay: Nenhum payment pendente")
+                return
+
+            logger.info(f"Reconciliador SigiloPay: {len(pending)} pendentes")
+
+            gateways_by_user = {}
+            for p in pending:
+                try:
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        continue
+
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(
+                            user_id=user_id, gateway_type='sigilopay',
+                            is_active=True, is_verified=True
+                        ).first()
+                        if not gw:
+                            continue
+                        creds = {'api_key': gw.api_key, 'client_secret': gw.client_secret}
+                        g = GatewayFactory.create_gateway('sigilopay', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+
+                    gateway = gateways_by_user[user_id]
+                    txid = p.gateway_transaction_id
+                    if not txid:
+                        continue
+
+                    result = gateway.get_payment_status(str(txid))
+                    if not result:
+                        continue
+
+                    remote_status = result.get('status')
+                    if p.status != 'paid' and remote_status == 'paid':
+                        p.status = 'paid'
+                        p.paid_at = get_brazil_time()
+                        if p.bot:
+                            p.bot.total_sales += 1
+                            p.bot.total_revenue += p.amount
+                            if p.bot.user_id:
+                                user = User.query.get(p.bot.user_id)
+                                if user:
+                                    user.total_sales += 1
+                                    user.total_revenue += p.amount
+                        db.session.commit()
+
+                        try:
+                            payment_obj = Payment.query.get(p.id)
+                            if payment_obj:
+                                db.session.refresh(payment_obj)
+                                if payment_obj.status == 'paid':
+                                    send_payment_delivery(payment_obj)
+                        except Exception as e:
+                            logger.error(f"Erro entregável SigiloPay: {e}")
+
+                        try:
+                            if p.bot and p.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': p.id,
+                                    'status': 'paid',
+                                    'amount': float(p.amount),
+                                    'bot_id': p.bot_id,
+                                }, room=f'user_{p.bot.user_id}')
+                        except Exception as e:
+                            logger.error(f"Erro WebSocket SigiloPay: {e}")
+
+                        logger.info(f"SigiloPay: Payment {p.id} pago via reconciliação")
+                    elif remote_status in ('failed', 'cancelled'):
+                        p.status = 'failed'
+                        db.session.commit()
+                        logger.info(f"SigiloPay: Payment {p.id} falhou via reconciliação")
+                except Exception as e:
+                    logger.error(f"Erro reconciliação SigiloPay {p.id}: {e}")
+                    continue
+    except Exception as e:
+        logger.error(f"Reconciliador SigiloPay erro: {e}")
+
+
 # ==================== JOBS DE ASSINATURA (STUBS - IMPLEMENTAR) ====================
 
 def check_expired_subscriptions():

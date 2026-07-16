@@ -91,6 +91,12 @@ def reconcile_bolt():
     run_with_context(reconcile_bolt_payments, "reconcile_bolt")
 
 
+def reconcile_sigilopay():
+    """Reconciliação SigiloPay - executar a cada 5 minutos (respeitar anti-polling)"""
+    from internal_logic.services.payment_processor import reconcile_sigilopay_payments
+    run_with_context(reconcile_sigilopay_payments, "reconcile_sigilopay")
+
+
 def reconcile_all():
     """Executa todos os reconciliadores em sequência"""
     jobs = [
@@ -99,6 +105,7 @@ def reconcile_all():
         reconcile_atomopay,
         reconcile_aguia,
         reconcile_bolt,
+        reconcile_sigilopay,
     ]
     
     logger.info("🚀 Iniciando reconciliação completa de todos os gateways")
@@ -167,6 +174,7 @@ def main():
         'reconcile_atomopay': reconcile_atomopay,
         'reconcile_aguia': reconcile_aguia,
         'reconcile_bolt': reconcile_bolt,
+        'reconcile_sigilopay': reconcile_sigilopay,
         'reconcile_all': reconcile_all,
         'check_expired_subscriptions': check_expired_subscriptions,
         'reset_error_count': reset_error_count,
