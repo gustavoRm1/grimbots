@@ -1350,6 +1350,7 @@ def process_telegram_message_async(bot_id: int, update_data: Dict[str, Any], tok
                 logger.critical(f"✅ [MESSAGE PROCESSED] Job: {job_id} | Bot: {bot_id}")
             except Exception as e:
                 logger.critical(f"❌ [MESSAGE FAILED] Erro no processamento: {e}", exc_info=True)
+                raise  # ✅ RQ marca como failed + salva exc_info
                 
     except Exception as e:
         logger.critical(f"💀 [FATAL] Erro crítico no Worker Telegram: {e}", exc_info=True)

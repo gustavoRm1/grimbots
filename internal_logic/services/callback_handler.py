@@ -1321,12 +1321,16 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 return  # Aguarda resposta dos order bumps
             
             # SEM ORDER BUMP - Gerar PIX direto
-            # Responder callback
-            requests.post(url, json={
-                'callback_query_id': callback_id,
-                'text': '🔄 Gerando pagamento PIX...'
-            }, timeout=3)
-            
+            # Responder callback (não crítico — não pode travar o PIX)
+            try:
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+            except Exception:
+                logger.warning("⚠️ Não foi possível responder callback (não crítico)")
+
+            logger.info(f"🔘 [BUY FLOW] Iniciando geração PIX...")
             logger.info(f"📝 Sem order bump - gerando PIX direto...")
             pix_data = bot_manager._generate_pix_payment(
                 bot_id=bot_id,
@@ -1341,11 +1345,14 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             # ✅ UX FIX: Tratamento Amigável de Rate Limit
             if pix_data and pix_data.get('rate_limit'):
                 wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
-                bot_manager.send_telegram_message(
-                    chat_id=chat_id,
-                    message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
-                    token=token
-                )
+                try:
+                    bot_manager.send_telegram_message(
+                        chat_id=chat_id,
+                        message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        token=token
+                    )
+                except Exception:
+                    logger.warning("⚠️ Falha ao enviar rate limit (não crítico)")
                 return
             
             if pix_data and pix_data.get('pix_code'):
@@ -1370,12 +1377,15 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                     'callback_data': f'verify_{pix_data.get("payment_id")}'
                 }]
                 
-                bot_manager.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=payment_message.strip(),
-                    buttons=buttons
-                )
+                try:
+                    bot_manager.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                except Exception:
+                    logger.warning("⚠️ Falha ao enviar PIX para o cliente (não crítico)")
                 
                 logger.info(f"✅ PIX ENVIADO! ID: {pix_data.get('payment_id')}")
                 
@@ -1430,11 +1440,14 @@ Você já tem um PIX pendente para outro produto.
 
 <i>Você pode verificar seu PIX atual em "Verificar Pagamento"</i>
                 """
-                bot_manager.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=rate_limit_message.strip()
-                )
+                try:
+                    bot_manager.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=rate_limit_message.strip()
+                    )
+                except Exception:
+                    logger.warning("⚠️ Falha ao enviar rate limit (não crítico)")
             elif pix_data is None:
                 # PIX não foi gerado (erro no gateway)
                 logger.error(f"❌ pix_data é None - erro no gateway")
@@ -1445,11 +1458,14 @@ Desculpe, não foi possível processar seu pagamento.
 
 <b>Entre em contato com o suporte.</b>
                 """
-                bot_manager.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=error_message.strip()
-                )
+                try:
+                    bot_manager.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=error_message.strip()
+                    )
+                except Exception:
+                    logger.warning("⚠️ Falha ao enviar mensagem de erro (não crítico)")
             else:
                 # Erro CRÍTICO ao gerar PIX
                 logger.error(f"❌ FALHA CRÍTICA: Não foi possível gerar PIX!")
@@ -1462,14 +1478,18 @@ Desculpe, não foi possível processar seu pagamento.
 
 <b>Entre em contato com o suporte.</b>
                 """
-                bot_manager.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=error_message.strip()
-                )
+                try:
+                    bot_manager.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=error_message.strip()
+                    )
+                except Exception:
+                    logger.warning("⚠️ Falha ao enviar mensagem de erro (não crítico)")
         
     except Exception as e:
         logger.error(f"❌ Erro ao processar callback: {e}")
         import traceback
         traceback.print_exc()
+        raise  # ✅ RQ marca como failed + salva exc_info
 
