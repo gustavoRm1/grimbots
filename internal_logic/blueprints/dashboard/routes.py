@@ -3093,6 +3093,48 @@ def api_update_gateway(gateway_id):
         return jsonify({'success': False, 'error': 'Erro ao atualizar gateway'}), 500
 
 
+@dashboard_bp.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_toggle_gateway(gateway_id):
+    gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+
+    if not gateway.is_verified:
+        return jsonify({'error': 'Gateway precisa estar verificado para ser ativado'}), 400
+
+    if not gateway.is_active:
+        Gateway.query.filter_by(user_id=current_user.id, is_active=True).update({'is_active': False})
+        gateway.is_active = True
+        message = f'Gateway {gateway.gateway_type} ativado'
+    else:
+        gateway.is_active = False
+        alt = Gateway.query.filter(
+            Gateway.user_id == current_user.id,
+            Gateway.id != gateway_id,
+            Gateway.is_verified == True
+        ).first()
+        if alt:
+            alt.is_active = True
+            message = f'Gateway {gateway.gateway_type} desativado. Gateway {alt.gateway_type} ativado automaticamente.'
+            logger.info(f"Gateway {gateway.gateway_type} desativado → {alt.gateway_type} ativado automaticamente por {current_user.email}")
+        else:
+            message = f'Gateway {gateway.gateway_type} desativado. Nenhum outro gateway verificado disponível - configure um para processar pagamentos.'
+            logger.warning(f"Gateway {gateway.gateway_type} desativado por {current_user.email} mas NENHUM outro gateway verificado disponível")
+
+    db.session.commit()
+    logger.info(f"Gateway {gateway.gateway_type} {'ativado' if gateway.is_active else 'desativado'} por {current_user.email}")
+
+    active_gateway = Gateway.query.filter_by(user_id=current_user.id, is_active=True).first()
+
+    return jsonify({
+        'success': True,
+        'message': message,
+        'is_active': gateway.is_active,
+        'active_gateway': active_gateway.gateway_type if active_gateway else None,
+        'warning': None if active_gateway else 'Nenhum gateway ativo - configure um para processar pagamentos'
+    })
+
+
 @dashboard_bp.route('/api/gateways/<int:gateway_id>/clear-credentials', methods=['POST', 'DELETE'])
 @login_required
 @csrf.exempt
