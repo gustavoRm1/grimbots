@@ -1429,6 +1429,8 @@ def process_webhook_async(user_id: int, gateway_type: str, data: Dict[str, Any])
                 dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
             elif gateway_type == 'aguia':
                 dummy_credentials = {'api_key': 'dummy'}
+            elif gateway_type == 'supremuspay':
+                dummy_credentials = {'api_key': 'dummy'}
             
             gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
             

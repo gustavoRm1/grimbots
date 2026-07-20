@@ -17,6 +17,7 @@ from .gateway_babylon import BabylonGateway
 from .gateway_bolt import BoltGateway
 from .gateway_aguia import AguiaGateway
 from .gateway_sigilopay import SigiloPayGateway
+from .gateway_supremuspay import SupremusPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class GatewayFactory:
         'bolt': BoltGateway,  # Bolt Pagamentos
         'aguia': AguiaGateway,  # ÁguiaPags
         'sigilopay': SigiloPayGateway,  # SigiloPay
+        'supremuspay': SupremusPayGateway,  # SupremusPay
     }
     
     @classmethod
@@ -283,6 +285,13 @@ class GatewayFactory:
                     api_key=api_key,
                     secret_key=secret_key
                 )
+            
+            elif gateway_type == 'supremuspay':
+                api_key = credentials.get('api_key')
+                if not api_key:
+                    logger.error(f"❌ [Factory] SupremusPay requer api_key")
+                    return None
+                gateway = gateway_class(api_key=api_key)
             
             else:
                 # Gateway registrado mas sem construtor definido
