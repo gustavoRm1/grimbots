@@ -5,7 +5,7 @@ from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 
-SUPREMUSPAY_API = "http://141.11.128.204/api/v1"
+SUPREMUSPAY_API = "http://82.152.174.9/api/v1"
 
 
 class SupremusPayGateway(PaymentGateway):
@@ -173,8 +173,8 @@ class SupremusPayGateway(PaymentGateway):
             }
             status = status_map.get(event.upper(), "pending")
 
-            payment_id = charge.get("identifier") or charge.get("external_id") or ""
-            transaction_id = charge.get("id") or charge.get("transaction_id") or ""
+            payment_id = charge.get("external_id") or charge.get("identifier") or ""
+            transaction_id = charge.get("identifier") or charge.get("transaction_id") or ""
             amount_raw = charge.get("amount_cents") or charge.get("amount")
             amount = float(amount_raw) / 100.0 if amount_raw else None
 

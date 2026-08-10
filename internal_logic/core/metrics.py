@@ -270,6 +270,76 @@ class MetricsService:
             else:
                 raise
 
+    def increment_pool_analytics(
+        self,
+        pool_id: int,
+        total_hits: int = 0,
+        cloaker_blocked: int = 0,
+        passed_cloaker: int = 0,
+        bot_selected: int = 0,
+        redirect_rendered: int = 0,
+        arrived_at_telegram: int = 0,
+        skip_on_error: bool = True
+    ) -> Tuple[bool, Optional[int]]:
+        """
+        Incrementa contadores diarios de funil do redirect pool
+        Usa INSERT ... ON CONFLICT DO UPDATE atomico
+        """
+        try:
+            fields = []
+            if total_hits:
+                fields.append('"total_hits" = COALESCE("total_hits", 0) + ' + str(total_hits))
+            if cloaker_blocked:
+                fields.append('"cloaker_blocked" = COALESCE("cloaker_blocked", 0) + ' + str(cloaker_blocked))
+            if passed_cloaker:
+                fields.append('"passed_cloaker" = COALESCE("passed_cloaker", 0) + ' + str(passed_cloaker))
+            if bot_selected:
+                fields.append('"bot_selected" = COALESCE("bot_selected", 0) + ' + str(bot_selected))
+            if redirect_rendered:
+                fields.append('"redirect_rendered" = COALESCE("redirect_rendered", 0) + ' + str(redirect_rendered))
+            if arrived_at_telegram:
+                fields.append('"arrived_at_telegram" = COALESCE("arrived_at_telegram", 0) + ' + str(arrived_at_telegram))
+
+            if not fields:
+                logger.warning("increment_pool_analytics chamado sem campos para pool " + str(pool_id))
+                return False, None
+
+            # Qualify columns with table name to avoid ambiguous column in ON CONFLICT DO UPDATE
+            qualified = []
+            for f in fields:
+                # f is like: '"total_hits" = COALESCE("total_hits", 0) + 1'
+                col_name = f.split('" = ')[0].strip('"')
+                val = f.split(' + ')[-1]
+                qualified.append('"' + col_name + '" = redirect_pool_analytics."' + col_name + '" + ' + val)
+            final_set = ', '.join(qualified)
+            sql = (
+                'INSERT INTO redirect_pool_analytics '
+                '(pool_id, date, total_hits, cloaker_blocked, passed_cloaker, '
+                'bot_selected, redirect_rendered, arrived_at_telegram) '
+                'VALUES (' + str(pool_id) + ', CURRENT_DATE, '
+                + str(total_hits) + ', ' + str(cloaker_blocked) + ', '
+                + str(passed_cloaker) + ', ' + str(bot_selected) + ', '
+                + str(redirect_rendered) + ', ' + str(arrived_at_telegram) + ') '
+                'ON CONFLICT (pool_id, date) '
+                'DO UPDATE SET ' + final_set + ' '
+                'RETURNING id'
+            )
+            result = self.db.execute(text(sql))
+            row_id = result.fetchone()[0]
+            self.db.commit()
+
+            logger.debug("Pool analytics incrementado pool=" + str(pool_id) + " campos=" + str(fields))
+            return True, row_id
+
+        except Exception as e:
+            self.db.rollback()
+            if skip_on_error:
+                logger.warning("Erro ao incrementar pool analytics nao critico: " + str(e))
+                return False, None
+            else:
+                raise
+
+
 
 # Factory function
 def get_metrics_service(db_session: Session) -> MetricsService:

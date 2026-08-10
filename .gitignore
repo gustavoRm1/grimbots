@@ -78,8 +78,10 @@ Thumbs.db
 # Backups
 *.backup
 *.bak
+*.bak.*
 *.orig
 *.rej
+*.pre-*
 backups/
 
 # Uploads

@@ -286,7 +286,7 @@
     <!-- Lista de Pools -->
     <div x-show="pools.length > 0" class="space-y-6">
         <template x-for="pool in pools" :key="pool.id">
-            <div class="pool-card">
+            <div class="pool-card" x-data="{ funnelOpen: false }">
                 <!-- Header - Responsivo -->
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                     <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -306,6 +306,13 @@
                               :class="pool.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
                         <span x-text="pool.is_active ? 'Ativo' : 'Inativo'"></span>
                     </span>
+                    <button @click="funnelOpen = !funnelOpen" class="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded transition-all duration-200 flex-shrink-0"
+                            :style="funnelOpen ? 'background: rgba(16, 185, 129, 0.15); color: #10B981;' : 'background: rgba(255,255,255,0.05); color: #9CA3AF;'"
+                            title="Ver funil de conversão">
+                        <i class="fas fa-chart-simple text-xs"></i>
+                        <span class="hidden sm:inline" x-text="funnelOpen ? 'Fechar' : 'Funil'"></span>
+                        <i class="fas fa-chevron-down text-[10px] transition-transform duration-200" :class="funnelOpen ? 'rotate-180' : ''"></i>
+                    </button>
                 </div>
 
                 <!-- Saúde do Pool - Responsivo -->
@@ -328,6 +335,37 @@
                         <i class="fas fa-check-circle mr-1" :class="pool.healthy_bots === pool.total_bots ? 'text-green-500' : 'text-gray-500'"></i>
                         <span x-text="pool.healthy_bots"></span>/<span x-text="pool.total_bots"></span> bots online
                     </p>
+                </div>
+
+                <!-- Funil de Analytics - SVG -->
+                <div class="p-3 sm:p-4 rounded-lg mb-3 sm:mb-4 border shadow-sm" style="background: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.18); box-shadow: 0 1px 6px rgba(16, 185, 129, 0.08); border-left: 3px solid #10B981;" x-show="funnelOpen" x-data="funnelData(pool.analytics_today || {})" x-transition.opacity.duration.300ms>
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <span class="text-xs sm:text-sm font-bold truncate" style="color: #10B981;">
+                            <i class="fas fa-chart-simple mr-1 sm:mr-2"></i>
+                            <span class="hidden sm:inline">Funil Hoje</span>
+                            <span class="sm:hidden">Funil</span>
+                        </span>
+                        <span class="flex items-baseline gap-1 flex-shrink-0">
+                            <span class="text-lg sm:text-xl font-bold" style="color: #10B981;" x-text="conversionRate"></span>
+                            <span class="text-[10px] text-gray-400 hidden sm:inline">conversão</span>
+                        </span>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 230" class="w-full h-auto block mt-1" x-ref="funnelSvg">
+                        <defs>
+                            <linearGradient id="fg0" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#059669"/></linearGradient>
+                            <linearGradient id="fg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#d97706"/></linearGradient>
+                            <linearGradient id="fg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+                            <linearGradient id="fg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
+                            <linearGradient id="fg4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f472b6"/><stop offset="100%" stop-color="#db2777"/></linearGradient>
+                        </defs>
+                    </svg>
+                    <p class="text-[11px] mt-2" style="color: #9CA3AF; font-style: italic;">
+                        <i class="fas fa-circle-info mr-1"></i>De quem clicou no link até chegar no Telegram
+                    </p>
+                    <div class="flex justify-between mt-2 pt-3" style="border-top: 1px solid rgba(16, 185, 129, 0.15);">
+                        <span class="text-xs" style="color: #f87171;">Bloqueados <b x-text="blocked"></b></span>
+                        <span class="text-xs" style="color: #22d3a5;">No Telegram <b x-text="arrived"></b></span>
+                    </div>
                 </div>
 
                 <!-- Métricas - Responsivo -->
@@ -1375,6 +1413,112 @@ function poolsApp() {
             notification.textContent = message;
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
+        }
+    };
+}
+
+function funnelData(analytics) {
+    return {
+        stages: [],
+        totalHits: 0,
+        arrived: 0,
+        blocked: 0,
+        conversionRate: '0%',
+        init() {
+            if (!analytics) return;
+            this.totalHits = analytics.total_hits || 0;
+            this.arrived = analytics.arrived_at_telegram || 0;
+            this.blocked = analytics.cloaker_blocked || 0;
+            this.conversionRate = this.totalHits > 0 ? (this.arrived / this.totalHits * 100).toFixed(1) + '%' : '0%';
+
+            const raw = [
+                { label: 'Cliques no Link', key: 'total_hits',          top: '#34d399', bottom: '#059669' },
+                { label: 'Verificação OK',  key: 'passed_cloaker',      top: '#fbbf24', bottom: '#d97706' },
+                { label: 'Enviado ao Bot',  key: 'bot_selected',        top: '#60a5fa', bottom: '#2563eb' },
+                { label: 'Página Exibida',  key: 'redirect_rendered',   top: '#a78bfa', bottom: '#7c3aed' },
+                { label: 'No Telegram',     key: 'arrived_at_telegram', top: '#f472b6', bottom: '#db2777' },
+            ];
+
+            const values = raw.map(s => analytics[s.key] || 0);
+            const maxVal = Math.max(...values, 1);
+            const CX = 300, Y0 = 14, PITCH = 36, RY = 7, BODY_H = 18;
+
+            const svg = this.$refs.funnelSvg;
+            const ns = 'http://www.w3.org/2000/svg';
+            const mainG = document.createElementNS(ns, 'g');
+
+            raw.forEach((s, i) => {
+                const v = values[i];
+                const w = 110 + (v / maxVal) * 170;
+                const wb = w * 0.8;
+                const y = Y0 + i * PITCH;
+
+                const tier = document.createElementNS(ns, 'g');
+
+                const bodyPath = document.createElementNS(ns, 'path');
+                bodyPath.setAttribute('d', 'M ' + (CX - w / 2) + ',' + y + ' L ' + (CX - wb / 2) + ',' + (y + BODY_H) + ' L ' + (CX + wb / 2) + ',' + (y + BODY_H) + ' L ' + (CX + w / 2) + ',' + y + ' Z');
+                bodyPath.setAttribute('fill', 'url(#fg' + i + ')');
+                bodyPath.setAttribute('opacity', '0.95');
+                tier.appendChild(bodyPath);
+
+                const ellipse = document.createElementNS(ns, 'ellipse');
+                ellipse.setAttribute('cx', CX);
+                ellipse.setAttribute('cy', y);
+                ellipse.setAttribute('rx', w / 2);
+                ellipse.setAttribute('ry', RY);
+                ellipse.setAttribute('fill', s.top);
+                ellipse.setAttribute('stroke', s.bottom);
+                ellipse.setAttribute('stroke-width', '1');
+                tier.appendChild(ellipse);
+
+                const rimArc = document.createElementNS(ns, 'path');
+                rimArc.setAttribute('d', 'M ' + (CX - w / 2 + 6) + ',' + (y - 2) + ' A ' + (w / 2 - 6) + ',' + (RY - 4) + ' 0 0 1 ' + (CX + w / 2 - 6) + ',' + (y - 2));
+                rimArc.setAttribute('fill', 'none');
+                rimArc.setAttribute('stroke', 'rgba(255,255,255,0.45)');
+                rimArc.setAttribute('stroke-width', '2');
+                rimArc.setAttribute('stroke-linecap', 'round');
+                tier.appendChild(rimArc);
+
+                const lx = CX - w / 2 - 100;
+                const rx = CX + w / 2;
+                const ty = y + BODY_H / 2 - 10;
+
+                [lx, rx].forEach(function(x) {
+                    const rect = document.createElementNS(ns, 'rect');
+                    rect.setAttribute('x', x);
+                    rect.setAttribute('y', ty);
+                    rect.setAttribute('width', x === lx ? '100' : '56');
+                    rect.setAttribute('height', '20');
+                    rect.setAttribute('rx', '6');
+                    rect.setAttribute('fill', s.bottom);
+                    rect.setAttribute('opacity', '0.9');
+                    tier.appendChild(rect);
+                });
+
+                const labelText = document.createElementNS(ns, 'text');
+                labelText.setAttribute('x', lx + 50);
+                labelText.setAttribute('y', ty + 14);
+                labelText.setAttribute('text-anchor', 'middle');
+                labelText.setAttribute('font-size', '11');
+                labelText.setAttribute('font-weight', '600');
+                labelText.setAttribute('fill', '#fff');
+                labelText.textContent = s.label;
+                tier.appendChild(labelText);
+
+                const valueText = document.createElementNS(ns, 'text');
+                valueText.setAttribute('x', rx + 28);
+                valueText.setAttribute('y', ty + 14);
+                valueText.setAttribute('text-anchor', 'middle');
+                valueText.setAttribute('font-size', '11');
+                valueText.setAttribute('font-weight', '700');
+                valueText.setAttribute('fill', '#fff');
+                valueText.textContent = v;
+                tier.appendChild(valueText);
+
+                mainG.appendChild(tier);
+            });
+
+            svg.appendChild(mainG);
         }
     };
 }

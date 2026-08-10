@@ -101,6 +101,14 @@ def handle_start_command(bot_manager, bot_id: int, token: str, config: Dict[str,
                             bot_user_track.utm_term = payload.get('utm_term') or bot_user_track.utm_term
                             bot_user_track.click_timestamp = datetime.now()
                             db.session.commit()
+                            # +1 arrived_at_telegram
+                            if payload.get('pool_id'):
+                                try:
+                                    from internal_logic.core.metrics import get_metrics_service
+                                    _msch = get_metrics_service(db.session)
+                                    _msch.increment_pool_analytics(payload['pool_id'], arrived_at_telegram=1)
+                                except Exception:
+                                    pass
                             logger.info(f"?? V4.1 - TRACKING LINKED: User {bot_user_track.id} -> FBCLID: {bot_user_track.fbclid} | Token: {start_param[:8]}...")
         except Exception as e:
             logger.warning(f"⚠️ Falha na hidratação inicial de tracking via start_param={start_param}: {e}")

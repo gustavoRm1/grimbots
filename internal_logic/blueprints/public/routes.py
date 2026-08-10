@@ -48,6 +48,13 @@ def public_redirect(slug):
     except Exception as e:
         logger.error(f"❌ Erro ao buscar pool: {e}")
         return jsonify({'error': 'Service unavailable'}), 503
+
+    # +1 total_hits
+    try:
+        _ms = get_metrics_service(db.session)
+        _ms.increment_pool_analytics(pool.id, total_hits=1)
+    except Exception:
+        pass
     
     # ═══════════════════════════════════════════════════════════
     # 2. ESCUDO (Cloaker V2.0) - BLOQUEANTE
@@ -55,12 +62,22 @@ def public_redirect(slug):
     try:
         allowed, reason, log_data = CloakerService.validate_access(request, pool)
         if not allowed:
+            try:
+                _ms.increment_pool_analytics(pool.id, cloaker_blocked=1)
+            except Exception:
+                pass
             return render_template('cloaker_block.html', pixel_id=getattr(pool, 'meta_pixel_id', None)), 200
     except Exception as e:
         logger.error(f"❌ Erro no cloaker: {e}")
         # Em caso de falha no cloaker, permitir acesso (fail-open)
         pass
     
+    # +1 passed_cloaker
+    try:
+        _ms.increment_pool_analytics(pool.id, passed_cloaker=1)
+    except Exception:
+        pass
+
     # ═══════════════════════════════════════════════════════════
     # 3. RASTREIO (Meta CAPI) - PREPARAR VARIÁVEIS
     # =================================================================
@@ -144,7 +161,13 @@ def public_redirect(slug):
     except Exception as e:
         logger.error(f"❌ Erro na seleção de bot: {e}")
         return jsonify({'error': 'Selection error'}), 503
-    
+
+    # +1 bot_selected
+    try:
+        _ms.increment_pool_analytics(pool.id, bot_selected=1)
+    except Exception:
+        pass
+
     # ═══════════════════════════════════════════════════════════
     # 5. MÉTRICAS ATÔMICAS - NÃO BLOQUEANTE
     # ═══════════════════════════════════════════════════════════
@@ -185,6 +208,12 @@ def public_redirect(slug):
         redirect_url=bot_url  # URL final para redirecionamento JS
     ))
     
+    # +1 redirect_rendered
+    try:
+        _ms.increment_pool_analytics(pool.id, redirect_rendered=1)
+    except Exception:
+        pass
+
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
@@ -261,9 +290,9 @@ def llms_txt():
 > Plataforma de automação de vendas no Telegram.
 
 ## Docs
-- Termos de Uso: https://grimbots.com.br/termos-de-uso
-- Política de Privacidade: https://grimbots.com.br/politica-privacidade
-- Pricing: https://grimbots.com.br/pricing.md
+- Termos de Uso: https://app.grimbots.online/termos-de-uso
+- Política de Privacidade: https://app.grimbots.online/politica-privacidade
+- Pricing: https://app.grimbots.online/pricing.md
 
 ## Core Features
 - Multi-bots ilimitados: crie quantos bots de vendas precisar
@@ -281,7 +310,7 @@ def llms_txt():
 4. Múltiplos gateways sem taxa extra
 """)
     resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     return resp
 
 
@@ -330,7 +359,7 @@ def pricing_md():
 | Preço | R$ 0 | R$ 47/mês | R$ 97/mês |
 """)
     resp.headers['Content-Type'] = 'text/markdown; charset=utf-8'
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     return resp
 
 
@@ -338,16 +367,17 @@ def pricing_md():
 def robots_txt():
     """robots.txt for search engines"""
     resp = make_response("""User-agent: *
-Allow: /
-Allow: /static/
-Disallow: /go/
-Disallow: /api/
-Disallow: /admin/
+Allow: /termos-de-uso
+Allow: /politica-privacidade
+Allow: /pricing.md
+Allow: /llms.txt
+Allow: /blog
+Disallow: /
 
-Sitemap: https://grimbots.com.br/sitemap.xml
+Sitemap: https://app.grimbots.online/sitemap.xml
 """)
     resp.headers['Content-Type'] = 'text/plain; charset=utf-8'
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     return resp
 
 
@@ -355,17 +385,17 @@ Sitemap: https://grimbots.com.br/sitemap.xml
 def sitemap_xml():
     """XML sitemap for search engines"""
     pages = [
-        {'loc': 'https://grimbots.com.br/', 'priority': '1.0', 'changefreq': 'weekly'},
-        {'loc': 'https://grimbots.com.br/termos-de-uso', 'priority': '0.5', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/politica-privacidade', 'priority': '0.6', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/blog', 'priority': '0.8', 'changefreq': 'weekly'},
-        {'loc': 'https://grimbots.com.br/blog/automacao-vendas-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/blog/meta-pixel-capi-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/blog/order-bump-downsell-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/blog/gateways-pagamento-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/blog/bot-vendas-sem-codigo', 'priority': '0.7', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/pricing.md', 'priority': '0.5', 'changefreq': 'monthly'},
-        {'loc': 'https://grimbots.com.br/llms.txt', 'priority': '0.3', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/', 'priority': '1.0', 'changefreq': 'weekly'},
+        {'loc': 'https://app.grimbots.online/termos-de-uso', 'priority': '0.5', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/politica-privacidade', 'priority': '0.6', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/blog', 'priority': '0.8', 'changefreq': 'weekly'},
+        {'loc': 'https://app.grimbots.online/blog/automacao-vendas-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/blog/meta-pixel-capi-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/blog/order-bump-downsell-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/blog/gateways-pagamento-telegram', 'priority': '0.7', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/blog/bot-vendas-sem-codigo', 'priority': '0.7', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/pricing.md', 'priority': '0.5', 'changefreq': 'monthly'},
+        {'loc': 'https://app.grimbots.online/llms.txt', 'priority': '0.3', 'changefreq': 'monthly'},
     ]
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -374,7 +404,7 @@ def sitemap_xml():
     xml += '</urlset>'
     resp = make_response(xml)
     resp.headers['Content-Type'] = 'application/xml; charset=utf-8'
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
     return resp
 
 

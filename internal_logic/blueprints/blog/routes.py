@@ -198,7 +198,7 @@ Você não precisa saber programar para criar um bot de vendas profissional no T
 
 ## Passo 1: Crie sua conta
 
-Acesse grimbots.com.br e crie sua conta gratuita. Não precisa de cartão de crédito.
+Acesse app.grimbots.online e crie sua conta gratuita. Não precisa de cartão de crédito.
 
 ## Passo 2: Crie um bot no Telegram
 

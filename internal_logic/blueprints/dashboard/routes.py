@@ -12,7 +12,7 @@ from internal_logic.core.models import (
     BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, 
     Commission, PushSubscription, NotificationSettings, Subscription, get_brazil_time
 )
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, text
 from datetime import datetime, timedelta
 import logging
 import os
@@ -468,7 +468,7 @@ def api_sales_chart():
 @login_required
 def api_dashboard_analytics():
     """API para métricas avançadas e analytics"""
-    from sqlalchemy import func, extract
+    from sqlalchemy import func, extract, text
     from datetime import datetime, timedelta
     from internal_logic.core.models import BotUser, Commission
     
@@ -1661,8 +1661,33 @@ def get_redirect_pools():
         # Log detalhado dos pools encontrados (apenas IDs e nomes para segurança)
         for p in pools:
             logger.debug(f"   - Pool ID: {p.id} | Name: {p.name}")
+        
+        # Incluir analytics de hoje na listagem
+        pool_list = []
+        for p in pools:
+            pd = p.to_dict()
+            try:
+                row = db.session.execute(
+                    text("SELECT total_hits, cloaker_blocked, passed_cloaker, bot_selected, redirect_rendered, arrived_at_telegram "
+                         "FROM redirect_pool_analytics WHERE pool_id = :pid AND date = CURRENT_DATE"),
+                    {'pid': p.id}
+                ).fetchone()
+                if row:
+                    pd['analytics_today'] = {
+                        'total_hits': row[0],
+                        'cloaker_blocked': row[1],
+                        'passed_cloaker': row[2],
+                        'bot_selected': row[3],
+                        'redirect_rendered': row[4],
+                        'arrived_at_telegram': row[5],
+                    }
+                else:
+                    pd['analytics_today'] = {'total_hits': 0, 'cloaker_blocked': 0, 'passed_cloaker': 0, 'bot_selected': 0, 'redirect_rendered': 0, 'arrived_at_telegram': 0}
+            except Exception:
+                pd['analytics_today'] = {'total_hits': 0, 'cloaker_blocked': 0, 'passed_cloaker': 0, 'bot_selected': 0, 'redirect_rendered': 0, 'arrived_at_telegram': 0}
+            pool_list.append(pd)
             
-        return jsonify([pool.to_dict() for pool in pools])
+        return jsonify(pool_list)
         
     except Exception as e:
         logger.error(f"❌ [GET_POOLS] Erro ao listar pools: {e}", exc_info=True)
@@ -1683,6 +1708,74 @@ def get_redirect_pool_detail(pool_id):
     # Incluir lista de bots (serializados)
     pool_data = pool.to_dict()
     pool_data['bots'] = [pb.to_dict() for pb in pool.pool_bots]
+    
+    # Analytics do funil (ultimos 7 dias)
+    try:
+        today = func.current_date()
+        week_ago = func.current_date() - text("INTERVAL '7 days'")
+        
+        # Funnel de hoje
+        today_row = db.session.execute(
+            text("SELECT total_hits, cloaker_blocked, passed_cloaker, bot_selected, redirect_rendered, arrived_at_telegram "
+                 "FROM redirect_pool_analytics WHERE pool_id = :pid AND date = CURRENT_DATE"),
+            {'pid': pool_id}
+        ).fetchone()
+        
+        if today_row:
+            pool_data['analytics_today'] = {
+                'total_hits': today_row[0],
+                'cloaker_blocked': today_row[1],
+                'passed_cloaker': today_row[2],
+                'bot_selected': today_row[3],
+                'redirect_rendered': today_row[4],
+                'arrived_at_telegram': today_row[5],
+            }
+        else:
+            pool_data['analytics_today'] = {'total_hits': 0, 'cloaker_blocked': 0, 'passed_cloaker': 0, 'bot_selected': 0, 'redirect_rendered': 0, 'arrived_at_telegram': 0}
+        
+        # Ultimos 7 dias
+        rows = db.session.execute(
+            text("SELECT date, total_hits, cloaker_blocked, passed_cloaker, bot_selected, redirect_rendered, arrived_at_telegram "
+                 "FROM redirect_pool_analytics WHERE pool_id = :pid AND date >= :week "
+                 "ORDER BY date DESC LIMIT 7"),
+            {'pid': pool_id, 'week': week_ago}
+        ).fetchall()
+        
+        pool_data['analytics_weekly'] = [
+            {
+                'date': str(r[0]),
+                'total_hits': r[1],
+                'cloaker_blocked': r[2],
+                'passed_cloaker': r[3],
+                'bot_selected': r[4],
+                'redirect_rendered': r[5],
+                'arrived_at_telegram': r[6],
+            }
+            for r in rows
+        ]
+        
+        # Totais agregados
+        totals = db.session.execute(
+            text("SELECT COALESCE(SUM(total_hits), 0), COALESCE(SUM(cloaker_blocked), 0), "
+                 "COALESCE(SUM(passed_cloaker), 0), COALESCE(SUM(bot_selected), 0), "
+                 "COALESCE(SUM(redirect_rendered), 0), COALESCE(SUM(arrived_at_telegram), 0) "
+                 "FROM redirect_pool_analytics WHERE pool_id = :pid"),
+            {'pid': pool_id}
+        ).fetchone()
+        
+        pool_data['analytics_totals'] = {
+            'total_hits': totals[0],
+            'cloaker_blocked': totals[1],
+            'passed_cloaker': totals[2],
+            'bot_selected': totals[3],
+            'redirect_rendered': totals[4],
+            'arrived_at_telegram': totals[5],
+        }
+    except Exception as e:
+        logger.warning(f"Erro ao carregar analytics do pool {pool_id}: {e}")
+        pool_data['analytics_today'] = {'total_hits': 0, 'cloaker_blocked': 0, 'passed_cloaker': 0, 'bot_selected': 0, 'redirect_rendered': 0, 'arrived_at_telegram': 0}
+        pool_data['analytics_weekly'] = []
+        pool_data['analytics_totals'] = None
     
     return jsonify(pool_data)
 

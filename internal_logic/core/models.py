@@ -693,6 +693,7 @@ class RedirectPool(db.Model):
                 'meta_cloaker_param_name': self.meta_cloaker_param_name,
                 'meta_cloaker_param_value': self.meta_cloaker_param_value,
                 'utmify_pixel_id': self.utmify_pixel_id,
+                'total_redirects': self.total_redirects,
                 # 'fallback_url': self.fallback_url
             }
         except Exception as e:

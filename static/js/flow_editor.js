@@ -368,15 +368,26 @@ class FlowEditor {
         this.backgroundBounds = { minX: -750, minY: -750, maxX: 750, maxY: 750 };
         
         // Cores e ícones
-        this.stepIcons = {
-            message: 'fa-comment',
-            payment: 'fa-credit-card',
+                this.stepIcons = {
+            message: 'fa-comment-dots',
+            payment: 'fa-qrcode',
             access: 'fa-key',
-            content: 'fa-file-alt',
-            audio: 'fa-headphones',
+            content: 'fa-photo-video',
+            audio: 'fa-microphone',
             video: 'fa-video',
             buttons: 'fa-mouse-pointer',
-            condition: 'fa-code-branch' // 🔥 V9.0 CHATBOT BUILDER: Novo tipo
+            condition: 'fa-code-branch'
+        };
+
+        this.stepColors = {
+            message: { bg: 'rgba(37,99,235,0.15)', border: 'rgba(37,99,235,0.3)', text: '#60A5FA' },
+            content: { bg: 'rgba(79,70,229,0.15)', border: 'rgba(79,70,229,0.3)', text: '#818CF8' },
+            audio: { bg: 'rgba(236,72,153,0.15)', border: 'rgba(236,72,153,0.3)', text: '#F472B6' },
+            video: { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.3)', text: '#C084FC' },
+            buttons: { bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.3)', text: '#34D399' },
+            payment: { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.3)', text: '#4ADE80' },
+            access: { bg: 'rgba(249,115,22,0.15)', border: 'rgba(249,115,22,0.3)', text: '#FB923C' },
+            condition: { bg: 'rgba(255,184,0,0.15)', border: 'rgba(255,184,0,0.3)', text: '#FFB800' }
         };
         
         // 🔥 V9.0 CHATBOT BUILDER: Regras de validação de conexões
@@ -522,11 +533,10 @@ class FlowEditor {
             this.enableActionButtonsDelegation(); // Event delegation como fallback
         }, 100);
         
-        // 🔥 V8 ULTRA: Renderizar steps após setup com delay maior para garantir que tudo está pronto
+        // PONTO 2+3: Usar renderFlow() — pipeline síncrono via setSuspendDrawing
         setTimeout(() => {
-            console.log('🔵 Renderizando steps...');
-            this.renderAllSteps();
-            console.log('✅ Steps renderizados');
+            console.log('🔵 Renderizando steps via renderFlow()...');
+            this.renderFlow();
         }, 200);
     }
     
@@ -836,6 +846,33 @@ class FlowEditor {
             this.instance.bind('dragStop', (params) => {
                 this.emit('drag:stop', params);
                 this.onStepDragStop(params);
+            });
+            
+            // T4 FIX: Connection drag - highlight target endpoints during drag
+            this.instance.bind('connectionDrag', (params) => {
+                var sourceEndpoint = params.sourceEndpoint;
+                if (!sourceEndpoint) return;
+                
+                var sourceUuid = sourceEndpoint.getUuid ? sourceEndpoint.getUuid() : '';
+                var sourceStepId = sourceUuid.replace(/^endpoint-(right|left|true|false|button)-/, '');
+                
+                var self = this;
+                this.steps.forEach(function(el, stepId) {
+                    if (stepId === sourceStepId) return;
+                    var endpoints = self.instance.getEndpoints(el);
+                    if (!endpoints) return;
+                    endpoints.forEach(function(ep) {
+                        if (ep.isTarget && ep.canvas) {
+                            ep.canvas.classList.add('endpoint-drag-target');
+                        }
+                    });
+                });
+            });
+            
+            this.instance.bind('connectionDragStop', (params) => {
+                document.querySelectorAll('.endpoint-drag-target').forEach(function(el) {
+                    el.classList.remove('endpoint-drag-target');
+                });
             });
             
             // 🔥 V2.0: Canvas Click (implementar manualmente)
@@ -1175,38 +1212,46 @@ class FlowEditor {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('wheel', (e) => {
-            // Zoom com Ctrl/Cmd ou scroll direto (padrão ManyChat)
-            if (e.ctrlKey || e.metaKey || true) {
-                e.preventDefault();
-                
-                // Obter posição do mouse relativa ao canvas
-                const rect = this.canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                
-                // Calcular zoom delta suave (ManyChat style)
-                const zoomSpeed = e.ctrlKey || e.metaKey ? 0.0015 : 0.001;
-                const zoomDelta = -e.deltaY * zoomSpeed;
-                const newZoom = Math.max(
-                    this.minZoom, 
-                    Math.min(this.maxZoom, this.zoomLevel * (1 + zoomDelta))
-                );
-                
-                // CRÍTICO: Zoom focado no ponto do cursor (não no centro)
-                // Converter coordenadas do mouse para coordenadas do mundo (antes do zoom)
-                const worldX = (mouseX - this.pan.x) / this.zoomLevel;
-                const worldY = (mouseY - this.pan.y) / this.zoomLevel;
-                
-                // Aplicar novo zoom
-                this.zoomLevel = newZoom;
-                
-                // Ajustar pan para manter o ponto do cursor fixo
-                this.pan.x = mouseX - worldX * this.zoomLevel;
-                this.pan.y = mouseY - worldY * this.zoomLevel;
-                
-                // Aplicar imediatamente (já inclui revalidate de todos os nodes)
-                this.updateCanvasTransform();
-            }
+            // T1 FIX: Plain scroll = zoom (padrao n8n/ManyChat/Figma)
+            // Pinch de trackpad gera ctrlKey:true (browser synthetic)
+            // Mouse scroll: deltaY discreto (100 ou 120), deltaX ~ 0
+            // Trackpad two-finger pan: deltaX/deltaY fracionarios CONTINUOS
+            // Pan do canvas e via mousedown-drag (enablePan), NAO via wheel
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Detectar se e trackpad pan (dois dedos, fracionario, sem ctrlKey)
+            var isTrackpadPan = !e.ctrlKey && !e.metaKey && (
+                Math.abs(e.deltaX) > 0.5 || 
+                (Math.abs(e.deltaY) > 0 && Math.abs(e.deltaY) < 50 && !Number.isInteger(e.deltaY))
+            );
+            if (isTrackpadPan) return;
+            
+            // Obter posicao do mouse relativa ao canvas
+            var rect = this.canvas.getBoundingClientRect();
+            var mouseX = e.clientX - rect.left;
+            var mouseY = e.clientY - rect.top;
+            
+            // Zoom speed: trackpad (ctrlKey) = mais suave, mouse wheel = mais rapido
+            var isPinch = e.ctrlKey || e.metaKey;
+            var zoomSpeed = isPinch ? 0.0015 : 0.003;
+            var zoomDelta = -e.deltaY * zoomSpeed;
+            var newZoom = Math.max(
+                this.minZoom, 
+                Math.min(this.maxZoom, this.zoomLevel * (1 + zoomDelta))
+            );
+            
+            // Zoom centrado no cursor (formula ManyChat/n8n)
+            var worldX = (mouseX - this.pan.x) / this.zoomLevel;
+            var worldY = (mouseY - this.pan.y) / this.zoomLevel;
+            
+            this.zoomLevel = newZoom;
+            
+            this.pan.x = mouseX - worldX * this.zoomLevel;
+            this.pan.y = mouseY - worldY * this.zoomLevel;
+            
+            this.updateCanvasTransform();
         }, { passive: false });
     }
     
@@ -1237,7 +1282,7 @@ class FlowEditor {
             const isOverEndpoint = e.target.closest('.jtk-endpoint');
             
             // Pan apenas se não estiver sobre step/button/endpoint E for botão direito
-            if (!isOverStep && !isOverButton && !isOverEndpoint && e.button === 2) {
+            if (!isOverStep && !isOverButton && !isOverEndpoint) {
                 e.preventDefault();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
@@ -1529,122 +1574,11 @@ class FlowEditor {
      * Previne ERRO 2 (race condition) e ERRO 8 (múltiplas chamadas)
      */
     renderAllSteps() {
-        // 🔥 V8 ULTRA: Verificar se está inicializado (ERRO 2)
-        if (!this.isInitialized()) {
-            console.warn('⚠️ renderAllSteps: Editor não está inicializado, aguardando...');
-            // Aguardar inicialização e tentar novamente
-            this.waitForInitialization(5000).then(() => {
-                this.renderAllSteps();
-            }).catch(e => {
-                console.error('❌ Timeout aguardando inicialização:', e);
-            });
-            return;
-        }
-        
-        console.log('🔵 renderAllSteps chamado', {
-            hasInstance: !!this.instance,
-            hasAlpine: !!this.alpine,
-            hasConfig: !!this.alpine?.config,
-            flowStepsCount: this.alpine?.config?.flow_steps?.length || 0
-        });
-        
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
-            console.warn('⚠️ renderAllSteps: Alpine ou config não disponível');
-            return;
-        }
-        
-        // 🔥 V8 ULTRA: Verificar se instance existe
-        if (!this.instance) {
-            console.error('❌ renderAllSteps: jsPlumb instance não existe! Tentando inicializar...');
-            // Tentar inicializar jsPlumb novamente
-            if (this.contentContainer) {
-                try {
-                    this.setupJsPlumb();
-                } catch(e) {
-                    console.error('❌ Erro ao tentar inicializar jsPlumb:', e);
-                }
-            } else {
-                // Se não tem contentContainer, criar canvas primeiro
-                this.setupCanvas();
-                if (this.contentContainer) {
-                    try {
-                        this.setupJsPlumb();
-                    } catch(e) {
-                        console.error('❌ Erro ao tentar inicializar jsPlumb após criar canvas:', e);
-                    }
-                }
-            }
-            
-            // Se ainda não tem instance, retornar
-            if (!this.instance) {
-                console.error('❌ renderAllSteps: Não foi possível inicializar instance');
-                return;
-            }
-        }
-        
-        // 🔥 V8 ULTRA: Garantir que contentContainer existe
-        if (!this.contentContainer) {
-            console.error('❌ renderAllSteps: contentContainer não existe! Tentando criar...');
-            this.setupCanvas();
-            if (!this.contentContainer) {
-                console.error('❌ renderAllSteps: Não foi possível criar contentContainer');
-                return;
-            }
-        }
-        
-        const steps = this.alpine.config.flow_steps || [];
-        if (!Array.isArray(steps)) {
-            console.warn('⚠️ renderAllSteps: flow_steps não é array');
-            return;
-        }
-        
-        console.log(`🔵 renderAllSteps: renderizando ${steps.length} steps`);
-        
-        // Remover steps que não existem mais
-        const currentStepIds = new Set(this.steps.keys());
-        const newStepIds = new Set(steps.map(s => String(s.id)));
-        
-        currentStepIds.forEach(stepId => {
-            if (!newStepIds.has(stepId)) {
-                this.removeStepElement(stepId);
-            }
-        });
-        
-        // Renderizar/atualizar steps
-        steps.forEach(step => {
-            const stepId = String(step.id);
-            if (this.steps.has(stepId)) {
-                this.updateStep(step);
-            } else {
-                this.renderStep(step);
-                // 🔥 V2.0: Emitir evento node:added
-                this.emit('node:added', { stepId, step });
-            }
-        });
-        
-        // Ajustar tamanho do canvas
-        this.adjustCanvasSize();
-        
-        // 🔥 V2.0 BACKGROUND: Atualizar bounds após renderizar steps
-        setTimeout(() => {
-            this.updateBackgroundBounds();
-        }, 50);
-        
-        // Reconectar após renderização
-        setTimeout(() => {
-            this.reconnectAll();
-            // 🔥 CRÍTICO: Forçar repaint final após tudo estar renderizado
-            if (this.instance) {
-                try {
-                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
-                            this.throttledRepaint();
-                    console.log('✅ Repaint final executado após renderAllSteps');
-                } catch(e) {
-                    console.error('❌ Erro ao fazer repaint final:', e);
-                }
-            }
-        }, 200);
+        // PONTO 3: renderAllSteps é agora um wrapper para renderFlow()
+        // Mantido para backward compat — todos os callers são redirecionados
+        this.renderFlow();
     }
+
     
     /**
      * Renderiza um step individual
@@ -1711,7 +1645,7 @@ class FlowEditor {
         inner.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
-                    <div class="flow-step-icon-center"><i class="fas ${this.stepIcons[stepType] || 'fa-circle'}"></i></div>
+                    <div class="flow-step-icon-center" style="background: ${(this.stepColors[stepType] || this.stepColors.message).bg}; border: 1px solid ${(this.stepColors[stepType] || this.stepColors.message).border}; color: ${(this.stepColors[stepType] || this.stepColors.message).text};"><i class="fas ${this.stepIcons[stepType] || 'fa-circle'}"></i></div>
                     <div class="flow-step-title-center">${this.getStepTypeLabel(stepType)}</div>
                     ${isStartStep?'<div class="flow-step-start-badge">⭐</div>':''}
                 </div>
@@ -1724,7 +1658,11 @@ class FlowEditor {
                 ${buttonsHtml}
                 ${isCondition ? '<div style="padding: 8px; font-size: 11px; color: #9CA3AF; text-align: center;">Verdadeiro / Falso</div>' : ''}
             </div>
-            <div class="flow-step-footer" data-jtk-not-draggable="true" style="pointer-events: auto; z-index: 10000;">
+            <div class="flow-step-status">
+                <span>${this.getStepTypeLabel(stepType)}</span>
+                <span class="flow-step-status-connected"><span class="flow-step-status-dot"></span> Pronto</span>
+            </div>
+            <div class="flow-step-footer" data-jtk-not-draggable="true" style="pointer-events: auto; z-index: 10000; padding: 6px 12px; display: flex; gap: 6px; justify-content: center; border-top: 1px solid #2A2D36;">
                 <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] editStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('edit', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.editStep) { window.flowEditorActions.editStep('${stepId}'); } return false;"><i class="fas fa-edit"></i></button>
                 <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] deleteStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('remove', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.deleteStep) { window.flowEditorActions.deleteStep('${stepId}'); } return false;"><i class="fas fa-trash"></i></button>
                 ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] setStartStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('set-start', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.setStartStep) { window.flowEditorActions.setStartStep('${stepId}'); } return false;">⭐</button>` : ''}
@@ -2515,6 +2453,108 @@ class FlowEditor {
         }
     }
     
+    /**
+     * PONTO 2: Força visibilidade de TODOS os endpoints (chamado após repaint)
+     */
+    forceAllEndpointsVisible() {
+        if (!this.instance) return;
+        this.steps.forEach((el, stepId) => {
+            try {
+                this.instance.revalidate(el);
+                const endpoints = this.instance.getEndpoints(el);
+                if (endpoints) {
+                    endpoints.forEach(ep => {
+                        if (ep && ep.canvas) {
+                            ep.canvas.style.display = 'block';
+                            ep.canvas.style.visibility = 'visible';
+                            ep.canvas.style.opacity = '1';
+                            ep.canvas.style.pointerEvents = 'auto';
+                            ep.canvas.style.zIndex = '10000';
+                        }
+                    });
+                }
+            } catch(e) {}
+        });
+    }
+
+    /**
+     * PONTO 2+3: Pipeline síncrono garantido via setSuspendDrawing
+     * ÚNICO entry point de renderização — substitui renderAllSteps + reconnectAll
+     * Pipeline: suspendDrawing → DOM → endpoints → conexões → resume+repaint
+     */
+    renderFlow() {
+        if (!this.isInitialized()) {
+            console.warn('⚠️ renderFlow: Editor não inicializado, aguardando...');
+            this.waitForInitialization(5000).then(() => this.renderFlow()).catch(() => {});
+            return;
+        }
+        if (!this.instance) {
+            console.error('❌ renderFlow: jsPlumb instance não existe');
+            return;
+        }
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
+            return;
+        }
+        if (!this.contentContainer) {
+            this.setupCanvas();
+            if (!this.contentContainer) return;
+        }
+
+        const steps = this.alpine.config.flow_steps;
+        if (!Array.isArray(steps)) return;
+
+        console.log('🔵 renderFlow: pipeline síncrono para', steps.length, 'steps');
+
+        // 1. Remover steps obsoletos
+        const currentIds = new Set(this.steps.keys());
+        const newIds = new Set(steps.map(s => String(s.id)));
+        currentIds.forEach(id => { if (!newIds.has(id)) this.removeStepElement(id); });
+
+        // 2. Suspend drawing (jsPlumb não pinta enquanto criamos tudo)
+        this.instance.setSuspendDrawing(true);
+
+        // 3. Criar/atualizar DOM de todos os steps
+        steps.forEach(step => {
+            const stepId = String(step.id);
+            if (this.steps.has(stepId)) {
+                this.updateStep(step);
+            } else {
+                this.renderStep(step);
+                this.emit('node:added', { stepId, step });
+            }
+        });
+
+        this.adjustCanvasSize();
+
+        // 4. Após DOM layout (1 rAF), criar endpoints + conexões de forma síncrona
+        requestAnimationFrame(() => {
+            // 4a. Criar endpoints para cada step
+            steps.forEach(step => {
+                const stepId = String(step.id);
+                const element = this.steps.get(stepId);
+                if (element) {
+                    // Forçar flag para permitir recriação
+                    element.dataset.endpointsInited = 'false';
+                    this.addEndpoints(element, stepId, step);
+                }
+            });
+
+            // 4b. Criar conexões (reconnectAll lê edges do alpine state)
+            this.reconnectAll();
+
+            // 4c. Resume drawing + repaint único
+            this.instance.setSuspendDrawing(false, true);
+
+            // 4d. Forçar visibilidade de todos os endpoints
+            this.forceAllEndpointsVisible();
+
+            // 4e. Atualizar bounds do background
+            this.updateBackgroundBounds && this.updateBackgroundBounds();
+
+            console.log('✅ renderFlow: pipeline concluído');
+        });
+    }
+
     /**
      * Adiciona endpoints ao step
      * 🔥 V7 PROFISSIONAL - ManyChat Perfect com Anti-Duplicação Robusta
@@ -3350,13 +3390,12 @@ class FlowEditor {
             }
             
             // CRÍTICO: Revalidar e repintar durante drag (com throttling)
+            // T2 FIX: fixEndpoints REMOVIDO daqui — roda só no dragStop
+            // fixEndpoints é caro (recalcula âncoras de todos os endpoints)
+            // revalidate + throttledRepaint são suficientes durante drag
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
-                    // 🔥 V5.0: Corrigir endpoints durante drag (remove duplicados que podem aparecer)
-                    this.fixEndpoints(element);
-                    // Revalidar o elemento arrastado
                     this.instance.revalidate(element);
-                    // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
                     this.throttledRepaint();
                 }
                 this.dragFrameId = null;
