@@ -142,12 +142,27 @@
     align-items: center;
     gap: 6px;
     padding: 4px 12px;
-    background: rgba(107, 114, 128, 0.1);
-    border: 1px solid rgba(107, 114, 128, 0.2);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 20px;
     font-size: 11px;
     font-weight: 700;
-    color: #9CA3AF;
+    color: #FCA5A5;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bot-status-maintenance {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #FCD34D;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -774,10 +789,10 @@
                                     <p class="text-xs text-gray-500">@<span x-text="bot.username"></span></p>
                         </div>
                             </div>
-                            <span :class="bot.is_running ? 'bot-status-online' : 'bot-status-offline'">
-                                <span class="w-2 h-2 rounded-full" 
-                                      :class="bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                                <span x-text="bot.is_running ? 'Operando' : 'Requer atenção'"></span>
+                            <span :class="bot.is_running ? 'bot-status-online' : (bot.manually_disabled ? 'bot-status-maintenance' : 'bot-status-offline')">
+                                <span class="w-2 h-2 rounded-full"
+                                      :class="bot.is_running ? 'bg-green-400 animate-pulse' : (bot.manually_disabled ? 'bg-yellow-400' : 'bg-red-400 animate-pulse')"></span>
+                                <span x-text="bot.is_running ? 'Operando' : (bot.manually_disabled ? 'Manutenção' : 'Offline')"></span>
                         </span>
                     </div>
                     
@@ -2412,7 +2427,10 @@ function dashboardApp() {
                 }
                 
                     bot.is_running = data.is_running;
-                    console.log(`✅ Bot ${bot.name} agora está ${data.is_running ? 'Online' : 'Offline'}`);
+                    if (data.manually_disabled !== undefined) {
+                        bot.manually_disabled = data.manually_disabled;
+                    }
+                    console.log(`✅ Bot ${bot.name} agora está ${data.is_running ? 'Online' : (bot.manually_disabled ? 'Manutenção' : 'Offline')}`);
             });
             
             socket.on('payment_update', (data) => {
@@ -3062,6 +3080,7 @@ function dashboardApp() {
                     const bot = this.bots.find(b => b.id === botStatus.id);
                     if (bot) {
                         bot.is_running = botStatus.is_running;
+                        bot.manually_disabled = botStatus.manually_disabled || false;
                         bot.status_sources = botStatus.sources || null;
                     }
                 });

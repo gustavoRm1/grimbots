@@ -219,9 +219,8 @@ class BotIntelligenceService:
         🔄 Fallback para bots degraded
         
         Quando nenhum bot está 100% online, tenta:
-        1. Bot com menos falhas consecutivas
-        2. Bot que ficou offline mais recentemente
-        3. Qualquer bot configurado
+        1. Bot com menos falhas consecutivas (máx 3)
+        2. Se todos com >3 falhas, retorna None (não serve bot morto)
         """
         try:
             pool_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
@@ -229,14 +228,26 @@ class BotIntelligenceService:
             if not pool_bots:
                 return None
             
-            # Tentar encontrar bot com menos falhas
-            sorted_by_failures = sorted(
-                pool_bots,
+            # Filtrar: só candidatos com poucas falhas
+            viable = [
+                pb for pb in pool_bots
+                if getattr(pb, 'is_enabled', True)
+                and getattr(pb, 'consecutive_failures', 0) <= 3
+            ]
+            
+            if not viable:
+                # Todos com muitas falhas — não servir nenhum
+                logger.warning(
+                    f"🚫 Fallback degraded: nenhum bot viável no pool {getattr(pool, 'id', '?')} "
+                    f"(todos com >3 falhas)"
+                )
+                return None
+            
+            # Retornar o com menos falhas
+            best_candidate = min(
+                viable,
                 key=lambda b: getattr(b, 'consecutive_failures', 0)
             )
-            
-            # Retornar o com menos falhas (mesmo se offline)
-            best_candidate = sorted_by_failures[0]
             
             logger.warning(
                 f"🔄 Fallback degraded: bot_id={best_candidate.bot_id} "
@@ -253,13 +264,14 @@ class BotIntelligenceService:
     @classmethod
     def _select_any_available(cls, pool) -> Optional[Any]:
         """
-        🆘 Último recurso: qualquer bot disponível
+        🆘 Último recurso: retorna None em vez de servir bot morto.
+        O redirect vai mostrar página de erro amigável.
         """
-        try:
-            pool_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
-            return pool_bots[0] if pool_bots else None
-        except Exception:
-            return None
+        logger.warning(
+            f"🚫 Último recurso: nenhum bot disponível no pool "
+            f"{getattr(pool, 'id', '?')} — retornando None"
+        )
+        return None
     
     @classmethod
     def get_bot_telegram_url(cls, pool_bot) -> Optional[str]:

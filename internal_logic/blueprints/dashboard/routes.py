@@ -2532,6 +2532,7 @@ def api_verify_bots_status():
         status = {
             'id': bot.id,
             'is_running': bot.is_running if hasattr(bot, 'is_running') else False,
+            'manually_disabled': getattr(bot, 'manually_disabled', False),
             'sources': ['database']
         }
         bots_status.append(status)
@@ -3475,6 +3476,7 @@ def api_toggle_bot(bot_id):
             bot_manager = BotManager(socketio=None, user_id=current_user.id)
             bot_manager.stop_bot(bot.id)
             bot.is_running = False
+            bot.manually_disabled = True
             bot.last_stopped = get_brazil_time()
             message = 'Bot parado com sucesso'
         else:
@@ -3488,6 +3490,7 @@ def api_toggle_bot(bot_id):
                 config=config.to_dict() if config else {}
             )
             bot.is_running = True
+            bot.manually_disabled = False
             bot.last_started = get_brazil_time()
             bot.last_error = None
             message = 'Bot iniciado com sucesso'

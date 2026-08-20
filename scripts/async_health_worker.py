@@ -39,7 +39,7 @@ import os
 import sys
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Tuple
 
 # Setup logging antes de qualquer import
@@ -70,8 +70,8 @@ except ImportError:
 logger.info("🚀 Inicializando Async Health Worker...")
 logger.info("   Carregando contexto Flask (setup único)...")
 
-from internal_logic.core.extensions import create_app, db
-from internal_logic.core.models import RedirectPool, PoolBot, get_brazil_time
+from internal_logic.core.extensions import create_app, db, socketio
+from internal_logic.core.models import RedirectPool, PoolBot, Bot, get_brazil_time
 from sqlalchemy.orm import joinedload
 
 # Criar aplicação Flask UMA VEZ
@@ -209,7 +209,89 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     # 5. COMMIT ÚNICO
     # ==========================================================================
     db.session.commit()
-    
+
+    # ==========================================================================
+    # 6. SINCRONIZAR Bot.is_running COM PoolBot.status (Fix 1 + Fix 4)
+    # ==========================================================================
+    # Agrupa bots por bot_id e conta online/offline
+    bot_ids_status = {}
+    for pool_bot in all_pool_bots:
+        bot_id = pool_bot.bot_id
+        if bot_id not in bot_ids_status:
+            bot_ids_status[bot_id] = {'online': 0, 'offline': 0, 'pool_bots': []}
+        if pool_bot.status == 'online':
+            bot_ids_status[bot_id]['online'] += 1
+        else:
+            bot_ids_status[bot_id]['offline'] += 1
+        bot_ids_status[bot_id]['pool_bots'].append(pool_bot)
+
+    bots_changed = 0
+    for bot_id, counts in bot_ids_status.items():
+        bot = Bot.query.get(bot_id)
+        if not bot:
+            continue
+
+        # FIX CRÍTICO: Health worker NUNCA mexe em bot desligado pelo usuário
+        if getattr(bot, 'manually_disabled', False):
+            continue
+
+        old_is_running = bot.is_running
+
+        if counts['online'] == 0 and counts['offline'] > 0:
+            # Todos os PoolBots offline → bot está morto
+            if bot.is_running:
+                bot.is_running = False
+                bot.health_status = 'offline'
+                bots_changed += 1
+                logger.warning(
+                    f"🔴 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                    f"marcado como OFFLINE — todos os pools mortos"
+                )
+        else:
+            # Pelo menos 1 online → bot está vivo
+            if not bot.is_running:
+                bot.is_running = True
+                bot.health_status = 'online'
+                bots_changed += 1
+                logger.info(
+                    f"🟢 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                    f"marcado como ONLINE — pools恢复"
+                )
+
+        # FIX 4: Aplicar circuit breaker automático se muitas falhas
+        for pool_bot in counts['pool_bots']:
+            if (pool_bot.status == 'offline'
+                    and getattr(pool_bot, 'consecutive_failures', 0) >= 5
+                    and not pool_bot.circuit_breaker_until):
+                pool_bot.circuit_breaker_until = get_brazil_time() + timedelta(minutes=30)
+                logger.warning(
+                    f"⚡ Circuit breaker ativado para PoolBot {pool_bot.id} "
+                    f"(bot {bot_id}) — {pool_bot.consecutive_failures} falhas, "
+                    f"bloqueado por 30min"
+                )
+
+        # FIX 3: Notificar usuário via WebSocket se bot caiu
+        if old_is_running and not bot.is_running:
+            try:
+                socketio.emit('bot_status_update', {
+                    'bot_id': bot.id,
+                    'bot_name': getattr(bot, 'name', 'Bot'),
+                    'is_running': False,
+                    'message': f'Bot {getattr(bot, "name", "Bot")} ficou offline!'
+                }, room=f'user_{bot.user_id}')
+                logger.info(
+                    f"🔔 WebSocket emitido: bot {bot.id} offline "
+                    f"(user {bot.user_id})"
+                )
+            except Exception as e:
+                logger.debug(f"Erro ao emitir WebSocket: {e}")
+
+    if bots_changed:
+        db.session.commit()
+        logger.info(
+            f"🔄 Sync Bot.is_running: {bots_changed} bots atualizados"
+        )
+
     elapsed = (datetime.now() - start_time).total_seconds()
     return (len(pools), elapsed)
 

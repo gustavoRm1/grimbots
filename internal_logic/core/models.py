@@ -221,6 +221,7 @@ class Bot(db.Model):
     # Status
     is_active = db.Column(db.Boolean, default=True)
     is_running = db.Column(db.Boolean, default=False, index=True)  # Indexado para filtrar bots em execução
+    manually_disabled = db.Column(db.Boolean, default=False, index=True)  # True = usuário desligou via toggle (health worker não reativa)
     last_error = db.Column(db.Text)
     
     # Circuit Breaker - Controle de saúde e falhas (colunas existem no banco)
@@ -280,6 +281,7 @@ class Bot(db.Model):
             'token': self.token[:20] + '...' if self.token else None,
             'is_active': self.is_active,
             'is_running': self.is_running,
+            'manually_disabled': getattr(self, 'manually_disabled', False),
             'total_users': self.total_users,
             'total_sales': self.total_sales,
             'total_revenue': self.total_revenue,

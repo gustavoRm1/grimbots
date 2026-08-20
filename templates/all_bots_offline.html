@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BBR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Indisponível - Tente novamente</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0d0d0d;
+            color: #FAFAFA;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+        }
+        .icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid rgba(239, 68, 68, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+        }
+        h1 {
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            color: #FAFAFA;
+        }
+        p {
+            font-size: 15px;
+            color: #B8B8B8;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .highlight {
+            color: #FFBA08;
+            font-weight: 600;
+        }
+        .retry-btn {
+            display: inline-block;
+            margin-top: 24px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #FFBA08, #E6A800);
+            color: #111827;
+            font-weight: 700;
+            font-size: 16px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .retry-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(255, 186, 8, 0.3);
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 12px;
+            color: #5A5A5A;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">⚠️</div>
+        <h1>Temporariamente Indisponível</h1>
+        <p>
+            O atendimento está passando por uma <span class="highlight">manutenção momentânea</span>.
+        </p>
+        <p>
+            Por favor, tente novamente em alguns minutos.
+        </p>
+
+        <button class="retry-btn" onclick="location.reload()">
+            Tentar Novamente
+        </button>
+
+        <div class="footer">
+            Se o problema persistir, aguarde alguns minutos e tente novamente.
+        </div>
+    </div>
+
+    <script>
+        // Auto-retry após 30 segundos
+        setTimeout(function() {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

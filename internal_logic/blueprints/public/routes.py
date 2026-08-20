@@ -141,18 +141,16 @@ def public_redirect(slug):
         selected_bot = BotIntelligenceService.select_bot(pool)
         
         if not selected_bot:
-            # Fallback: tentar URL de fallback ou primeiro bot
-            logger.warning(f"⚠️ Nenhum bot online no pool {pool.id}")
-            
-            # if hasattr(pool, 'fallback_url') and pool.fallback_url:
-            #     return redirect(pool.fallback_url, code=302)
-            
-            all_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
-            if all_bots:
-                selected_bot = all_bots[0]
-                logger.info(f"🔄 Fallback para bot offline: {selected_bot.bot_id}")
-            else:
-                return jsonify({'error': 'No bots configured'}), 503
+            # Nenhum bot disponível — mostrar página de erro amigável
+            logger.warning(f"⚠️ Nenhum bot online no pool {pool.id} ({pool.slug})")
+            try:
+                _ms.increment_pool_analytics(pool.id, bot_selected=0)
+            except Exception:
+                pass
+            return render_template('all_bots_offline.html',
+                pool_name=pool.name,
+                pool_slug=pool.slug
+            ), 503
         
         bot_url = BotIntelligenceService.get_bot_telegram_url(selected_bot)
         if not bot_url:
