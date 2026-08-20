@@ -574,16 +574,33 @@ def create_general_remarketing():
         if not bot_ids: 
             return jsonify({'error': 'Nenhum bot selecionado'}), 400
 
+        # Processar agendamento (ref: endpoint per-bot linha 200-217)
+        scheduled_at = None
+        status = 'queued'
+        if data.get('scheduled_at'):
+            try:
+                scheduled_at_str = data.get('scheduled_at')
+                scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+                if scheduled_at <= datetime.utcnow():
+                    return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
+                status = 'scheduled'
+                logger.info(f"📅 Campanha geral agendada para: {scheduled_at}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar scheduled_at: {e}")
+                return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
+
         group_id = str(uuid.uuid4())
         campaign_data = {
             'name': data.get('name', 'Campanha Geral'),
             'message': data.get('message'),
-            'buttons': json.dumps(data.get('buttons', [])),
+            'buttons': data.get('buttons', []),
             'target_audience': data.get('audience_segment', 'all_users'),
             'days_since_last_contact': data.get('days_since_last_contact', 0),
-            'status': 'queued',
+            'exclude_buyers': data.get('exclude_buyers', True),
+            'cooldown_hours': data.get('cooldown_hours', 24),
+            'status': status,
+            'scheduled_at': scheduled_at,
             'group_id': group_id,
-            # FIX: Adicionando os campos de mídia perdidos
             'media_url': data.get('media_url'),
             'media_type': data.get('media_type', 'video'),
             'audio_enabled': data.get('audio_enabled', False),
@@ -616,12 +633,13 @@ def create_general_remarketing():
 
         db.session.commit()
 
-        # Disparo Assíncrono
-        service = get_remarketing_service()
-        for c in created_campaigns:
-            service.send_campaign_async(c['campaign_id'], current_user.id)
+        # Disparo Assíncrono — só enviar se imediato (campanhas agendadas são disparadas pelo cron)
+        if status != 'scheduled':
+            service = get_remarketing_service()
+            for c in created_campaigns:
+                service.send_campaign_async(c['campaign_id'], current_user.id)
 
-        return jsonify({'success': True, 'group_id': group_id, 'campaigns': created_campaigns})
+        return jsonify({'success': True, 'group_id': group_id, 'campaigns': created_campaigns, 'scheduled': status == 'scheduled'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
