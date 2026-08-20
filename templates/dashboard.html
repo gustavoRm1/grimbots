@@ -1222,7 +1222,7 @@
                             Selecione os Bots
                         </label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <template x-for="bot in bots" :key="bot.id">
+                            <template x-for="bot in bots.filter(b => b.is_running)" :key="bot.id">
                                 <label class="flex items-center gap-3 p-3 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border"
                                        :class="generalRemarketing.selectedBots.includes(bot.id) ? 'border-accent500' : 'border-transparent'"
                                        :style="generalRemarketing.selectedBots.includes(bot.id) ? 'background: var(--border-subtle); border-color: var(--brand-gold-500);' : ''">
