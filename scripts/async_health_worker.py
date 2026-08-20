@@ -72,7 +72,6 @@ logger.info("   Carregando contexto Flask (setup único)...")
 
 from internal_logic.core.extensions import create_app, db, socketio
 from internal_logic.core.models import RedirectPool, PoolBot, Bot, get_brazil_time
-from sqlalchemy.orm import joinedload
 
 # Criar aplicação Flask UMA VEZ
 app = create_app()
@@ -140,11 +139,9 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     start_time = datetime.now()
     
     # ==========================================================================
-    # 1. EAGER LOAD - Busca tudo em UMA query (elimina N+1)
+    # 1. EAGER LOAD - Busca pools ativos (pool_bots é lazy='dynamic', não joinedload)
     # ==========================================================================
-    pools = RedirectPool.query.options(
-        joinedload(RedirectPool.pool_bots).joinedload(PoolBot.bot)
-    ).filter_by(is_active=True).all()
+    pools = RedirectPool.query.filter_by(is_active=True).all()
     
     if not pools:
         return (0, 0.0)
@@ -333,8 +330,9 @@ async def main_loop():
                 logger.error(f"❌ Erro no ciclo #{cycle_count}: {e}")
                 
                 try:
-                    db.session.rollback()
-                    logger.info("   Rollback executado com sucesso")
+                    with app.app_context():
+                        db.session.rollback()
+                        logger.info("   Rollback executado com sucesso")
                 except Exception as rollback_error:
                     logger.error(f"   Falha no rollback: {rollback_error}")
                 
@@ -343,11 +341,11 @@ async def main_loop():
                 logger.debug(f"Traceback: {traceback.format_exc()}")
             
             finally:
-                # 🔥 CRÍTICO: Limpar sessão do SQLAlchemy para evitar memory leak (Identity Map)
-                # Remove todos os objetos da sessão, permitindo Garbage Collector limpar a RAM
+                # Limpar sessão do SQLAlchemy
                 try:
-                    db.session.remove()
-                    logger.debug("   Sessão do SQLAlchemy limpa (db.session.remove())")
+                    with app.app_context():
+                        db.session.remove()
+                        logger.debug("   Sessão do SQLAlchemy limpa")
                 except Exception as cleanup_error:
                     logger.warning(f"   Erro ao limpar sessão: {cleanup_error}")
                 
