@@ -5,7 +5,7 @@ from .gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 
-SUPREMUSPAY_API = "http://82.152.174.9/api/v1"
+SUPREMUSPAY_API = "http://178.92.163.234/api/v1"
 
 
 class SupremusPayGateway(PaymentGateway):
