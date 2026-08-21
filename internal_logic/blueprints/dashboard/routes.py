@@ -3607,8 +3607,14 @@ def api_update_bot_token(bot_id):
                     token=new_token,
                     config=bot.config.to_dict() if bot.config else {}
                 )
-                logger.info(f"Bot {bot_id} reiniciado após atualização de token")
+                bot.is_running = True
+                bot.last_started = get_brazil_time()
+                bot.last_error = None
+                db.session.commit()
+                logger.info(f"Bot {bot_id} reiniciado e marcado como ONLINE após atualização de token")
             except Exception as e:
+                bot.last_error = str(e)
+                db.session.commit()
                 logger.error(f"Erro ao reiniciar bot {bot_id} após troca de token: {e}")
 
         return jsonify({
