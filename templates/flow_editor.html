@@ -44,6 +44,25 @@
 .df-btn{width:30px;height:26px;border:none;border-radius:6px;background:#E02727;color:#fff;cursor:pointer;font-size:11px;z-index:5;position:relative}
 .df-btn.edit{background:#242836}.df-btn.edit:hover{background:#333}
 .df-btn:hover{filter:brightness(1.2)}
+/* ===== MODAL DE EDIÇÃO ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:5000}
+.modal-overlay.open{display:flex}
+.modal-box{width:500px;max-width:92vw;max-height:88vh;overflow-y:auto;background:#161920;border:1px solid #2F3441;border-radius:14px;padding:24px;color:#fff;font-family:'Inter',sans-serif}
+.modal-box::-webkit-scrollbar{width:6px}.modal-box::-webkit-scrollbar-thumb{background:#2A2D36;border-radius:10px}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.modal-head h3{font-size:16px;font-weight:700;margin:0}
+.fgroup{margin-bottom:14px}
+.fgroup label{display:block;font-size:11px;font-weight:700;color:#8B8B93;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.fgroup input,.fgroup textarea,.fgroup select{width:100%;background:#0F0F14;border:1px solid #2B303D;color:#fff;padding:10px 12px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
+.fgroup input:focus,.fgroup textarea:focus,.fgroup select:focus{border-color:#FFB800}
+.fgroup textarea{min-height:75px;resize:vertical}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-row{display:flex;gap:8px;margin-bottom:8px}
+.btn-row input{flex:1;background:#0F0F14;border:1px solid #2B303D;color:#fff;padding:9px 12px;border-radius:8px;font-size:13px}
+.btn-del2{background:transparent;border:1px solid #3A3F50;color:#EF4444;border-radius:8px;width:40px;cursor:pointer}
+.btn-ghost2{background:transparent;border:1px solid #3A3F50;color:#8B8B93;padding:6px 12px;border-radius:8px;font-weight:600;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-ghost2:hover{background:#242836;color:#fff}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 </style>
 {% endblock %}
 
@@ -128,6 +147,20 @@
     </div>
 </div>
 
+<!-- MODAL DE EDIÇÃO -->
+<div class="modal-overlay" id="modal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>Editar: <span id="mTitle" style="color:#FFB800"></span></h3>
+            <button type="button" class="btn-ghost2" onclick="closeModal()" style="padding:6px 12px;">✕</button>
+        </div>
+        <div id="mFields"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-ghost2" onclick="closeModal()">Cancelar</button>
+            <button type="button" class="btn-primary2" onclick="saveModal()" style="background:#FFB800;border:none;color:#000;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;">✓ Salvar</button>
+        </div>
+    </div>
+</div>
 <script>
 var BOT_ID = {{ bot.id }};
 var CFG_DATA = null;
@@ -191,11 +224,182 @@ function refreshStartBadges(startId) {
 function buildNodeHtml(type) {
     var t = TYPES[type] || {label:type, icon:'fa-circle', color:'#888'};
     var outs = OUT_LABELS[type] || [];
-    return '<div class="df-head"><div class="df-icon" style="background:'+t.color+'22;border:1px solid '+t.color+'44;color:'+t.color+'"><i class="fas '+t.icon+'"></i></div><div class="df-title">'+t.label+'</div><div class="df-star" title="Definir como inicio" onclick="event.stopPropagation();window._flowSetStart(parentNodeIdGf(this))">&#11088;</div></div><div class="df-body placeholder" data-df-preview>Nada configurado</div>'+outs.map(function(l){return '<div class="df-out-label">'+l+'</div>'}).join('')+'<div class="df-actions"><button class="df-btn edit" title="Editar" onclick="event.stopPropagation()"><i class="fas fa-pen"></i></button><button class="df-btn" title="Remover" onclick="event.stopPropagation();window._flowRemoveNode(parentNodeIdGf(this))"><i class="fas fa-trash"></i></button></div>';
+    return '<div class="df-head"><div class="df-icon" style="background:'+t.color+'22;border:1px solid '+t.color+'44;color:'+t.color+'"><i class="fas '+t.icon+'"></i></div><div class="df-title">'+t.label+'</div><div class="df-star" title="Definir como inicio" onclick="event.stopPropagation();window._flowSetStart(parentNodeIdGf(this))">&#11088;</div></div><div class="df-body placeholder" data-df-preview>Nada configurado</div>'+outs.map(function(l){return '<div class="df-out-label">'+l+'</div>'}).join('')+'<div class="df-actions"><button class="df-btn edit" title="Editar" onclick="event.stopPropagation();openModal(parentNodeIdGf(this))"><i class="fas fa-pen"></i></button><button class="df-btn" title="Remover" onclick="event.stopPropagation();window._flowRemoveNode(parentNodeIdGf(this))"><i class="fas fa-trash"></i></button></div>';
 }
 
 function defaultData(type) {
     return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
+}
+
+/* ═══════════ SISTEMA DE EDIÇÃO (modais) — portado do flow_drawflow ═══════════ */
+var OPT_LABELS = { video:'🎬 Vídeo', photo:'🖼️ Foto', fixed:'💰 Preço Fixo (R$)', percentage:'📉 Desconto % sobre o original',
+    hours:'⏰ Horas', days:'📅 Dias', weeks:'🗓️ Semanas', months:'📆 Meses',
+    browser:'🌐 Navegador', telegram:'✈️ Telegram', paid:'✅ Pago', pending:'⏳ Pendente',
+    any:'Qualquer coisa (só recebeu mensagem)', email:'Um e-mail válido', phone:'Um telefone válido',
+    cpf:'Um CPF válido', contains:'Uma frase que contenha uma palavra', equals:'Exatamente igual a um texto',
+    payment_status:'💰 Se o pagamento foi aprovado', text_validation:'⌨️ O que o cliente digitou (resposta)',
+    button_click:'🖱️ Em qual botão o cliente clicou', time_elapsed:'⏰ Se passou um tempo (minutos)' };
+function gfEsc(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
+var BOX = function(s){ return '<div style="background:rgba(255,184,0,.08);border:1px solid rgba(255,184,0,.25);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6;color:#e5e7eb;">'+s+'</div>'; };
+var EXPLAINERS = {
+    message: BOX('<b style="color:#FFB800">💬 Como funciona:</b> este bloco envia uma <b>mensagem de texto</b> para o cliente no Telegram.<br>🟢 <b>Entrada</b> (bolinha verde, esquerda): recebe a conversa de onde parou.<br>⚪ <b>Saída</b> (bolinha branca, direita): ligue no próximo passo. <i>Fica 🟡 no hover.</i><br>💡 A mídia é <b>opcional</b>.'),
+    content: BOX('<b style="color:#FFB800">🎬 Como funciona:</b> envia <b>mídia com legenda</b> — escolha <b>vídeo</b> ou <b>foto</b> dentro dele.<br>📎 URL direta ou file_id do Telegram.<br>✍️ A mensagem vira a legenda (pode ficar vazia).<br>💡 Substitui os antigos blocos de Vídeo/Foto separados.'),
+    audio: BOX('<b style="color:#FFB800">🎙️ Como funciona:</b> envia um <b>áudio</b> (voice note ou música).<br>📎 URL direta ou file_id (pegue no @getidsbot).<br>⚠️ Envia <b>somente o áudio</b>, sem texto junto.'),
+    payment: BOX('<b style="color:#FFB800">💰 Como funciona:</b> gera o <b>PIX</b> e <b>pausa</b> o fluxo. O caminho depende do resultado:<br>🟢 <b>PAGO</b> — aprovado: entrega/acesso. <i>(obrigatório)</i><br>🟡 <b>PENDENTE</b> — clicou mas não pagou: lembrete. <i>(opcional)</i><br>🔴 <b>RETRY</b> — expirou/falhou: reenvia PIX. <i>(opcional)</i><br>⚠️ Conecte pelo menos PAGO ou PENDENTE — senão o PIX não é gerado.'),
+    access: BOX('<b style="color:#FFB800">🔑 Como funciona:</b> libera o acesso e <b>finaliza o fluxo</b>.<br>🔗 Informe o link entregue ao cliente (botão "✅ Acessar").'),
+    condition: BOX('<b style="color:#FFB800">Como funciona:</b> a condição decide o caminho do fluxo.<br>🟢 <b>Se ATENDER</b> → ligue a bolinha <b>verde</b> (TRUE).<br>🔴 <b>Se NÃO atender</b> → ligue a bolinha <b>vermelha</b> (FALSE).'),
+    subscription: BOX('<b style="color:#FFB800">👑 Como funciona:</b> define o <b>acesso VIP</b> recebido na compra.<br>✅ Pago → registro com validade · 👥 entra no grupo VIP<br>🚪 Saiu do grupo → cancela sozinho · 💸 Reembolso → cancela<br>⚠️ <b>ID do Grupo VIP é obrigatório</b> (@getidsbot no grupo; começa com -100).'),
+    downsell: BOX('<b style="color:#FFB800">⬇️ Como funciona:</b> cliente <b>recusou/abandonou</b> a oferta principal? Envie uma <b>segunda chance mais barata</b>.<br>🤖 Botão de compra automático (texto vazio = bot monta).<br>💰 Preço fixo ou % de desconto (mínimo R$ 0,50).<br>⏱️ Delay em minutos antes de disparar.'),
+    upsell: BOX('<b style="color:#FFB800">⬆️ Como funciona:</b> depois que o cliente <b>PAGA</b>, espera X minutos e envia esta <b>oferta extra</b>.<br>🤖 Botão de compra automático (texto vazio = bot monta).<br>💰 Preço fixo ou % de desconto (mínimo R$ 0,50).<br>⏱️ Delay em minutos após o pagamento.'),
+    redirect: BOX('<b style="color:#FFB800">🔗 Como funciona:</b> envia <b>mensagem com botão de link</b>.<br>👆 O Telegram abre o link no navegador do cliente.<br>⚪ A saída branca continua o fluxo após o clique.')
+};
+var FIELDS = {
+    common: [ ['message','Mensagem','textarea'], ['media_url','URL da Midia ou file_id (opcional)','text'] ],
+    message: null,
+    content: [ ['media_type','Formato da midia','select:video,photo'], ['media_url','URL da Midia ou file_id','text'], ['message','Legenda (aparece em cima da midia)','textarea'] ],
+    audio: [ ['audio_url','URL do Audio ou file_id do Telegram','text'] ],
+    payment: [ ['price','Preco (R$)','number'], ['product_name','Nome do Produto','text'], ['button_text','Texto do Botao','text'] ],
+    access: [ ['access_link','Link de Acesso','text'], ['message','Mensagem de liberacao','textarea'] ],
+    subscription: [ ['duration_type','Validade em...','select:hours,days,weeks,months'], ['duration_value','Quantidade de tempo','number'], ['vip_chat_id','ID do Grupo VIP (obrigatorio, comeca com -100)','text'], ['vip_group_link','Link de convite alternativo (opcional)','text'] ],
+    redirect: [ ['message','Mensagem (aparece acima do botao)','textarea'], ['button_text','Texto do Botao','text'], ['redirect_url','Link de Destino (URL)','text'] ],
+    settings: [ ['access_link','Link de Acesso (vale para o bot inteiro)','text'], ['success_message','Mensagem de Sucesso (apos pagamento)','textarea'], ['pending_message','Mensagem Pendente (enquanto processa)','textarea'], ['meta_pixel_id','Meta Pixel ID','text'] ],
+    condition: [
+        ['@cond:condition_type','Tipo de Condicao','select:payment_status,text_validation,button_click,time_elapsed'],
+        ['@cond:validation','O que validar na resposta?','select:any,email,phone,cpf,contains,equals'],
+        ['@cond:value','Palavra/Texto esperado (contains/equals)','text'],
+        ['@cond:button_text','Texto do Botao esperado','text'],
+        ['@cond:status','Status esperado do pagamento','select:paid,pending'],
+        ['@cond:minutes','Minutos decorridos','number'],
+        ['@cond:max_attempts','Maximo de Tentativas (vazio = sem limite)','number']
+    ],
+    downsell: 'OFFER', upsell: 'OFFER'
+};
+
+var editingId = null;
+function gfSel(k, opts, cur){ return '<select data-k="'+k+'">' + opts.map(function(o){ var v=o[0], t=o[1]; return '<option value="'+v+'" '+(v===cur?'selected':'')+'>'+t+'</option>'; }).join('') + '</select>'; }
+function buildConditionFields(cd){
+    return BOX('<b style="color:#FFB800">Como funciona:</b> a condição decide o caminho do fluxo.<br>🟢 <b>Se ATENDER</b> → bolinha <b>verde</b> (TRUE).<br>🔴 <b>Se NÃO atender</b> → bolinha <b>vermelha</b> (FALSE).') +
+    '<div class="fgroup"><label>O que você quer verificar?</label>'+gfSel('@cond:condition_type',[['payment_status',OPT_LABELS.payment_status],['text_validation',OPT_LABELS.text_validation],['button_click',OPT_LABELS.button_click],['time_elapsed',OPT_LABELS.time_elapsed]],cd.condition_type)+'</div>'+
+    '<div data-ct="text_validation"><div class="fgroup"><label>A resposta do cliente deve ser...</label>'+gfSel('@cond:validation',[['any',OPT_LABELS.any],['email',OPT_LABELS.email],['phone',OPT_LABELS.phone],['cpf',OPT_LABELS.cpf],['contains',OPT_LABELS.contains],['equals',OPT_LABELS.equals]],cd.validation)+'</div>'+
+    '<div class="fgroup" data-needsval style="display:'+(['contains','equals'].indexOf(cd.validation)!==-1?'':'none')+'"><label>Qual palavra ou texto?</label><input data-k="@cond:value" value="'+gfEsc(cd.value)+'"></div>'+
+    '<div class="fgroup"><label>Quantas tentativas o cliente tem? <span style="color:#6B7280">(opcional)</span></label><input data-k="@cond:max_attempts" type="number" placeholder="Vazio = ilimitado" value="'+gfEsc(cd.max_attempts)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Esgotou? Segue pelo caminho 🔴 vermelho.</p></div></div>'+
+    '<div data-ct="button_click" style="display:none"><div class="fgroup"><label>Qual o texto escrito no botão?</label><input data-k="@cond:button_text" value="'+gfEsc(cd.button_text)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Idêntico ao botão do bloco anterior.</p></div></div>'+
+    '<div data-ct="payment_status" style="display:none"><div class="fgroup"><label>Qual status do pagamento?</label>'+gfSel('@cond:status',[['paid','✅ Pago'],['pending','⏳ Pendente']],cd.status)+'</div></div>'+
+    '<div data-ct="time_elapsed" style="display:none"><div class="fgroup"><label>Quantos minutos devem passar?</label><input data-k="@cond:minutes" type="number" value="'+gfEsc(cd.minutes??5)+'"></div></div>';
+}
+function applyConditionVisibility(){
+    var type = document.querySelector('[data-k="@cond:condition_type"]').value;
+    var validation = document.querySelector('[data-k="@cond:validation"]').value;
+    document.querySelectorAll('#mFields [data-ct]').forEach(function(g){ g.style.display = (g.getAttribute('data-ct')===type)?'':'none'; });
+    var needsVal = ['contains','equals'].indexOf(validation)!==-1;
+    var v = document.querySelector('[data-needsval]'); if(v) v.style.display = needsVal?'':'none';
+}
+function buildOfferFields(c){
+    return BOX(c.__meta && c.__meta.type==='upsell'
+        ? '<b style="color:#FFB800">⬆️ Como funciona:</b> depois que o cliente <b>PAGA</b>, espera X min e envia esta <b>oferta extra</b>.<br>🤖 Botão de compra automático (texto vazio = bot monta).<br>💰 Fixo ou % desconto (mín R$ 0,50).<br>⏱️ Delay em minutos após o pagamento.'
+        : '<b style="color:#FFB800">⬇️ Como funciona:</b> cliente <b>recusou/abandonou</b>? Envie uma <b>segunda chance mais barata</b>.<br>🤖 Botão de compra automático.<br>💰 Fixo ou % desconto (mín R$ 0,50).<br>⏱️ Delay antes de disparar.') +
+    '<div class="fgroup"><label>Mensagem de Venda <span style="color:#6B7280">(o cliente lê antes do botão)</span></label><textarea data-k="message">'+gfEsc(c.message)+'</textarea></div>'+
+    '<div class="frow"><div class="fgroup"><label>Tipo de Mídia <span style="color:#6B7280">(opcional)</span></label>'+gfSel('media_type',[['video','🎬 Vídeo'],['photo','🖼️ Foto']],c.media_type)+'</div>'+
+    '<div class="fgroup"><label>URL da Mídia ou file_id</label><input data-k="media_url" value="'+gfEsc(c.media_url)+'"></div></div>'+
+    '<div class="fgroup"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:#e5e7eb;"><input type="checkbox" data-k="audio_enabled" data-bool="1" '+(c.audio_enabled?'checked':'')+' style="width:18px;height:18px;accent-color:#FFB800;"> 🎙️ Enviar um áudio junto</label>'+
+    '<div data-audio-url style="margin-top:8px;display:'+(c.audio_enabled?'':'none')+'"><input data-k="audio_url" value="'+gfEsc(c.audio_url)+'"></div></div>'+
+    '<div class="fgroup"><label>Como será o preço da oferta?</label>'+gfSel('pricing_mode',[['fixed',OPT_LABELS.fixed],['percentage',OPT_LABELS.percentage]],c.pricing_mode)+'</div>'+
+    '<div class="frow"><div class="fgroup" data-pm="fixed" style="display:'+(c.pricing_mode==='percentage'?'none':'')+'"><label>Preço da oferta (R$)</label><input data-k="price" type="number" step="0.01" min="0.5" value="'+gfEsc(c.price)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Mínimo: R$ 0,50</p></div>'+
+    '<div class="fgroup" data-pm="percentage" style="display:'+(c.pricing_mode==='fixed'?'none':'')+'"><label>Desconto (%)</label><input data-k="discount_percentage" type="number" min="1" max="95" value="'+gfEsc(c.discount_percentage)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Ex: 50 = metade do preço</p></div></div>'+
+    '<div class="frow"><div class="fgroup"><label>Nome do Produto</label><input data-k="product_name" value="'+gfEsc(c.product_name)+'"></div>'+
+    '<div class="fgroup"><label>Texto do Botão <span style="color:#6B7280">(vazio = automático)</span></label><input data-k="button_text" value="'+gfEsc(c.button_text)+'"></div></div>'+
+    '<div class="fgroup"><label>Esperar quantos minutos para enviar?</label><input data-k="delay_minutes" type="number" min="0" style="max-width:140px" value="'+gfEsc(c.delay_minutes??5)+'"></div>';
+}
+function applyOfferVisibility(){
+    var pm = document.querySelector('[data-k="pricing_mode"]').value;
+    var au = document.querySelector('[data-k="audio_enabled"]').checked;
+    document.querySelectorAll('#mFields [data-pm]').forEach(function(g){ g.style.display=(g.getAttribute('data-pm')===pm)?'':'none'; });
+    var a = document.querySelector('[data-audio-url]'); if(a) a.style.display = au?'':'none';
+}
+function openModal(id){
+    editingId = String(id);
+    var ed = window._gfEditor; if(!ed) return;
+    var node = ed.getNodeFromId(id);
+    var c = node.data;
+    var t = TYPES[node.name] || {label:node.name};
+    document.getElementById('mTitle').textContent = t.label;
+
+    if(node.name==='condition'){
+        c.__meta = c.__meta || {};
+        if(!Array.isArray(c.__meta.conditions) || !c.__meta.conditions[0]){
+            c.__meta.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status', validation:'any', value:'', button_text:'', status:'paid', minutes:5, target_step:'', fallback_step:'', max_attempts:null, order:0 }];
+        }
+    }
+
+    var html = '';
+    if(node.name==='condition'){ html = buildConditionFields(c.__meta.conditions[0]); }
+    else if(FIELDS[node.name]==='OFFER'){ html = EXPLAINERS[node.name] + buildOfferFields(c); }
+    else {
+        if(EXPLAINERS[node.name]) html += EXPLAINERS[node.name];
+        var fields = FIELDS[node.name];
+        if(!fields && ['message','video'].indexOf(node.name)!==-1) fields = FIELDS.common;
+        if(fields) fields.forEach(function(f){
+            var k=f[0], label=f[1], kind=f[2];
+            var v = k.indexOf('@cond:')===0 ? '' : (c[k]);
+            if(kind==='textarea') html += '<div class="fgroup"><label>'+label+'</label><textarea data-k="'+k+'">'+gfEsc(v)+'</textarea></div>';
+            else if(kind.indexOf('select:')===0){ var opts=kind.slice(7).split(',').map(function(o){return '<option value="'+o+'" '+(o===v?'selected':'')+'>'+(OPT_LABELS[o]||o)+'</option>';}).join(''); html += '<div class="fgroup"><label>'+label+'</label><select data-k="'+k+'">'+opts+'</select></div>'; }
+            else html += '<div class="fgroup"><label>'+label+'</label><input data-k="'+k+'" type="'+kind+'" value="'+gfEsc(v)+'"></div>';
+        });
+    }
+    // Botões customizados (exceto tipos sem suporte)
+    if(['message','buttons','content','audio','video','subscription'].indexOf(node.name)!==-1){
+        html += '<div class="fgroup"><label>Botões Customizados <span style="color:#6B7280">(cada um vira uma saída)</span></label><div id="btnList"></div><button type="button" class="btn-ghost2" onclick="addBtnRow()"><i class="fas fa-plus"></i> Adicionar botão</button></div>';
+    }
+    document.getElementById('mFields').innerHTML = html;
+    (c.custom_buttons||[]).forEach(function(b){ addBtnRow(b.text); });
+    if(node.name==='condition'){
+        var applyCt = applyConditionVisibility;
+        document.querySelector('[data-k="@cond:condition_type"]').addEventListener('change', applyCt);
+        document.querySelector('[data-k="@cond:validation"]').addEventListener('change', applyCt);
+        applyCt();
+    }
+    if(FIELDS[node.name]==='OFFER'){
+        document.querySelector('[data-k="pricing_mode"]').addEventListener('change', applyOfferVisibility);
+        document.querySelector('[data-k="audio_enabled"]').addEventListener('change', applyOfferVisibility);
+        applyOfferVisibility();
+    }
+    document.getElementById('modal').classList.add('open');
+}
+function addBtnRow(text){
+    var div = document.createElement('div');
+    div.className='btn-row';
+    div.innerHTML='<input type="text" placeholder="Texto do botão" value="'+gfEsc(text)+'"><button type="button" class="btn-del2" onclick="this.parentElement.remove()">✕</button>';
+    document.getElementById('btnList').appendChild(div);
+}
+function closeModal(){ document.getElementById('modal').classList.remove('open'); editingId=null; }
+function saveModal(){
+    var ed = window._gfEditor; if(!ed || !editingId) return;
+    var node = ed.getNodeFromId(editingId);
+    var data = JSON.parse(JSON.stringify(node.data));
+    document.querySelectorAll('#mFields [data-k]').forEach(function(inp){
+        var k = inp.getAttribute('data-k'); var val;
+        if(inp.dataset.bool) val = inp.checked;
+        else if(inp.type==='number') val = (parseFloat(inp.value)||null);
+        else val = inp.value;
+        if(k.indexOf('@cond:')===0){ data.__meta.conditions[0][k.slice(6)] = val; }
+        else data[k] = val;
+    });
+    var rows = document.querySelectorAll('#btnList .btn-row input');
+    if(rows.length || (data.custom_buttons&&data.custom_buttons.length)){
+        data.custom_buttons = Array.from(rows).map(function(r,i){ return { text:r.value, target_step:(data.custom_buttons&&data.custom_buttons[i]?data.custom_buttons[i].target_step:'') }; });
+    }
+    syncOutputs(editingId, node.name, data.custom_buttons);
+    ed.updateNodeDataFromId(editingId, data);
+    refreshPreview(ed, editingId);
+    closeModal();
+}
+function syncOutputs(id, type, buttons){
+    var ed = window._gfEditor;
+    var desired = DrawflowAdapter.computeOutputs(type, buttons);
+    var keys = function(){ return Object.keys(ed.drawflow.drawflow.Home.data[id].outputs).sort(function(a,b){return (+a.slice(7))-(+b.slice(7));}); };
+    while(keys().length > desired.length){ ed.removeNodeOutput(id, keys().pop()); }
+    while(keys().length < desired.length){ ed.addNodeOutput(id); }
+    ed.updateConnectionNodes(id);
 }
 
 function flowEditor() {
@@ -213,6 +417,7 @@ function flowEditor() {
             self.editor = new Drawflow(el);
             self.editor.reroute = true;
             self.editor.start();
+            window._gfEditor = self.editor;
             window._flowSetStart = function(id) { self.flow_start_step_id = String(id); refreshStartBadges(self.flow_start_step_id); };
             window._flowRemoveNode = function(id) { self.removeNode(id); };
             self.editor.on('nodeCreated', function(newId) {
