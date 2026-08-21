@@ -4200,6 +4200,14 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                     </div>
                 </div>
 
+                <div x-show="config.flow_enabled" x-transition class="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-3 mt-2">
+                    <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+                    <p class="text-sm text-blue-300">
+                        <strong>Importante:</strong> Salve as configuracoes antes de abrir o Editor de Fluxo. 
+                        Caso contrario, as alteracoes feitas aqui serao perdidas.
+                    </p>
+                </div>
+
                 <div x-show="config.flow_enabled" x-transition class="flex justify-center mt-4">
                     <a href="{{ url_for('dashboard.flow_editor_page', bot_id=bot.id) }}" target="_blank"
                        style="background:#FFB800;color:#000;display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:12px;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;box-shadow:0 4px 20px rgba(255,184,0,0.3);transition:all 0.2s;text-decoration:none;"
