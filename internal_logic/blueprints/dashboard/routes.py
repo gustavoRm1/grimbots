@@ -3599,23 +3599,23 @@ def api_update_bot_token(bot_id):
         bot.total_users = 0
         db.session.commit()
 
-        # ✅ REINICIAR BOT SE ESTAVA RODANDO ANTES
-        if was_running:
-            try:
-                bot_manager.start_bot(
-                    bot_id=bot_id,
-                    token=new_token,
-                    config=bot.config.to_dict() if bot.config else {}
-                )
-                bot.is_running = True
-                bot.last_started = get_brazil_time()
-                bot.last_error = None
-                db.session.commit()
-                logger.info(f"Bot {bot_id} reiniciado e marcado como ONLINE após atualização de token")
-            except Exception as e:
-                bot.last_error = str(e)
-                db.session.commit()
-                logger.error(f"Erro ao reiniciar bot {bot_id} após troca de token: {e}")
+        # ✅ SEMPRE INICIAR BOT APÓS TROCA DE TOKEN
+        try:
+            bot_manager.start_bot(
+                bot_id=bot_id,
+                token=new_token,
+                config=bot.config.to_dict() if bot.config else {}
+            )
+            bot.is_running = True
+            bot.manually_disabled = False
+            bot.last_started = get_brazil_time()
+            bot.last_error = None
+            db.session.commit()
+            logger.info(f"Bot {bot_id} iniciado e marcado como ONLINE após atualização de token")
+        except Exception as e:
+            bot.last_error = str(e)
+            db.session.commit()
+            logger.error(f"Erro ao iniciar bot {bot_id} após troca de token: {e}")
 
         return jsonify({
             'message': f'Token atualizado! {archived_count} usuários arquivados.',
