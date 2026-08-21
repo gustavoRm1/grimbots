@@ -4202,8 +4202,10 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                 <div x-show="config.flow_enabled" x-transition class="flex justify-center mt-4">
                     <a href="{{ url_for('dashboard.flow_editor_page', bot_id=bot.id) }}" target="_blank"
-                       class="bg-[#FFB800] hover:bg-[#E5A800] text-black font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-[#FFB800]/30 transition-all duration-200 flex items-center gap-3 text-sm uppercase tracking-wider">
-                        <i class="fas fa-external-link-alt text-lg"></i> Abrir Editor de Fluxo
+                       style="background:#FFB800;color:#000;display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:12px;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;box-shadow:0 4px 20px rgba(255,184,0,0.3);transition:all 0.2s;text-decoration:none;"
+                       onmouseover="this.style.background='#E5A800';this.style.boxShadow='0 4px 25px rgba(255,184,0,0.5)'"
+                       onmouseout="this.style.background='#FFB800';this.style.boxShadow='0 4px 20px rgba(255,184,0,0.3)'">
+                        <i class="fas fa-external-link-alt" style="font-size:18px"></i> Abrir Editor de Fluxo
                     </a>
                 </div>
             </div>
