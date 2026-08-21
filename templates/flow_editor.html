@@ -408,7 +408,11 @@ function flowEditor() {
         saving: false,
         emptyCanvas: true,
         flow_start_step_id: null,
-        blocks: Object.entries(TYPES).map(function(e){ return { type:e[0], label:e[1].label, icon:e[1].icon, color:e[1].color, bgColor:e[1].bgColor, borderColor:e[1].borderColor, desc: STEP_DESCS[e[0]]||'' }; }),
+        // 🔥 Funil FREESTYLE: paleta só com blocos que executam algo.
+        // 'video' = redundante (Conteudo envia video/foto)
+        // 'settings' = muta config global (nao é passo de fluxo; vive na aba Configuracoes)
+        // Nós legados desses tipos ainda carregam/editam se existirem no banco.
+        blocks: Object.entries(TYPES).filter(function(e){ return ['video','settings'].indexOf(e[0]) === -1; }).map(function(e){ return { type:e[0], label:e[1].label, icon:e[1].icon, color:e[1].color, bgColor:e[1].bgColor, borderColor:e[1].borderColor, desc: STEP_DESCS[e[0]]||'' }; }),
 
         init: function() {
             var self = this;
