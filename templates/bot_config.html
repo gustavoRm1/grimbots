@@ -2,6 +2,11 @@
 {% block title %}Configurar Bot - {{ bot.name }}{% endblock %}
 
 {% block extra_head %}
+<!-- 🔥 MIGRAÇÃO DRAWFLOW: substitui stack jsPlumb (MIT, vanilla, sem build) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='drawflow/drawflow.min.css') }}">
+<script src="{{ url_for('static', filename='drawflow/drawflow.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/grim_flow_bridge.js') }}?v=1"></script>
 <style>
 /* ============================================
    BOT CONFIG - CSS COMPLETO
@@ -1581,6 +1586,51 @@ svg circle[data-endpoint-type="button"] {
     r: 6 !important;
 }
 
+/* 🔥 V9.0 CHATBOT BUILDER: Condition endpoints (True/False) */
+.jtk-endpoint[data-endpoint-type="condition-true"] circle,
+svg circle[data-endpoint-type="condition-true"] {
+    fill: #10B981 !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+    r: 6 !important;
+}
+
+.jtk-endpoint[data-endpoint-type="condition-false"] circle,
+svg circle[data-endpoint-type="condition-false"] {
+    fill: #EF4444 !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+    r: 6 !important;
+}
+
+/* 🔥 V9.0 CHATBOT BUILDER: Subscription/Downsell/Upsell/Redirect endpoints */
+.jtk-endpoint[data-endpoint-type="subscription"] circle,
+.jtk-endpoint[data-endpoint-type="downsell"] circle,
+.jtk-endpoint[data-endpoint-type="upsell"] circle,
+.jtk-endpoint[data-endpoint-type="redirect"] circle,
+svg circle[data-endpoint-type="subscription"],
+svg circle[data-endpoint-type="downsell"],
+svg circle[data-endpoint-type="upsell"],
+svg circle[data-endpoint-type="redirect"] {
+    fill: #FFFFFF !important;
+    stroke: #0D0F15 !important;
+    stroke-width: 2 !important;
+    r: 7 !important;
+}
+
+/* Condition hover states */
+.flow-endpoint-condition-true-hover,
+.flow-endpoint-condition-true:hover {
+    transform: scale(1.2) !important;
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8)) !important;
+}
+
+.flow-endpoint-condition-false-hover,
+.flow-endpoint-condition-false:hover {
+    transform: scale(1.2) !important;
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8)) !important;
+}
+
 /* 🔥 FASE 1: CSS Classes Oficiais jsPlumb conforme documentação */
 /* UI Core - Nodes */
 .jtk-node {
@@ -2235,15 +2285,10 @@ window.botConfigApp = function() {
             // Carregar configuração imediatamente, mesmo na versão temporária
             await this.loadConfig();
             
-            // PONTO 1: Watcher do activeTab — renderFlow quando aba Flow fica visível
-            // jsPlumb não calcula posições quando container está display:none (x-show)
-            this.$watch('activeTab', (newTab, oldTab) => {
-                if (newTab === 'flow' && window.flowEditor) {
-                    this.$nextTick(() => {
-                        try {
-                            window.flowEditor.renderFlow();
-                        } catch(e) { console.warn('renderFlow on tab switch:', e); }
-                    });
+            // 🔥 DRAWFLOW: init quando aba Flow fica visível (container precisa estar no DOM)
+            this.$watch('activeTab', (newTab) => {
+                if (newTab === 'flow' && this.config.flow_enabled) {
+                    this.$nextTick(() => { this.initVisualFlowEditor(); });
                 }
             });
         },
@@ -2403,6 +2448,12 @@ window.botConfigApp = function() {
         },
         async saveConfig() {
             console.log('🔍 saveConfig chamado (versão temporária)');
+            
+            // 🔥 DRAWFLOW: exporta canvas → schema grimbots ANTES de persistir
+            if (this.config.flow_enabled && window.GrimFlow && window.GrimFlow.isReady()) {
+                window.GrimFlow.syncToConfig(this.config);
+                console.log('✅ Canvas sincronizado:', this.config.flow_steps.length, 'steps, start =', this.config.flow_start_step_id);
+            }
             
             // Implementar salvamento direto (sempre funciona, não depende da versão completa)
             this.loading = true;
@@ -2636,87 +2687,20 @@ window.botConfigApp = function() {
             }
         },
         onFlowToggle() {
-            console.log('Flow enabled:', this.config.flow_enabled);
-            
             if (this.config.flow_enabled) {
-                this.$nextTick(() => {
-                    setTimeout(() => {
-                        this.initVisualFlowEditor();
-                    }, 200);
-                });
+                this.$nextTick(() => { this.initVisualFlowEditor(); });
             } else {
-                if (window.flowEditor) {
-                    try {
-                        window.flowEditor.destroy();
-                        window.flowEditor = null;
-                    } catch (e) {
-                        console.warn('Erro ao destruir editor antigo:', e);
-                    }
-                }
+                if (window.GrimFlow) window.GrimFlow.destroy();
             }
         },
 
         initVisualFlowEditor() {
-            if (!this.config.flow_enabled) {
-                console.log('Flow desabilitado - nao inicializando editor');
-                return;
-            }
-            
+            if (!this.config.flow_enabled) return;
             this.$nextTick(() => {
-                const canvas = document.getElementById('flow-visual-canvas');
-                if (!canvas) {
-                    console.error('Canvas nao encontrado');
-                    return;
-                }
-                
-                if (typeof jsPlumb === 'undefined') {
-                    console.error('jsPlumb nao disponivel. Aguardando...');
-                    setTimeout(() => this.initVisualFlowEditor(), 500);
-                    return;
-                }
-                
-                if (typeof window.FlowEditor === 'undefined') {
-                    console.error('FlowEditor nao disponivel. Aguardando...');
-                    setTimeout(() => this.initVisualFlowEditor(), 500);
-                    return;
-                }
-                
-                if (window.flowEditor) {
-                    try {
-                        window.flowEditor.destroy();
-                        window.flowEditor = null;
-                    } catch (e) {
-                        console.warn('Erro ao destruir editor antigo:', e);
-                    }
-                }
-                
-                const contentContainer = canvas.querySelector('.flow-canvas-content');
-                if (contentContainer) {
-                    Array.from(contentContainer.children).forEach(child => {
-                        if (child.classList && child.classList.contains('flow-step-block')) {
-                            child.remove();
-                        }
-                    });
-                } else {
-                    const newContent = document.createElement('div');
-                    newContent.className = 'flow-canvas-content';
-                    newContent.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0;';
-                    canvas.appendChild(newContent);
-                }
-                
-                window.alpineFlowEditor = this;
-                
-                try {
-                    window.flowEditor = new window.FlowEditor('flow-visual-canvas', this);
-                    window.flowEditor.init().then(() => {
-                        console.log('Editor jsPlumb inicializado');
-                    }).catch(error => {
-                        console.error('Erro ao inicializar editor jsPlumb:', error);
-                        setTimeout(() => this.initVisualFlowEditor(), 1000);
-                    });
-                } catch (error) {
-                    console.error('Erro ao criar instancia do FlowEditor:', error);
-                    setTimeout(() => this.initVisualFlowEditor(), 1000);
+                if (window.GrimFlow && window.GrimFlow.ensureInit(this)) {
+                    console.log('✅ Flow Editor (Drawflow) inicializado');
+                } else if (this.activeTab === 'flow') {
+                    setTimeout(() => this.initVisualFlowEditor(), 300);
                 }
             });
         },
@@ -2724,139 +2708,17 @@ window.botConfigApp = function() {
         handleFlowDrop(event) {
             const nodeType = event.dataTransfer.getData('text/plain');
             if (!nodeType) return;
-            
-            const canvas = event.currentTarget;
-            const rect = canvas.getBoundingClientRect();
-            const content = canvas.querySelector('.flow-canvas-content');
-            
-            let scaleX = 1, scaleY = 1, translateX = 0, translateY = 0;
-            if (content) {
-                const transform = getComputedStyle(content).transform;
-                if (transform && transform !== 'none') {
-                    const m2d = transform.match(/matrix\(([^)]+)\)/);
-                    if (m2d) {
-                        const p = m2d[1].split(',').map(Number);
-                        scaleX = p[0]; scaleY = p[3]; translateX = p[4]; translateY = p[5];
-                    }
-                    const m3d = transform.match(/matrix3d\(([^)]+)\)/);
-                    if (m3d) {
-                        const p = m3d[1].split(',').map(Number);
-                        scaleX = p[0]; scaleY = p[5]; translateX = p[12]; translateY = p[13];
-                    }
-                }
-            }
-            
-            const x = (event.clientX - rect.left - translateX) / scaleX;
-            const y = (event.clientY - rect.top - translateY) / scaleY;
-            
-            this.addFlowStep({ type: nodeType, x, y });
+            this.addFlowStep(nodeType);
         },
 
         addFlowStep(typeOrOpts = {}) {
             let stepType = 'message';
-            let customX = undefined;
-            let customY = undefined;
             if (typeof typeOrOpts === 'string') {
                 stepType = typeOrOpts;
             } else if (typeof typeOrOpts === 'object' && typeOrOpts !== null) {
                 stepType = typeOrOpts.type || 'message';
-                customX = typeOrOpts.x;
-                customY = typeOrOpts.y;
             }
-            
-            if (!this.config.flow_steps) {
-                this.config.flow_steps = [];
-            }
-            
-            if (!this.config.flow_enabled) {
-                this.config.flow_enabled = true;
-                if (this.activeTab !== 'flow') {
-                    this.activeTab = 'flow';
-                }
-            }
-            
-            const stepId = 'step_' + Date.now();
-            const existingSteps = this.config.flow_steps.length;
-            const cols = Math.ceil(Math.sqrt(existingSteps + 1));
-            const row = Math.floor(existingSteps / cols);
-            const col = existingSteps % cols;
-            
-            const newStep = {
-                id: stepId,
-                type: stepType,
-                order: existingSteps,
-                config: {
-                    message: '',
-                    media_url: '',
-                    audio_url: '',
-                    media_type: 'video',
-                    custom_buttons: []
-                },
-                connections: {},
-                conditions: [],
-                delay_seconds: 0,
-                position: (customX !== undefined && customY !== undefined)
-                    ? { x: customX, y: customY }
-                    : { x: 100 + (col * 280), y: 100 + (row * 180) }
-            };
-            
-            this.config.flow_steps.push(newStep);
-            
-            if (this._renderDebounceTimeout) {
-                clearTimeout(this._renderDebounceTimeout);
-            }
-            
-            this._renderDebounceTimeout = setTimeout(() => {
-                this.$nextTick(async () => {
-                    const tryRender = async () => {
-                        if (window.flowEditor) {
-                            if (!window.flowEditor.isInitialized()) {
-                                try {
-                                    await window.flowEditor.waitForInitialization(5000);
-                                } catch(e) { return false; }
-                            }
-                            if (typeof window.flowEditor.renderAllSteps === 'function') {
-                                try {
-                                    window.flowEditor.renderAllSteps();
-                                    return true;
-                                } catch(e) { return false; }
-                            }
-                        }
-                        return false;
-                    };
-                
-                tryRender().then(success => {
-                    if (success) return;
-                });
-                
-                if (typeof window.FlowEditor === 'undefined' || typeof jsPlumb === 'undefined') {
-                    let attempts = 0;
-                    const checkInterval = setInterval(() => {
-                        attempts++;
-                        if (typeof window.FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
-                            clearInterval(checkInterval);
-                            this.initVisualFlowEditor();
-                            setTimeout(async () => {
-                                const success = await tryRender();
-                                if (!success) setTimeout(() => tryRender(), 1000);
-                            }, 500);
-                        } else if (attempts > 20) {
-                            clearInterval(checkInterval);
-                        }
-                    }, 200);
-                } else {
-                    this.initVisualFlowEditor();
-                    setTimeout(async () => {
-                        const success = await tryRender();
-                        if (!success) {
-                            setTimeout(async () => {
-                                await tryRender();
-                            }, 1000);
-                        }
-                    }, 500);
-                }
-                });
-            }, 300);
+            if (window.GrimFlow) window.GrimFlow.addNode(stepType);
         },
 
         removeFlowStep(stepId) {
@@ -2913,16 +2775,8 @@ window.botConfigApp = function() {
         },
         
         watchFlowSteps() {
-            this.$watch('config.flow_steps', (newSteps, oldSteps) => {
-                if (window.flowEditor && newSteps) {
-                    clearTimeout(this._flowStepsWatchTimeout);
-                    this._flowStepsWatchTimeout = setTimeout(() => {
-                        if (window.flowEditor && window.flowEditor.renderAllSteps) {
-                            window.flowEditor.renderAllSteps();
-                        }
-                    }, 300);
-                }
-            }, { deep: true });
+            // 🔥 DRAWFLOW: sem deep-watch — canvas é a fonte durante edição;
+            // config sincronizada no save (syncToConfig) e no modal (applyStep)
         },
         
         getStepTypeLabel(type) {
@@ -2976,6 +2830,21 @@ window.botConfigApp = function() {
             if (this.editingStep.config.button_text === undefined) this.editingStep.config.button_text = '';
             if (this.editingStep.config.access_link === undefined) this.editingStep.config.access_link = '';
             if (this.editingStep.config.custom_buttons === undefined) this.editingStep.config.custom_buttons = [];
+            // 🔥 Defaults de oferta (downsell/upsell) — schema offer_sender.py
+            if (this.editingStep.config.pricing_mode === undefined) this.editingStep.config.pricing_mode = 'fixed';
+            if (this.editingStep.config.discount_percentage === undefined) this.editingStep.config.discount_percentage = 50;
+            if (this.editingStep.config.audio_enabled === undefined) this.editingStep.config.audio_enabled = false;
+            if (this.editingStep.config.audio_url === undefined) this.editingStep.config.audio_url = '';
+            if (this.editingStep.config.description === undefined) this.editingStep.config.description = '';
+            if (this.editingStep.config.delay_minutes === undefined) this.editingStep.config.delay_minutes = 5;
+            if (!this.editingStep.config.subscription || typeof this.editingStep.config.subscription !== 'object') {
+                this.editingStep.config.subscription = { enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' };
+            }
+
+            // 🔥 Condicao: garantir conditions[0] completa (schema engine)
+            if (this.editingStep.type === 'condition' && (!Array.isArray(this.editingStep.conditions) || this.editingStep.conditions.length === 0)) {
+                this.editingStep.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status', validation:'any', value:'', button_text:'', status:'paid', minutes:5, target_step:'', fallback_step:'', max_attempts:null, order:0 }];
+            }
             if (this.editingStep.delay_seconds === undefined) this.editingStep.delay_seconds = 0;
             if (this.editingStep.title === undefined) this.editingStep.title = '';
             if (!this.editingStep.conditions) this.editingStep.conditions = [];
@@ -3016,10 +2885,8 @@ window.botConfigApp = function() {
             if (!updatedStep.config.custom_buttons) updatedStep.config.custom_buttons = [];
             this.config.flow_steps[this.editingStepIndex] = updatedStep;
             this.$nextTick(() => {
-                if (window.flowEditor && window.flowEditor.updateStepEndpoints) {
-                    window.flowEditor.updateStepEndpoints(existingStep.id);
-                    window.flowEditor.renderAllSteps();
-                }
+                // 🔥 DRAWFLOW: reflete edição no canvas (dados + outputs posicionais)
+                if (window.GrimFlow) window.GrimFlow.applyStep(updatedStep);
             });
             this.closeStepModal();
         },
@@ -4392,17 +4259,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                             </div>
                         </div>
 
-                        <!-- Video -->
-                        <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'video')" @click="addFlowStep('video')" 
-                             class="p-3 bg-[#0F0F14] border border-[#2A2D36] hover:border-[#FFB800] rounded-xl flex flex-col items-center text-center gap-2 cursor-grab active:cursor-grabbing hover:bg-[#1C1E26] transition-all duration-200 shadow-sm group">
-                            <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 group-hover:bg-purple-500/20 transition-all">
-                                <i class="fas fa-video text-base"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-xs font-bold text-gray-200 group-hover:text-white">Video</h4>
-                                <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">Nativo</p>
-                            </div>
-                        </div>
+                        <!-- 🔥 Bloco Video removido: Conteudo ja envia video OU foto (media_type no modal) -->
 
                         <!-- Botoes -->
                         <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'buttons')" @click="addFlowStep('buttons')" 
@@ -4451,6 +4308,57 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">True / False</p>
                             </div>
                         </div>
+
+                        <!-- Assinatura / Subscription -->
+                        <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'subscription')" @click="addFlowStep('subscription')" 
+                             class="p-3 bg-[#0F0F14] border border-[#2A2D36] hover:border-[#FFB800] rounded-xl flex flex-col items-center text-center gap-2 cursor-grab active:cursor-grabbing hover:bg-[#1C1E26] transition-all duration-200 shadow-sm group">
+                            <div class="w-10 h-10 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 group-hover:scale-110 group-hover:bg-yellow-500/20 transition-all">
+                                <i class="fas fa-crown text-base"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-200 group-hover:text-white">Assinatura</h4>
+                                <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">Acesso VIP</p>
+                            </div>
+                        </div>
+
+                        <!-- Downsell -->
+                        <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'downsell')" @click="addFlowStep('downsell')" 
+                             class="p-3 bg-[#0F0F14] border border-[#2A2D36] hover:border-red-500 rounded-xl flex flex-col items-center text-center gap-2 cursor-grab active:cursor-grabbing hover:bg-[#1C1E26] transition-all duration-200 shadow-sm group">
+                            <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 group-hover:scale-110 group-hover:bg-red-500/20 transition-all">
+                                <i class="fas fa-arrow-down text-base"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-200 group-hover:text-white">Downsell</h4>
+                                <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">Oferta alternativa</p>
+                            </div>
+                        </div>
+
+                        <!-- Upsell -->
+                        <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'upsell')" @click="addFlowStep('upsell')" 
+                             class="p-3 bg-[#0F0F14] border border-[#2A2D36] hover:border-green-500 rounded-xl flex flex-col items-center text-center gap-2 cursor-grab active:cursor-grabbing hover:bg-[#1C1E26] transition-all duration-200 shadow-sm group">
+                            <div class="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-400 group-hover:scale-110 group-hover:bg-green-500/20 transition-all">
+                                <i class="fas fa-arrow-up text-base"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-200 group-hover:text-white">Upsell</h4>
+                                <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">Oferta adicional</p>
+                            </div>
+                        </div>
+
+                        <!-- Redirecionamento -->
+                        <div draggable="true" @dragstart="event.dataTransfer.setData('text/plain', 'redirect')" @click="addFlowStep('redirect')" 
+                             class="p-3 bg-[#0F0F14] border border-[#2A2D36] hover:border-purple-500 rounded-xl flex flex-col items-center text-center gap-2 cursor-grab active:cursor-grabbing hover:bg-[#1C1E26] transition-all duration-200 shadow-sm group">
+                            <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 group-hover:bg-purple-500/20 transition-all">
+                                <i class="fas fa-external-link-alt text-base"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-200 group-hover:text-white">Redirecionamento</h4>
+                                <p class="text-[9px] text-[#8B8B93] leading-tight mt-0.5">Link externo</p>
+                            </div>
+                        </div>
+
+                        <!-- 🔥 Bloco Configuracoes removido: funil freestyle = blocos autocontidos.
+                             Configs globais (acesso, msgs de pagamento) vivem na aba Configurações. -->
 
                     </div>
 
@@ -4502,21 +4410,18 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         </div>
                     </div>
 
-                    <!-- CANVAS COM ONDROP DIRECIONADO -->
+                    <!-- CANVAS DRAWFLOW (migração jsPlumb → Drawflow) -->
                     <div id="flow-visual-canvas" 
                          class="flex-1 w-full h-full relative overflow-hidden z-10" 
-                         style="touch-action: none; transform-origin: 0 0; min-height: 500px;"
-                         @dragover.prevent
-                         @drop.prevent="handleFlowDrop(event)">
-                        <div class="flow-canvas-content w-full h-full relative min-h-[500px]">
+                         style="touch-action: none; min-height: 500px;">
+                        <div id="drawflow-canvas" style="width:100%;height:100%;"></div>
                         <div x-show="config.flow_steps.length === 0" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style="z-index: 0;">
                             <div class="w-16 h-16 rounded-2xl bg-[#FFB800]/10 border border-[#FFB800]/20 flex items-center justify-center mb-4">
                                 <i class="fas fa-hand-pointer text-2xl text-[#FFB800]/40"></i>
                             </div>
-                            <p class="text-sm font-bold text-[#8B8B93] mb-1">Arraste um bloco aqui</p>
-                            <p class="text-[11px] text-[#6B7280]">Selecione um modulo na paleta ao lado</p>
+                            <p class="text-sm font-bold text-[#8B8B93] mb-1">Clique em um bloco na paleta</p>
+                            <p class="text-[11px] text-[#6B7280]">Ou arraste os pontos para conectar</p>
                         </div>
-                    </div>
                     </div>
 
                     <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0B0D14] to-transparent pt-12 pb-4 px-4 flex justify-between items-end pointer-events-none" style="z-index: 20;">
@@ -4628,17 +4533,54 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                     <label class="form-label">Tipo</label>
                     <select x-model="editingStep.type" x-show="editingStep" class="form-select">
                         <option value="message">Mensagem</option>
+                        <option value="content">Conteudo (Midia + Texto)</option>
+                        <option value="audio">Audio</option>
+                        <option value="video">Video</option>
+                        <option value="buttons">Botoes</option>
                         <option value="payment">Pagamento</option>
                         <option value="access">Acesso</option>
+                        <option value="subscription">Assinatura VIP</option>
+                        <option value="downsell">Downsell</option>
+                        <option value="upsell">Upsell</option>
+                        <option value="redirect">Redirecionamento</option>
+                        <option value="settings">Configuracoes</option>
+                        <option value="condition">Condicao</option>
                     </select>
                 </div>
 
-                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
+                <!-- 💬 Explicador: Mensagem -->
+                <template x-if="editingStep && editingStep.type === 'message'">
+                    <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200 mb-4">
+                        <b class="text-[#FFB800]">💬 Como funciona:</b> este bloco envia uma <b>mensagem de texto</b> para o cliente no Telegram.<br>
+                        🟢 <b>Entrada</b> (bolinha verde, lado esquerdo): recebe a conversa de onde ela parou.<br>
+                        ⚪ <b>Saída</b> (bolinha branca, lado direito): ligue no próximo passo depois dessa mensagem. <i>Fica 🟡 amarela quando o mouse passa por cima.</i><br>
+                        💡 A mídia é <b>opcional</b> — pode enviar só texto, ou foto/vídeo junto com o texto.
+                    </div>
+                </template>
+
+                <div class="form-group" x-show="editingStep && !['payment','downsell','upsell','condition','audio','redirect','subscription','settings'].includes(editingStep.type)">
                     <label class="form-label">Mensagem</label>
                     <textarea x-model="editingStep.config.message" x-show="editingStep && editingStep.config" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
-                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
+                <!-- 🎙️ Explicador + campo de Áudio (step tipo audio) -->
+                <template x-if="editingStep && editingStep.type === 'audio'">
+                    <div>
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200 mb-4">
+                            <b class="text-[#FFB800]">🎙️ Como funciona:</b> este bloco envia um <b>áudio</b> (voice note ou música) para o cliente.<br>
+                            📎 Cole a <b>URL direta do arquivo</b> ou o <b>file_id do Telegram</b>.<br>
+                            💡 Para pegar o file_id: envie o áudio para o bot <b>@getidsbot</b> e copie o código que ele responder.<br>
+                            🖱️ <b>Botões opcionais:</b> aparecem embaixo do áudio — cada um vira uma saída para um caminho diferente.<br>
+                            ⚠️ Este bloco envia <b>somente o áudio</b>, sem texto junto.
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">URL do Áudio ou file_id do Telegram</label>
+                            <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://... ou file_id" />
+                        </div>
+                    </div>
+                </template>
+
+                <div class="form-group" x-show="editingStep && !['payment','downsell','upsell','condition','audio','redirect','subscription','settings'].includes(editingStep.type)">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
                         <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" x-show="editingStep && editingStep.config" class="form-input pr-20" placeholder="https://..." />
@@ -4657,13 +4599,24 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                     </p>
                 </div>
 
-                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && !['payment','downsell','upsell','condition','audio','redirect','subscription','settings'].includes(editingStep.type)">
                     <label class="form-label">URL do Áudio</label>
                     <input type="text" x-model="editingStep.config.audio_url" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
                     </p>
                 </div>
+
+                <!-- 💰 Explicador: Pagamento -->
+                <template x-if="editingStep && editingStep.type === 'payment'">
+                    <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200 mb-4">
+                        <b class="text-[#FFB800]">💰 Como funciona:</b> este bloco <b>gera o PIX</b> e <b>pausa</b> o fluxo até algo acontecer com o pagamento. O caminho depende do resultado:<br><br>
+                        🟢 <b>PAGO</b> — pagamento <b>aprovado</b>: siga para a entrega, acesso ou próxima oferta. <i>(obrigatório)</i><br>
+                        🟡 <b>PENDENTE</b> — cliente <b>clicou mas ainda não pagou</b>: envie uma mensagem de "aguardando pagamento". <i>(opcional)</i><br>
+                        🔴 <b>RETRY</b> — pagamento <b>expirou ou falhou</b>: reenvie o PIX ou ofereça tentar de novo. <i>(opcional)</i><br><br>
+                        ⚠️ <b>Importante:</b> conecte pelo menos <b>PAGO</b> ou <b>PENDENTE</b> no canvas — sem nenhuma das duas, o PIX não é gerado.
+                    </div>
+                </template>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Preço (R$)</label>
@@ -4685,12 +4638,338 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                     <input type="text" x-model="editingStep.config.access_link" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
                 </div>
 
-                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
+                <!-- 👑 Assinatura VIP (schema subscription_service) -->
+                <template x-if="editingStep && editingStep.type === 'subscription'">
+                    <div class="border border-[#242836] rounded-xl p-4 space-y-4 bg-[#0F0F14]">
+                        <h4 class="text-sm font-bold text-[#FFB800] uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-crown"></i> Acesso VIP
+                        </h4>
+
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200">
+                            <b class="text-[#FFB800]">👑 Como funciona:</b> este bloco define o <b>acesso VIP</b> que o cliente recebe ao comprar.<br>
+                            ✅ Pagamento aprovado → criamos o registro de assinatura com a <b>validade</b> escolhida.<br>
+                            👥 O cliente entra no <b>grupo VIP</b> pelo ID informado.<br>
+                            🚪 Se ele <b>sair do grupo</b> antes do prazo → acesso cancelado sozinho.<br>
+                            💸 Reembolso ou pagamento falho → assinatura <b>cancelada</b> automaticamente.<br>
+                            ⚠️ O <b>ID do Grupo VIP é obrigatório</b> — pegue adicionando o bot @getidsbot no grupo (número que começa com -100).
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Validade do acesso</label>
+                            <div class="grid grid-cols-2 gap-4">
+                                <select x-model="editingStep.config.duration_type" class="form-select">
+                                    <option value="hours">Horas</option>
+                                    <option value="days">Dias</option>
+                                    <option value="weeks">Semanas</option>
+                                    <option value="months">Meses</option>
+                                </select>
+                                <input type="number" x-model.number="editingStep.config.duration_value" class="form-input" placeholder="Ex: 30" min="1" />
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle"></i> Ex: 30 Dias = acesso por um mês. Máximo: 10 anos.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">ID do Grupo VIP (obrigatório)</label>
+                            <input type="text" x-model="editingStep.config.vip_chat_id" class="form-input" placeholder="-1001234567890" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Link de convite alternativo (opcional)</label>
+                            <input type="text" x-model="editingStep.config.vip_group_link" class="form-input" placeholder="https://t.me/joinchat/..." />
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 🔥 DOWNSELL COMPLETO (schema offer_sender.py) -->
+                <template x-if="editingStep && (editingStep.type === 'downsell' || editingStep.type === 'upsell')">
+                    <div class="border border-[#242836] rounded-xl p-4 space-y-4 bg-[#0F0F14]">
+                        <h4 class="text-sm font-bold text-[#FFB800] uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas" :class="editingStep.type === 'downsell' ? 'fa-arrow-down' : 'fa-arrow-up'"></i>
+                            <span x-text="editingStep.type === 'downsell' ? 'Oferta Downsell' : 'Oferta Upsell'"></span>
+                        </h4>
+
+                        <!-- Como funciona -->
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200">
+                            <template x-if="editingStep.type === 'upsell'">
+                                <div>
+                                    <b class="text-[#FFB800]">⬆️ Como funciona:</b> depois que o cliente <b>PAGA</b>, o bot espera alguns minutos e envia esta <b>oferta extra</b>.<br>
+                                    🤖 O botão de compra é <b>criado automaticamente</b> — texto vazio = bot monta sozinho.<br>
+                                    ⏱️ <b>Delay:</b> quantos minutos após o pagamento a oferta aparece.
+                                </div>
+                            </template>
+                            <template x-if="editingStep.type === 'downsell'">
+                                <div>
+                                    <b class="text-[#FFB800]">⬇️ Como funciona:</b> quando o cliente <b>recusou ou abandonou</b> a oferta principal, enviamos uma <b>segunda chance mais barata</b>.<br>
+                                    🤖 O botão de compra é <b>criado automaticamente</b> — texto vazio = bot monta sozinho.<br>
+                                    ⏱️ <b>Delay:</b> minutos de espera antes de disparar essa segunda oferta.
+                                </div>
+                            </template>
+                            💰 Preço <b>fixo</b> ou <b>% de desconto</b> sobre o produto (mínimo R$ 0,50).
+                        </div>
+
+                        <!-- Mensagem de venda -->
+                        <div class="form-group">
+                            <label class="form-label">Mensagem de Venda (o cliente lê antes do botão)</label>
+                            <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Ex: Espera! Temos uma condição especial só para você..."></textarea>
+                        </div>
+
+                        <!-- Mídia -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="form-label">Tipo de Mídia</label>
+                                <select x-model="editingStep.config.media_type" class="form-select">
+                                    <option value="video">Vídeo</option>
+                                    <option value="photo">Foto</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label">URL da Mídia / file_id</label>
+                                <input type="text" x-model="editingStep.config.media_url" class="form-input" placeholder="https://... ou file_id do Telegram" />
+                            </div>
+                        </div>
+
+                        <!-- Áudio complementar -->
+                        <div class="bg-[#13151C] border border-[#242836] rounded-lg p-3">
+                            <label class="flex items-center gap-3 cursor-pointer select-none">
+                                <input type="checkbox" x-model="editingStep.config.audio_enabled" class="w-5 h-5 accent-[#FFB800]" />
+                                <span class="text-sm font-semibold text-gray-200">Áudio Complementar</span>
+                                <span class="text-xs text-[#8B8B93]">(enviado após a mensagem)</span>
+                            </label>
+                            <div x-show="editingStep.config.audio_enabled" class="mt-3">
+                                <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="URL do áudio ou file_id..." />
+                            </div>
+                        </div>
+
+                        <!-- Preço: fixo ou desconto -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="form-label">Modo de Preço</label>
+                                <select x-model="editingStep.config.pricing_mode" class="form-select">
+                                    <option value="fixed">Preço Fixo (R$)</option>
+                                    <option value="percentage">Porcentagem (%) de Desconto</option>
+                                </select>
+                            </div>
+                            <div x-show="editingStep.config.pricing_mode === 'fixed'">
+                                <label class="form-label">Preço (R$)</label>
+                                <input type="number" x-model.number="editingStep.config.price" class="form-input" step="0.01" min="0" placeholder="Ex: 47.00" />
+                            </div>
+                            <div x-show="editingStep.config.pricing_mode === 'percentage'">
+                                <label class="form-label">Desconto (%)</label>
+                                <input type="number" x-model.number="editingStep.config.discount_percentage" class="form-input" min="1" max="95" placeholder="50" />
+                            </div>
+                        </div>
+
+                        <!-- Produto + Botão -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="form-label">Nome do Produto</label>
+                                <input type="text" x-model="editingStep.config.product_name" class="form-input" placeholder="Ex: Plano Básico" />
+                            </div>
+                            <div>
+                                <label class="form-label">Texto do Botão</label>
+                                <input type="text" x-model="editingStep.config.button_text" class="form-input" placeholder="Ex: Quero essa oferta!" />
+                            </div>
+                        </div>
+
+                        <!-- Upsell exclusivo -->
+                        <template x-if="editingStep.type === 'upsell'">
+                            <div class="form-group">
+                                <label class="form-label">Produto Gatilho (opcional)</label>
+                                <input type="text" x-model="editingStep.config.trigger_product" class="form-input" placeholder="Deixe vazio para disparar após qualquer compra" />
+                            </div>
+                        </template>
+
+                        <!-- Delay -->
+                        <div>
+                            <label class="form-label">Delay do Envio (minutos)</label>
+                            <input type="number" x-model.number="editingStep.config.delay_minutes" class="form-input w-40" min="0" placeholder="5" />
+                        </div>
+
+                        <!-- Assinatura VIP -->
+                        <div class="bg-[#13151C] border border-[#242836] rounded-lg p-3">
+                            <label class="flex items-center gap-3 cursor-pointer select-none">
+                                <input type="checkbox" x-model="editingStep.config.subscription.enabled" class="w-5 h-5 accent-[#FFB800]" />
+                                <i class="fas fa-crown text-[#FFB800]"></i>
+                                <span class="text-sm font-bold text-gray-200">Liberar Grupo VIP na compra</span>
+                            </label>
+                            <div x-show="editingStep.config.subscription.enabled" class="mt-3 space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <select x-model="editingStep.config.subscription.duration_type" class="form-select">
+                                        <option value="hours">Horas</option><option value="days">Dias</option>
+                                        <option value="weeks">Semanas</option><option value="months">Meses</option>
+                                    </select>
+                                    <input type="number" x-model.number="editingStep.config.subscription.duration_value" class="form-input" min="1" placeholder="Ex: 30" />
+                                </div>
+                                <input type="text" x-model="editingStep.config.subscription.vip_chat_id" class="form-input" placeholder="ID do Grupo VIP (-1001234567890)" />
+                                <input type="text" x-model="editingStep.config.subscription.vip_group_link" class="form-input" placeholder="Link alternativo https://t.me/joinchat/..." />
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 🔥 CONDIÇÃO COMPLETA (schema _evaluate_conditions / bot_manager.py) -->
+                <template x-if="editingStep && editingStep.type === 'condition' && editingStep.conditions && editingStep.conditions[0]">
+                    <div class="border border-[#242836] rounded-xl p-4 space-y-4 bg-[#0F0F14]">
+                        <h4 class="text-sm font-bold text-[#FFB800] uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-code-branch"></i> Condição (Se / Senão)
+                        </h4>
+
+                        <!-- Como funciona -->
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200">
+                            <b class="text-[#FFB800]">Como funciona:</b> a condição decide o caminho do fluxo.<br>
+                            🟢 <b>Se ATENDER</b> → ligue a bolinha <b>verde</b> (TRUE) no próximo passo.<br>
+                            🔴 <b>Se NÃO atender</b> → ligue a bolinha <b>vermelha</b> (FALSE).
+                        </div>
+
+                        <!-- Tipo -->
+                        <div class="form-group">
+                            <label class="form-label">O que você quer verificar?</label>
+                            <select x-model="editingStep.conditions[0].condition_type" class="form-select">
+                                <option value="payment_status">💰 Se o pagamento foi aprovado</option>
+                                <option value="text_validation">⌨️ O que o cliente digitou (resposta)</option>
+                                <option value="button_click">🖱️ Em qual botão o cliente clicou</option>
+                                <option value="time_elapsed">⏰ Se passou um tempo (minutos)</option>
+                            </select>
+                        </div>
+
+                        <!-- text_validation: validação + valor -->
+                        <template x-if="editingStep.conditions[0].condition_type === 'text_validation'">
+                            <div class="space-y-3">
+                                <div class="form-group">
+                                    <label class="form-label">A resposta do cliente deve ser...</label>
+                                    <select x-model="editingStep.conditions[0].validation" class="form-select">
+                                        <option value="any">Qualquer coisa (só recebeu mensagem)</option>
+                                        <option value="email">Um e-mail válido</option>
+                                        <option value="phone">Um telefone válido</option>
+                                        <option value="cpf">Um CPF válido</option>
+                                        <option value="contains">Uma frase que contenha uma palavra</option>
+                                        <option value="equals">Exatamente igual a um texto</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" x-show="['contains','equals'].includes(editingStep.conditions[0].validation)">
+                                    <label class="form-label">Palavra/Texto esperado</label>
+                                    <input type="text" x-model="editingStep.conditions[0].value" class="form-input" placeholder="Ex: quero" />
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- button_click: texto do botão -->
+                        <template x-if="editingStep.conditions[0].condition_type === 'button_click'">
+                            <div class="form-group">
+                                <label class="form-label">Texto do Botão esperado</label>
+                                <input type="text" x-model="editingStep.conditions[0].button_text" class="form-input" placeholder="Ex: Quero saber mais" />
+                                <p class="text-xs text-[#8B8B93] mt-1"><i class="fas fa-info-circle"></i> Deve corresponder ao texto de um botão customizado do step anterior.</p>
+                            </div>
+                        </template>
+
+                        <!-- payment_status: status esperado -->
+                        <template x-if="editingStep.conditions[0].condition_type === 'payment_status'">
+                            <div class="form-group">
+                                <label class="form-label">Status esperado do pagamento</label>
+                                <select x-model="editingStep.conditions[0].status" class="form-select">
+                                    <option value="paid">Pago (paid)</option>
+                                    <option value="pending">Pendente (pending)</option>
+                                </select>
+                            </div>
+                        </template>
+
+                        <!-- time_elapsed: minutos -->
+                        <template x-if="editingStep.conditions[0].condition_type === 'time_elapsed'">
+                            <div class="form-group">
+                                <label class="form-label">Minutos decorridos no step</label>
+                                <input type="number" x-model.number="editingStep.conditions[0].minutes" class="form-input w-40" min="1" placeholder="5" />
+                            </div>
+                        </template>
+
+                        <!-- max_attempts -->
+                        <div class="form-group" x-show="['text_validation','button_click'].includes(editingStep.conditions[0].condition_type)">
+                            <label class="form-label">Máximo de Tentativas (opcional)</label>
+                            <input type="number" x-model.number="editingStep.conditions[0].max_attempts" class="form-input w-40" min="1" placeholder="Sem limite" />
+                            <p class="text-xs text-[#8B8B93] mt-1"><i class="fas fa-info-circle"></i> Esgotou as tentativas? O fluxo segue pela saída <span class="text-red-400 font-bold">FALSA (Senão)</span>.</p>
+                        </div>
+
+                        <!-- Legenda TRUE/FALSE -->
+                        <div class="bg-[#13151C] border border-[#242836] rounded-lg p-3 text-xs space-y-1.5">
+                            <p class="text-[#34D399] font-bold"><i class="fas fa-circle" style="font-size:8px"></i> SAÍDA VERDE (Verdadeiro) → conecte ao step quando a condição ATENDER</p>
+                            <p class="text-[#EF4444] font-bold"><i class="fas fa-circle" style="font-size:8px"></i> SAÍDA VERMELHA (Falso) → conecte ao step quando NÃO atender</p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 🔗 Redirecionamento (real: botão de URL do Telegram) -->
+                <template x-if="editingStep && editingStep.type === 'redirect'">
+                    <div class="border border-[#242836] rounded-xl p-4 space-y-4 bg-[#0F0F14]">
+                        <h4 class="text-sm font-bold text-[#C084FC] uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-external-link-alt"></i> Redirecionar Cliente
+                        </h4>
+
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200">
+                            <b class="text-[#FFB800]">🔗 Como funciona:</b> este bloco envia uma <b>mensagem com um botão de link</b>.<br>
+                            👆 Quando o cliente clica no botão, o <b>Telegram abre o link no navegador</b> dele — automático.<br>
+                            💡 Use para mandar o cliente para um site externo, grupo, checkout ou página de suporte.
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem (aparece acima do botão)</label>
+                            <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Ex: Clique abaixo para falar com nosso suporte..."></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="form-label">Texto do Botão</label>
+                                <input type="text" x-model="editingStep.config.button_text" class="form-input" placeholder="Ex: Falar com Suporte" />
+                            </div>
+                            <div>
+                                <label class="form-label">Link de Destino (URL)</label>
+                                <input type="text" x-model="editingStep.config.redirect_url" class="form-input" placeholder="https://..." />
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ⚙️ Configuracoes (aplica no CONFIG GLOBAL ao salvar) -->
+                <template x-if="editingStep && editingStep.type === 'settings'">
+                    <div class="border border-[#242836] rounded-xl p-4 space-y-4 bg-[#0F0F14]">
+                        <h4 class="text-sm font-bold text-[#9CA3AF] uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-cog"></i> Configurações do Bot
+                        </h4>
+
+                        <div class="bg-[#FFB800]/10 border border-[#FFB800]/25 rounded-lg p-3 text-xs leading-relaxed text-gray-200">
+                            <b class="text-[#FFB800]">⚙️ Como funciona:</b> estas configurações valem para o <b>BOT INTEIRO</b>, não só para um ponto do fluxo.<br>
+                            ✅ Ao <b>salvar</b>, os valores daqui são aplicados na configuração geral do bot.<br>
+                            💬 <b>Mensagem de Sucesso:</b> enviada quando o pagamento é confirmado.<br>
+                            ⏳ <b>Mensagem Pendente:</b> enviada enquanto o pagamento está processando.<br>
+                            🚫 A troca de <b>token</b> não é feita aqui — por segurança, use a aba Configurações.
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Link de Acesso (vale para o bot inteiro)</label>
+                            <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem de Sucesso (após pagamento)</label>
+                            <textarea x-model="editingStep.config.success_message" class="form-textarea" placeholder="Ex: Pagamento confirmado! Seu acesso está liberado."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem Pendente (enquanto processa)</label>
+                            <textarea x-model="editingStep.config.pending_message" class="form-textarea" placeholder="Ex: Recebemos seu pagamento, estamos confirmando..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Meta Pixel ID (opcional)</label>
+                            <input type="text" x-model="editingStep.config.meta_pixel_id" class="form-input" placeholder="1234567890" />
+                        </div>
+                    </div>
+                </template>
+
+                <div class="form-group" x-show="editingStep && !['payment','downsell','upsell','condition'].includes(editingStep.type)">
                     <label class="form-label">Delay (segundos)</label>
                     <input type="number" x-model.number="editingStep.delay_seconds" x-show="editingStep" class="form-input" min="0" />
                 </div>
 
-                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && !['payment','downsell','upsell','condition'].includes(editingStep.type)">
                     <label class="form-label">Título do Step (Opcional)</label>
                     <input type="text" x-model="editingStep.title" x-show="editingStep" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
@@ -4698,7 +4977,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
 
                 <!-- Botões Customizados -->
-                <div class="border-t border-gray-700 pt-4" x-show="editingStep && editingStep.type !== 'payment'">
+                <div class="border-t border-gray-700 pt-4" x-show="editingStep && !['payment','downsell','upsell','condition'].includes(editingStep.type)">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-md font-semibold text-white">Botões Customizados</h4>
                         <button @click="addCustomButton()" class="btn btn-secondary">
@@ -4994,6 +5273,12 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         _saveMessageTimeout: null,
         
         async saveConfig() {
+            // 🔥 DRAWFLOW: exporta canvas → schema grimbots ANTES de persistir
+            if (this.config.flow_enabled && window.GrimFlow && window.GrimFlow.isReady()) {
+                window.GrimFlow.syncToConfig(this.config);
+                console.log('✅ Canvas sincronizado:', this.config.flow_steps.length, 'steps, start =', this.config.flow_start_step_id);
+            }
+            
             // Cancelar debounce anterior
             if (this._saveConfigDebounce) {
                 clearTimeout(this._saveConfigDebounce);
@@ -5534,103 +5819,21 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         },
 
         onFlowToggle() {
-            console.log('Flow enabled:', this.config.flow_enabled);
-            
             if (this.config.flow_enabled) {
-                this.$nextTick(() => {
-                    setTimeout(() => {
-                        this.initVisualFlowEditor();
-                    }, 200);
-                });
+                this.$nextTick(() => { this.initVisualFlowEditor(); });
             } else {
-                // Limpar Flow Editor (jsPlumb)
-                if (window.flowEditor) {
-                    try {
-                        window.flowEditor.destroy();
-                        window.flowEditor = null;
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao destruir editor antigo:', e);
-                    }
-                }
+                // 🔥 DRAWFLOW
+                if (window.GrimFlow) window.GrimFlow.destroy();
             }
         },
 
         initVisualFlowEditor() {
-            if (!this.config.flow_enabled) {
-                console.log('ℹ️ Flow desabilitado - não inicializando editor');
-                return;
-            }
-            
+            if (!this.config.flow_enabled) return;
             this.$nextTick(() => {
-                const canvas = document.getElementById('flow-visual-canvas');
-                if (!canvas) {
-                    console.error('❌ Canvas não encontrado');
-                    return;
-                }
-                
-                // Verificar jsPlumb e FlowEditor
-                if (typeof jsPlumb === 'undefined') {
-                    console.error('❌ jsPlumb não está disponível. Aguardando carregamento...');
-                    setTimeout(() => this.initVisualFlowEditor(), 500);
-                    return;
-                }
-                
-                if (typeof window.FlowEditor === 'undefined') {
-                    console.error('❌ FlowEditor não está disponível. Aguardando carregamento...');
-                    setTimeout(() => this.initVisualFlowEditor(), 500);
-                    return;
-                }
-                
-                // Limpar editor anterior se existir
-                if (window.flowEditor) {
-                    try {
-                        window.flowEditor.destroy();
-                        window.flowEditor = null;
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao destruir editor antigo:', e);
-                    }
-                }
-                
-                // 🔥 CRÍTICO: NÃO limpar o contentContainer! Apenas remover steps
-                const contentContainer = canvas.querySelector('.flow-canvas-content');
-                if (contentContainer) {
-                    // Remover apenas os steps, manter o contentContainer
-                    Array.from(contentContainer.children).forEach(child => {
-                        if (child.classList && child.classList.contains('flow-step-block')) {
-                            child.remove();
-                        }
-                    });
-                    console.log('✅ ContentContainer preservado, apenas steps removidos');
-                } else {
-                    // Se não existe, criar (mas não limpar tudo)
-                    const newContent = document.createElement('div');
-                    newContent.className = 'flow-canvas-content';
-                    newContent.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0;';
-                    canvas.appendChild(newContent);
-                    console.log('✅ ContentContainer criado');
-                }
-                
-                // Expor Alpine context
-                window.alpineFlowEditor = this;
-                
-                try {
-                    // 🔥 V8 ULTRA: Criar instância e aguardar inicialização completa (ERRO 2)
-                    window.flowEditor = new window.FlowEditor('flow-visual-canvas', this);
-                    
-                    // Aguardar inicialização completa antes de usar
-                    window.flowEditor.init().then(() => {
-                        console.log('✅ Editor jsPlumb inicializado completamente (V8)');
-                    }).catch(error => {
-                        console.error('❌ Erro ao inicializar editor jsPlumb:', error);
-                        console.error('Stack:', error.stack);
-                        // Tentar novamente após 1 segundo
-                        setTimeout(() => this.initVisualFlowEditor(), 1000);
-                    });
-                } catch (error) {
-                    console.error('❌ Erro ao criar instância do FlowEditor:', error);
-                    console.error('Stack:', error.stack);
-                    // Tentar novamente após 1 segundo
-                    setTimeout(() => this.initVisualFlowEditor(), 1000);
+                if (window.GrimFlow && window.GrimFlow.ensureInit(this)) {
+                    console.log('✅ Flow Editor (Drawflow) inicializado');
+                } else if (this.activeTab === 'flow') {
+                    setTimeout(() => this.initVisualFlowEditor(), 300);
                 }
             });
         },
@@ -5693,6 +5896,21 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             }
             if (this.editingStep.config.custom_buttons === undefined) {
                 this.editingStep.config.custom_buttons = [];
+            }
+            // 🔥 Defaults de oferta (downsell/upsell) — schema offer_sender.py
+            if (this.editingStep.config.pricing_mode === undefined) this.editingStep.config.pricing_mode = 'fixed';
+            if (this.editingStep.config.discount_percentage === undefined) this.editingStep.config.discount_percentage = 50;
+            if (this.editingStep.config.audio_enabled === undefined) this.editingStep.config.audio_enabled = false;
+            if (this.editingStep.config.audio_url === undefined) this.editingStep.config.audio_url = '';
+            if (this.editingStep.config.description === undefined) this.editingStep.config.description = '';
+            if (this.editingStep.config.delay_minutes === undefined) this.editingStep.config.delay_minutes = 5;
+            if (!this.editingStep.config.subscription || typeof this.editingStep.config.subscription !== 'object') {
+                this.editingStep.config.subscription = { enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' };
+            }
+
+            // 🔥 Condicao: garantir conditions[0] completa (schema engine)
+            if (this.editingStep.type === 'condition' && (!Array.isArray(this.editingStep.conditions) || this.editingStep.conditions.length === 0)) {
+                this.editingStep.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status', validation:'any', value:'', button_text:'', status:'paid', minutes:5, target_step:'', fallback_step:'', max_attempts:null, order:0 }];
             }
             if (this.editingStep.delay_seconds === undefined) {
                 this.editingStep.delay_seconds = 0;
@@ -5802,200 +6020,29 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             this.config.flow_steps[this.editingStepIndex] = updatedStep;
             
             this.$nextTick(() => {
-                // Atualizar step no Flow Editor (jsPlumb)
-                if (window.flowEditor && window.flowEditor.updateStepEndpoints) {
-                    window.flowEditor.updateStepEndpoints(existingStep.id);
-                    window.flowEditor.renderAllSteps();
-                }
+                // 🔥 DRAWFLOW: reflete edição no canvas (dados + outputs posicionais)
+                if (window.GrimFlow) window.GrimFlow.applyStep(updatedStep);
             });
             
             this.closeStepModal();
         },
         
         addFlowStep(typeOrOpts = {}) {
-            console.log('\U0001f535 addFlowStep chamado:', typeOrOpts);
-            
             let stepType = 'message';
-            let customX = undefined;
-            let customY = undefined;
             if (typeof typeOrOpts === 'string') {
                 stepType = typeOrOpts;
             } else if (typeof typeOrOpts === 'object' && typeOrOpts !== null) {
                 stepType = typeOrOpts.type || 'message';
-                customX = typeOrOpts.x;
-                customY = typeOrOpts.y;
             }
-            
-            if (!this.config.flow_steps) {
-                this.config.flow_steps = [];
-            }
-            
-            if (!this.config.flow_enabled) {
-                this.config.flow_enabled = true;
-                console.log('\u2705 Flow habilitado automaticamente');
-                if (this.activeTab !== 'flow') {
-                    this.activeTab = 'flow';
-                    console.log('\u2705 Tab Flow ativada automaticamente');
-                }
-            }
-            
-            const stepId = `step_${Date.now()}`;
-            const existingSteps = this.config.flow_steps.length;
-            const cols = Math.ceil(Math.sqrt(existingSteps + 1));
-            const row = Math.floor(existingSteps / cols);
-            const col = existingSteps % cols;
-            
-            const newStep = {
-                id: stepId,
-                type: stepType,
-                order: existingSteps,
-                config: {
-                    message: '',
-                    media_url: '',
-                    audio_url: '',
-                    media_type: 'video',
-                    custom_buttons: []
-                },
-                connections: {},
-                conditions: [],
-                delay_seconds: 0,
-                position: (customX !== undefined && customY !== undefined)
-                    ? { x: customX, y: customY }
-                    : { x: 100 + (col * 280), y: 100 + (row * 180) }
-            };
-            
-            this.config.flow_steps.push(newStep);
-            console.log('✅ Step adicionado ao Alpine:', stepId, 'Total:', this.config.flow_steps.length);
-            
-            // 🔥 V8 ULTRA: Garantir que o editor está inicializado e renderizar (ERRO 8)
-            // Debounce para prevenir múltiplas chamadas
-            if (this._renderDebounceTimeout) {
-                clearTimeout(this._renderDebounceTimeout);
-            }
-            
-            this._renderDebounceTimeout = setTimeout(() => {
-                this.$nextTick(async () => {
-                    console.log('🔵 $nextTick executado após adicionar step (V8 debounced)');
-                    
-                    // Função para tentar renderizar
-                    const tryRender = async () => {
-                        console.log('🔵 Tentando renderizar steps...', {
-                            hasFlowEditor: !!window.flowEditor,
-                            hasRenderAllSteps: !!(window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function'),
-                            flowStepsCount: this.config.flow_steps?.length || 0
-                        });
-                        
-                        // 🔥 V8 ULTRA: Verificar se editor está inicializado antes de usar (ERRO 2)
-                        if (window.flowEditor) {
-                            // Aguardar inicialização se necessário
-                            if (!window.flowEditor.isInitialized()) {
-                                console.log('⏳ Editor não inicializado, aguardando...');
-                                try {
-                                    await window.flowEditor.waitForInitialization(5000);
-                                } catch(e) {
-                                    console.error('❌ Timeout aguardando inicialização:', e);
-                                    return false;
-                                }
-                            }
-                            
-                            if (typeof window.flowEditor.renderAllSteps === 'function') {
-                                try {
-                                    window.flowEditor.renderAllSteps();
-                                    console.log('✅ Steps re-renderizados (jsPlumb V8)');
-                                    return true;
-                                } catch(e) {
-                                    console.error('❌ Erro ao chamar renderAllSteps:', e);
-                                    return false;
-                                }
-                            }
-                        }
-                        return false;
-                    };
-                
-                // Tentar renderizar imediatamente
-                tryRender().then(success => {
-                    if (success) {
-                        return;
-                    }
-                });
-                
-                // Se não funcionou, tentar inicializar o editor
-                console.log('🆕 Editor não inicializado. Inicializando agora...');
-                
-                // Verificar se FlowEditor e jsPlumb estão disponíveis
-                if (typeof window.FlowEditor === 'undefined' || typeof jsPlumb === 'undefined') {
-                    console.warn('⚠️ FlowEditor ou jsPlumb não está disponível. Aguardando carregamento...');
-                    // Aguardar até FlowEditor e jsPlumb estarem disponíveis
-                    let attempts = 0;
-                    const checkInterval = setInterval(() => {
-                        attempts++;
-                        if (typeof window.FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
-                            clearInterval(checkInterval);
-                            console.log('✅ FlowEditor e jsPlumb carregados, inicializando editor...');
-                            this.initVisualFlowEditor();
-                            setTimeout(async () => {
-                                const success = await tryRender();
-                                if (!success) {
-                                    console.warn('⚠️ Tentando renderizar novamente após 1s...');
-                                    setTimeout(() => tryRender(), 1000);
-                                }
-                            }, 500);
-                        } else if (attempts > 20) {
-                            clearInterval(checkInterval);
-                            console.error('❌ FlowEditor ou jsPlumb não carregou após 4 segundos');
-                        }
-                    }, 200);
-                } else {
-                    // FlowEditor está disponível, inicializar
-                    console.log('✅ FlowEditor disponível, inicializando...');
-                    this.initVisualFlowEditor();
-                    // Aguardar um pouco e tentar renderizar
-                    setTimeout(async () => {
-                        const success = await tryRender();
-                        if (!success) {
-                            console.warn('⚠️ Editor inicializado mas renderAllSteps ainda não está disponível. Tentando novamente...');
-                            setTimeout(async () => {
-                                const success2 = await tryRender();
-                                if (!success2) {
-                                    console.error('❌ Falha ao renderizar após múltiplas tentativas');
-                                }
-                            }, 1000);
-                        }
-                    }, 500);
-                }
-                });
-            }, 300);
+            // 🔥 DRAWFLOW: canvas manda; config espelhada nos eventos da bridge
+            if (!this.config.flow_enabled) this.config.flow_enabled = true;
+            if (window.GrimFlow) window.GrimFlow.addNode(stepType);
         },
         
         handleFlowDrop(event) {
             const nodeType = event.dataTransfer.getData('text/plain');
             if (!nodeType) return;
-            
-            const canvas = event.currentTarget;
-            const rect = canvas.getBoundingClientRect();
-            const content = canvas.querySelector('.flow-canvas-content');
-            
-            let scaleX = 1, scaleY = 1, translateX = 0, translateY = 0;
-            if (content) {
-                const transform = getComputedStyle(content).transform;
-                if (transform && transform !== 'none') {
-                    const m2d = transform.match(/matrix\(([^)]+)\)/);
-                    if (m2d) {
-                        const p = m2d[1].split(',').map(Number);
-                        scaleX = p[0]; scaleY = p[3]; translateX = p[4]; translateY = p[5];
-                    }
-                    const m3d = transform.match(/matrix3d\(([^)]+)\)/);
-                    if (m3d) {
-                        const p = m3d[1].split(',').map(Number);
-                        scaleX = p[0]; scaleY = p[5]; translateX = p[12]; translateY = p[13];
-                    }
-                }
-            }
-            
-            const x = (event.clientX - rect.left - translateX) / scaleX;
-            const y = (event.clientY - rect.top - translateY) / scaleY;
-            
-            this.addFlowStep({ type: nodeType, x, y });
+            this.addFlowStep(nodeType);
         },
 
         removeFlowStep(stepId) {
@@ -6066,18 +6113,7 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         },
         
         watchFlowSteps() {
-            // Watcher otimizado para Flow Editor (jsPlumb)
-            this.$watch('config.flow_steps', (newSteps, oldSteps) => {
-                if (window.flowEditor && newSteps) {
-                    clearTimeout(this._flowStepsWatchTimeout);
-                    this._flowStepsWatchTimeout = setTimeout(() => {
-                        // Re-renderizar tudo no Flow Editor
-                        if (window.flowEditor && window.flowEditor.renderAllSteps) {
-                            window.flowEditor.renderAllSteps();
-                        }
-                    }, 300);
-                }
-            }, { deep: true });
+            // 🔥 DRAWFLOW: sem deep-watch — sincronização no save/modal
         },
         
         getStepTypeLabel(type) {
