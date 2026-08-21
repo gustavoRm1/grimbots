@@ -67,7 +67,7 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="flowEditor()" x-init="init()" class="flex flex-col h-screen bg-[#0B0D14]">
+<div x-data="flowEditor()" class="flex flex-col h-screen bg-[#0B0D14]">
     <header class="flex items-center justify-between px-6 py-3 bg-[#13151C] border-b border-[#242836] shrink-0">
         <div class="flex items-center gap-4">
             <a href="{{ url_for('dashboard.bot_config_page', bot_id=bot.id) }}" class="text-[#8B8B93] hover:text-white transition-colors">
@@ -412,6 +412,11 @@ function flowEditor() {
 
         init: function() {
             var self = this;
+            // 🔥 GUARDA: Alpine 3 ja chama init() automaticamente. Sem x-init extra,
+            // e com esta trava, garantimos UMA unica instancia Drawflow.
+            // Duas instancias = listeners duplicados = card atrasa do mouse
+            // e linha de conexao gruda no cursor eternamente.
+            if (this.editor || window._gfEditor) { console.warn('[flow] init ignorado: editor ja existe'); return; }
             var el = document.getElementById('drawflow-canvas');
             if (!el || typeof Drawflow === 'undefined') { console.error('Drawflow not loaded'); return; }
             self.editor = new Drawflow(el);
