@@ -93,7 +93,7 @@
             <button @click="clearCanvas()" class="px-4 py-2 text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider rounded-lg bg-red-500/10 border border-red-500/20 transition-colors">
                 <i class="fas fa-trash"></i> Limpar
             </button>
-            <button @click="save()" :disabled="saving" class="px-6 py-2 bg-[#FFB800] hover:bg-[#E5A800] disabled:opacity-50 text-black font-bold text-[11px] uppercase tracking-wider rounded-lg shadow-lg shadow-[#FFB800]/20 transition-all">
+            <button @click="save()" :disabled="saving" style="background:#FFB800;color:#000;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;padding:8px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(255,184,0,0.2);transition:all 0.2s;cursor:pointer;" onmouseover="this.style.background='#E5A800'" onmouseout="this.style.background='#FFB800'">
                 <i class="fas fa-save"></i> Salvar
             </button>
         </div>
