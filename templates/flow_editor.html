@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}Editor de Fluxo - {{ bot.name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='drawflow/drawflow.min.css') }}">
+<script src="{{ url_for('static', filename='drawflow/drawflow.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=2"></script>
+<style>
+.pal-item{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:12px 8px;background:#0F0F14;border:1px solid #2A2D36;border-radius:12px;cursor:grab;transition:all .2s}
+.pal-item:hover{border-color:#FFB800;background:#1C1E26}
+.pal-item .pal-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;transition:transform .2s}
+.pal-item:hover .pal-icon{transform:scale(1.1)}
+.pal-item h4{font-size:11px;font-weight:700;color:#E5E7EB}
+.pal-item p{font-size:9px;color:#8B8B93;line-height:1.2}
+.pal-item:active{cursor:grabbing}
+#drawflow-canvas{width:100%;height:100%;background:#0D0F15;border-radius:12px}
+.drawflow .drawflow-node{background:#13151C;border:1px solid #2A2D36;border-radius:12px;min-width:220px;color:#E5E7EB;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.drawflow .drawflow-node:hover{border-color:#FFB800}
+.drawflow .drawflow-node.selected{border-color:#FFB800!important;box-shadow:0 0 0 2px rgba(255,184,0,.4)}
+.drawflow .input,.drawflow .output{width:14px;height:14px;border-radius:50%;cursor:crosshair}
+.drawflow .input{left:-8px;background:#10B981!important;border:2px solid #fff!important}
+.drawflow .output{right:-8px;background:#FFFFFF!important;border:2px solid #0D0F15!important}
+.drawflow .output:hover{background:#FFB800!important;transform:scale(1.25)}
+.drawflow .drawflow-node.selected .input{background:#10B981!important}
+.drawflow .drawflow-node.selected .output{background:#FFFFFF!important}
+.drawflow .drawflow-node.condition .output_1{background:#10B981!important;border-color:#fff!important}
+.drawflow .drawflow-node.condition .output_2{background:#EF4444!important;border-color:#fff!important}
+.drawflow .drawflow-node.payment .output_1{background:#10B981!important;border-color:#fff!important}
+.drawflow .drawflow-node.payment .output_2{background:#F59E0B!important;border-color:#fff!important}
+.drawflow .drawflow-node.payment .output_3{background:#EF4444!important;border-color:#fff!important}
+.drawflow svg.connection path.main-path{stroke:#fff;stroke-width:2.5;fill:none;stroke-opacity:.9}
+.drawflow svg.connection.selected path.main-path,.drawflow svg.connection:hover path.main-path{stroke:#FFB800;stroke-width:3.5}
+.df-head{display:flex;align-items:center;gap:9px;padding:9px 12px;background:#1C1E26;border-radius:12px 12px 0 0;border-bottom:1px solid #2A2D36;position:relative}
+.df-icon{width:26px;height:26px;min-width:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px}
+.df-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;flex:1;color:#E5E7EB}
+.df-star{position:absolute;top:-9px;right:-6px;font-size:16px;cursor:pointer;filter:drop-shadow(0 0 4px rgba(255,184,0,.8));display:none}
+.drawflow-node.is-start .df-star{display:block;animation:gfpulse 2s infinite}
+@keyframes gfpulse{50%{transform:scale(1.2)}}
+.drawflow-node.is-start{border-color:#FFB800!important;box-shadow:0 0 0 2px rgba(255,184,0,.35),0 0 20px rgba(255,184,0,.25)!important}
+.df-body{padding:10px 12px;font-size:11px;line-height:1.5;color:#c9cbd3;min-height:38px;max-height:80px;overflow:hidden;word-break:break-word}
+.df-body.placeholder{color:#6B7280;font-style:italic}
+.df-out-label{font-size:8px;font-weight:700;text-transform:uppercase;color:#8B8B93;text-align:right;padding:0 14px 2px 0;margin-top:-4px}
+.df-actions{display:flex;gap:6px;justify-content:center;padding:6px;border-top:1px solid #2A2D36}
+.df-btn{width:30px;height:26px;border:none;border-radius:6px;background:#E02727;color:#fff;cursor:pointer;font-size:11px;z-index:5;position:relative}
+.df-btn.edit{background:#242836}.df-btn.edit:hover{background:#333}
+.df-btn:hover{filter:brightness(1.2)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="flowEditor()" x-init="init()" class="flex flex-col h-screen bg-[#0B0D14]">
+    <header class="flex items-center justify-between px-6 py-3 bg-[#13151C] border-b border-[#242836] shrink-0">
+        <div class="flex items-center gap-4">
+            <a href="{{ url_for('dashboard.bot_config_page', bot_id=bot.id) }}" class="text-[#8B8B93] hover:text-white transition-colors">
+                <i class="fas fa-arrow-left text-lg"></i>
+            </a>
+            <div>
+                <h1 class="text-sm font-bold text-white uppercase tracking-wider">{{ bot.name }}</h1>
+                <p class="text-[10px] text-[#8B8B93]">Editor de Fluxo Visual</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1 bg-[#1C1E26] p-1.5 rounded-lg border border-[#333]">
+                <button @click="editor && editor.zoom_in()" class="w-8 h-8 flex items-center justify-center text-[#8B8B93] hover:text-white hover:bg-[#333] rounded transition-colors"><i class="fas fa-plus"></i></button>
+                <div class="w-px h-5 bg-[#444]"></div>
+                <button @click="editor && editor.zoom_out()" class="w-8 h-8 flex items-center justify-center text-[#8B8B93] hover:text-white hover:bg-[#333] rounded transition-colors"><i class="fas fa-minus"></i></button>
+                <div class="w-px h-5 bg-[#444]"></div>
+                <button @click="editor && editor.zoom_reset()" class="px-3 h-8 flex items-center justify-center text-[10px] font-bold text-[#8B8B93] hover:text-white hover:bg-[#333] rounded uppercase tracking-wider">Reset</button>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 bg-[#1C1E26] rounded-lg border border-[#333]">
+                <div class="w-2.5 h-2.5 rounded-full animate-pulse" :class="saving ? 'bg-yellow-500' : 'bg-green-500'"></div>
+                <span class="text-[11px] font-bold text-gray-200 uppercase tracking-wider" x-text="saving ? 'Salvando...' : 'Drag & Drop Ativo'"></span>
+            </div>
+            <button @click="clearCanvas()" class="px-4 py-2 text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider rounded-lg bg-red-500/10 border border-red-500/20 transition-colors">
+                <i class="fas fa-trash"></i> Limpar
+            </button>
+            <button @click="save()" :disabled="saving" class="px-6 py-2 bg-[#FFB800] hover:bg-[#E5A800] disabled:opacity-50 text-black font-bold text-[11px] uppercase tracking-wider rounded-lg shadow-lg shadow-[#FFB800]/20 transition-all">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside class="w-64 bg-[#13151C] border-r border-[#242836] flex flex-col shrink-0">
+            <div class="p-4 border-b border-[#242836] bg-[#1C1E26] flex justify-between items-center">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-cubes text-[#FFB800]"></i> Blocos de Acao
+                </h3>
+                <span class="text-[9px] bg-[#FFB800]/15 text-[#FFB800] px-2 py-0.5 rounded border border-[#FFB800]/30 font-bold uppercase">Arraste</span>
+            </div>
+            <div class="p-3 flex-1 overflow-y-auto grid grid-cols-2 gap-2.5">
+                <template x-for="b in blocks" :key="b.type">
+                    <div class="pal-item" draggable="true"
+                         @dragstart="event.dataTransfer.setData('text/plain', b.type)"
+                         @click="addNode(b.type)">
+                        <div class="pal-icon" :style="'background:'+b.bgColor+';border:1px solid '+b.borderColor+';color:'+b.color">
+                            <i class="fas" :class="b.icon"></i>
+                        </div>
+                        <div>
+                            <h4 x-text="b.label"></h4>
+                            <p x-text="b.desc"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="p-3 border-t border-[#242836] bg-[#1C1E26]">
+                <p class="text-[9px] text-[#6B7280] text-center">Clique ou arraste para adicionar blocos ao canvas</p>
+            </div>
+        </aside>
+
+        <main class="flex-1 relative bg-[#0B0D14] overflow-hidden">
+            <div class="absolute inset-0 pointer-events-none opacity-[0.15] z-0" style="background-image: radial-gradient(circle at 1px 1px, #FFB800 1px, transparent 0); background-size: 24px 24px;"></div>
+            <div id="flow-visual-canvas" class="absolute inset-0 z-10" style="touch-action: none;">
+                <div id="drawflow-canvas" style="width:100%;height:100%;"></div>
+                <div x-show="emptyCanvas" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style="z-index:0;">
+                    <div class="w-16 h-16 rounded-2xl bg-[#FFB800]/10 border border-[#FFB800]/20 flex items-center justify-center mb-4">
+                        <i class="fas fa-hand-pointer text-2xl text-[#FFB800]/40"></i>
+                    </div>
+                    <p class="text-sm font-bold text-[#8B8B93] mb-1">Clique em um bloco na paleta</p>
+                    <p class="text-[11px] text-[#6B7280]">Ou arraste os pontos para conectar</p>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0B0D14] to-transparent pt-12 pb-4 px-4 flex justify-between items-end pointer-events-none" style="z-index:20;">
+                <span class="text-[10px] text-[#FFB800] font-bold tracking-wider px-3 py-1.5 rounded-md border border-[#FFB800]/20 bg-[#FFB800]/10 backdrop-blur-sm">Modo Arrastar e Soltar Real</span>
+                <span class="text-[10px] text-[#8B8B93] font-semibold bg-[#0B0D14]/80 px-3 py-1.5 rounded-md border border-[#242836]">Arraste e solte exatamente onde quiser no canvas</span>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+var BOT_ID = {{ bot.id }};
+var CFG_DATA = null;
+var TYPES = {
+    message:      { label:'Mensagem',      icon:'fa-comment-dots',      color:'#60A5FA', bgColor:'rgba(96,165,250,0.1)',  borderColor:'rgba(96,165,250,0.2)' },
+    content:      { label:'Conteudo',      icon:'fa-photo-video',       color:'#818CF8', bgColor:'rgba(129,140,248,0.1)', borderColor:'rgba(129,140,248,0.2)' },
+    audio:        { label:'Audio',         icon:'fa-microphone',        color:'#F472B6', bgColor:'rgba(244,114,182,0.1)', borderColor:'rgba(244,114,182,0.2)' },
+    buttons:      { label:'Botoes',        icon:'fa-mouse-pointer',     color:'#34D399', bgColor:'rgba(52,211,153,0.1)',  borderColor:'rgba(52,211,153,0.2)' },
+    payment:      { label:'Pagamento',     icon:'fa-qrcode',            color:'#4ADE80', bgColor:'rgba(74,222,128,0.1)',  borderColor:'rgba(74,222,128,0.2)' },
+    access:       { label:'Acesso',        icon:'fa-key',               color:'#FB923C', bgColor:'rgba(251,146,60,0.1)',  borderColor:'rgba(251,146,60,0.2)' },
+    condition:    { label:'Condicao',      icon:'fa-code-branch',       color:'#FFB800', bgColor:'rgba(255,184,0,0.1)',   borderColor:'rgba(255,184,0,0.2)' },
+    subscription: { label:'Assinatura',    icon:'fa-crown',             color:'#FFB800', bgColor:'rgba(255,184,0,0.1)',   borderColor:'rgba(255,184,0,0.2)' },
+    downsell:     { label:'Downsell',      icon:'fa-arrow-down',        color:'#EF4444', bgColor:'rgba(239,68,68,0.1)',   borderColor:'rgba(239,68,68,0.2)' },
+    upsell:       { label:'Upsell',        icon:'fa-arrow-up',          color:'#22C55E', bgColor:'rgba(34,197,94,0.1)',   borderColor:'rgba(34,197,94,0.2)' },
+    redirect:     { label:'Redirecionar',  icon:'fa-external-link-alt', color:'#C084FC', bgColor:'rgba(192,132,252,0.1)', borderColor:'rgba(192,132,252,0.2)' },
+    settings:     { label:'Configuracoes', icon:'fa-cog',               color:'#9CA3AF', bgColor:'rgba(156,163,175,0.1)', borderColor:'rgba(156,163,175,0.2)' }
+};
+var OUT_LABELS = { condition:['TRUE','FALSE'], payment:['PAGO','PENDENTE','RETRY'] };
+var STEP_DESCS = { message:'Texto simples', content:'Midia + Texto', audio:'Voice Note', buttons:'Acoes inline', payment:'Gera PIX', access:'Link VIP', condition:'True / False', subscription:'Acesso VIP', downsell:'Oferta alternativa', upsell:'Oferta adicional', redirect:'Link externo', settings:'Configuracoes globais' };
+
+function parentNodeIdGf(el) {
+    while (el && !el.classList.contains('drawflow-node')) el = el.parentElement;
+    return el ? el.id.replace('node-','') : null;
+}
+
+function refreshPreview(editor, id) {
+    try {
+        var d = editor.getNodeFromId(id);
+        var el = document.getElementById('node-'+id);
+        if (!d || !el) return;
+        var body = el.querySelector('[data-df-preview]');
+        var c = d.data; var txt = '';
+        if (d.name==='payment') txt = (c.product_name||'Produto') + ' \u2014 R$ ' + (c.price||0);
+        else if (d.name==='subscription') txt = c.vip_chat_id ? 'VIP: ' + (c.duration_value||'?') + ' ' + (c.duration_type||'dias') + ' de acesso' : 'Acesso VIP';
+        else if (d.name==='downsell'||d.name==='upsell') txt = c.pricing_mode==='percentage' ? (c.product_name||d.name) + ' \u2014 -' + (c.discount_percentage||50) + '%' : (c.product_name||d.name) + ' \u2014 R$ ' + (c.price||0);
+        else if (d.name==='redirect') txt = (c.button_text||'Acessar') + ' \u2192 ' + (c.redirect_url||'?');
+        else if (d.name==='access') txt = c.access_link || 'Liberar acesso';
+        else if (d.name==='settings') txt = 'Configuracoes globais';
+        else if (d.name==='condition') {
+            var cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
+            if (cd.condition_type==='text_validation') txt = 'Se resposta ' + (cd.validation||'any') + (cd.value ? ' = "'+cd.value+'"' : '');
+            else if (cd.condition_type==='button_click') txt = 'Se clicar "' + (cd.button_text||'?') + '"';
+            else if (cd.condition_type==='time_elapsed') txt = 'Se passarem ' + (cd.minutes||5) + ' min';
+            else txt = 'Se pagamento == ' + (cd.status||'paid');
+        }
+        else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
+        else if ((c.custom_buttons||[]).length) txt = c.custom_buttons.map(function(b){return '['+(b.text||'?')+']'}).join(' ');
+        else txt = c.message || '';
+        body.textContent = txt || 'Nada configurado';
+        body.classList.toggle('placeholder', !txt);
+    } catch(e){}
+}
+
+function refreshStartBadges(startId) {
+    var start = String(startId || '');
+    document.querySelectorAll('#drawflow-canvas .drawflow-node').forEach(function(n) {
+        n.classList.toggle('is-start', n.id.replace('node-','') === start);
+    });
+}
+
+function buildNodeHtml(type) {
+    var t = TYPES[type] || {label:type, icon:'fa-circle', color:'#888'};
+    var outs = OUT_LABELS[type] || [];
+    return '<div class="df-head"><div class="df-icon" style="background:'+t.color+'22;border:1px solid '+t.color+'44;color:'+t.color+'"><i class="fas '+t.icon+'"></i></div><div class="df-title">'+t.label+'</div><div class="df-star" title="Definir como inicio" onclick="event.stopPropagation();window._flowSetStart(parentNodeIdGf(this))">&#11088;</div></div><div class="df-body placeholder" data-df-preview>Nada configurado</div>'+outs.map(function(l){return '<div class="df-out-label">'+l+'</div>'}).join('')+'<div class="df-actions"><button class="df-btn edit" title="Editar" onclick="event.stopPropagation()"><i class="fas fa-pen"></i></button><button class="df-btn" title="Remover" onclick="event.stopPropagation();window._flowRemoveNode(parentNodeIdGf(this))"><i class="fas fa-trash"></i></button></div>';
+}
+
+function defaultData(type) {
+    return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
+}
+
+function flowEditor() {
+    return {
+        editor: null,
+        saving: false,
+        emptyCanvas: true,
+        flow_start_step_id: null,
+        blocks: Object.entries(TYPES).map(function(e){ return { type:e[0], label:e[1].label, icon:e[1].icon, color:e[1].color, bgColor:e[1].bgColor, borderColor:e[1].borderColor, desc: STEP_DESCS[e[0]]||'' }; }),
+
+        init: function() {
+            var self = this;
+            var el = document.getElementById('drawflow-canvas');
+            if (!el || typeof Drawflow === 'undefined') { console.error('Drawflow not loaded'); return; }
+            self.editor = new Drawflow(el);
+            self.editor.reroute = true;
+            self.editor.start();
+            window._flowSetStart = function(id) { self.flow_start_step_id = String(id); refreshStartBadges(self.flow_start_step_id); };
+            window._flowRemoveNode = function(id) { self.removeNode(id); };
+            self.editor.on('nodeCreated', function(newId) {
+                self.emptyCanvas = Object.keys(self.editor.drawflow.drawflow.Home.data).length === 0;
+                refreshPreview(self.editor, String(newId));
+                refreshStartBadges(self.flow_start_step_id);
+            });
+            self.editor.on('nodeRemoved', function() {
+                self.emptyCanvas = Object.keys(self.editor.drawflow.drawflow.Home.data).length === 0;
+            });
+            self.loadConfig();
+        },
+
+        loadConfig: function() {
+            var self = this;
+            fetch('/api/bots/' + BOT_ID + '/config')
+                .then(function(r){return r.json()})
+                .then(function(data){
+                    if (!data.success) return;
+                    CFG_DATA = data.config;
+                    self.flow_start_step_id = CFG_DATA.flow_start_step_id || null;
+                    if (CFG_DATA.flow_steps && CFG_DATA.flow_steps.length > 0) {
+                        var dfData = DrawflowAdapter.toDrawflow(CFG_DATA);
+                        self.editor.import(dfData);
+                        Object.keys(dfData.drawflow.Home.data).forEach(function(id) { refreshPreview(self.editor, id); });
+                        self.emptyCanvas = Object.keys(dfData.drawflow.Home.data).length === 0;
+                    }
+                    refreshStartBadges(self.flow_start_step_id);
+                });
+        },
+
+        addNode: function(type) {
+            if (!this.editor) return;
+            var n = Object.keys(this.editor.drawflow.drawflow.Home.data).length;
+            var outs = DrawflowAdapter.computeOutputs(type, []).length;
+            var x = 140 + (n % 4) * 290 + Math.random()*40;
+            var y = 90 + Math.floor(n / 4) * 190 + Math.random()*30;
+            var id = this.editor.addNode(type, 1, outs, x, y, type, defaultData(type), buildNodeHtml(type));
+            if (!this.flow_start_step_id) this.flow_start_step_id = String(id);
+        },
+
+        removeNode: function(id) {
+            if (!this.editor) return;
+            if (!confirm('Remover este bloco?')) return;
+            this.editor.removeNodeId('node-'+id);
+            if (String(this.flow_start_step_id) === id) this.flow_start_step_id = null;
+        },
+
+        clearCanvas: function() {
+            if (!this.editor) return;
+            if (!confirm('Apagar TODO o fluxo?')) return;
+            var self = this;
+            Object.keys(self.editor.drawflow.drawflow.Home.data).forEach(function(id) {
+                try { self.editor.removeNodeId('node-'+id); } catch(e){}
+            });
+            self.flow_start_step_id = null;
+        },
+
+        save: function() {
+            if (!this.editor || this.saving) return;
+            var self = this;
+            self.saving = true;
+            var exported = self.editor.export();
+            var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
+            CFG_DATA.flow_steps = grim.flow_steps;
+            CFG_DATA.flow_start_step_id = grim.flow_start_step_id;
+            CFG_DATA.flow_enabled = true;
+            var settingsStep = CFG_DATA.flow_steps.find(function(s){return s.type==='settings'});
+            if (settingsStep) {
+                var c = settingsStep.config || {};
+                if (c.access_link !== undefined && c.access_link !== '') CFG_DATA.access_link = c.access_link;
+                if (c.success_message !== undefined) CFG_DATA.success_message = c.success_message;
+                if (c.pending_message !== undefined) CFG_DATA.pending_message = c.pending_message;
+                if (c.meta_pixel_id !== undefined && c.meta_pixel_id !== '') CFG_DATA.meta_pixel_id = c.meta_pixel_id;
+            }
+            fetch('/api/bots/' + BOT_ID + '/config', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(CFG_DATA)
+            })
+            .then(function(r){return r.json()})
+            .then(function(d){
+                self.saving = false;
+                alert(d.success ? 'Fluxo salvo com sucesso!' : ('Erro ao salvar: ' + (d.error || 'desconhecido')));
+            })
+            .catch(function(e){
+                self.saving = false;
+                alert('Erro de conexao: ' + e.message);
+            });
+        }
+    };
+}
+</script>
+{% endblock %}

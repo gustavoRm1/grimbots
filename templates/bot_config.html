@@ -4204,6 +4204,13 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         <p class="text-sm text-gray-300 leading-relaxed">As abas tradicionais estao pausadas. O robo executara <u>apenas</u> os nos conectados no canvas.</p>
                     </div>
                 </div>
+
+                <div x-show="config.flow_enabled" x-transition class="flex justify-center mt-4">
+                    <a href="{{ url_for('dashboard.flow_editor_page', bot_id=bot.id) }}" target="_blank"
+                       class="bg-[#FFB800] hover:bg-[#E5A800] text-black font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-[#FFB800]/30 transition-all duration-200 flex items-center gap-3 text-sm uppercase tracking-wider">
+                        <i class="fas fa-external-link-alt text-lg"></i> Abrir Editor de Fluxo
+                    </a>
+                </div>
             </div>
 
             <!-- CONSTRUTOR -->

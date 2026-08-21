@@ -2548,6 +2548,14 @@ def bot_config_page(bot_id):
     return render_template('bot_config.html', bot=bot)
 
 
+@dashboard_bp.route('/bots/<int:bot_id>/flow-editor')
+@login_required
+def flow_editor_page(bot_id):
+    """Editor de fluxo visual standalone (Drawflow)"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    return render_template('flow_editor.html', bot=bot)
+
+
 # ============================================================================
 # BOT CONFIGURATION APIs (Lazy Loading + Auto-Cura)
 # ============================================================================
