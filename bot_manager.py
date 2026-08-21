@@ -3247,7 +3247,129 @@ class BotManager:
                         message=step_config.get('message', '⬇️ Escolha uma opção'),
                         buttons=buttons
                     )
-            
+
+            elif step_type == 'condition':
+                conditions = step.get('conditions', [])
+                if not conditions:
+                    logger.warning(f"⚠️ Step condition sem conditions[]: {step.get('id')}")
+                    return
+
+                condition = conditions[0]
+                ctype = condition.get('condition_type', 'payment_status')
+
+                if ctype in ('payment_status', 'time_elapsed'):
+                    context = {}
+                    if ctype == 'payment_status':
+                        from internal_logic.core.models import Payment
+                        last_payment = Payment.query.filter_by(
+                            bot_id=bot_id,
+                            customer_user_id=str(telegram_user_id)
+                        ).order_by(Payment.created_at.desc()).first()
+                        if last_payment:
+                            context = {'payment_status': last_payment.status}
+
+                    next_step_id = self._evaluate_conditions(
+                        step, user_input=None, context=context,
+                        bot_id=bot_id, telegram_user_id=telegram_user_id,
+                        step_id=step.get('id')
+                    )
+                    if next_step_id:
+                        self._execute_flow_recursive(
+                            bot_id, token, config, chat_id,
+                            telegram_user_id, next_step_id
+                        )
+                    else:
+                        fallback = condition.get('fallback_step')
+                        if fallback:
+                            self._execute_flow_recursive(
+                                bot_id, token, config, chat_id,
+                                telegram_user_id, fallback
+                            )
+                    step['conditions'] = []
+                    return
+
+                elif ctype in ('text_validation', 'button_click'):
+                    self._save_current_step_atomic(bot_id, telegram_user_id, step.get('id'))
+                    msg = step.get('config', {}).get('message', '')
+                    if msg:
+                        self.send_telegram_message(
+                            token=token, chat_id=str(chat_id),
+                            message=msg, bot_id=bot_id
+                        )
+                    return
+
+            elif step_type == 'redirect':
+                step_config = step.get('config', {})
+                msg = step_config.get('message', '')
+                btn_text = step_config.get('button_text', 'Acessar')
+                url = step_config.get('redirect_url', '')
+
+                if msg:
+                    self.send_telegram_message(
+                        token=token, chat_id=str(chat_id),
+                        message=msg, bot_id=bot_id
+                    )
+
+                if url:
+                    buttons = [{'text': btn_text, 'url': url}]
+                    self.send_telegram_message(
+                        token=token, chat_id=str(chat_id),
+                        message='', buttons=buttons, bot_id=bot_id
+                    )
+                return
+
+            elif step_type in ('downsell', 'upsell'):
+                step_config = step.get('config', {})
+                mode = step_type
+
+                from internal_logic.core.models import Payment
+                last_payment = Payment.query.filter_by(
+                    bot_id=bot_id,
+                    customer_user_id=str(telegram_user_id)
+                ).order_by(Payment.created_at.desc()).first()
+
+                if not last_payment:
+                    logger.warning(f"⚠️ {mode} sem pagamento: bot={bot_id}, user={telegram_user_id}")
+                    return
+
+                offer_config = {
+                    'message': step_config.get('message', ''),
+                    'media_url': step_config.get('media_url', ''),
+                    'media_type': step_config.get('media_type', 'video'),
+                    'audio_enabled': step_config.get('audio_enabled', False),
+                    'audio_url': step_config.get('audio_url', ''),
+                    'pricing_mode': step_config.get('pricing_mode', 'fixed'),
+                    'price': step_config.get('price', 0),
+                    'discount_percentage': step_config.get('discount_percentage', 50),
+                    'product_name': step_config.get('product_name', ''),
+                    'button_text': step_config.get('button_text', ''),
+                    'subscription': step_config.get('subscription', {}),
+                    'trigger_product': step_config.get('trigger_product', ''),
+                    'delay_minutes': step_config.get('delay_minutes', 5),
+                }
+
+                try:
+                    from internal_logic.services.offer_sender import schedule_offers
+                    from tasks_async import marathon_queue
+                    schedule_offers(
+                        mode=mode,
+                        marathon_queue=marathon_queue,
+                        bot_id=bot_id,
+                        payment_id=str(last_payment.payment_id),
+                        chat_id=chat_id,
+                        offers=[offer_config],
+                        original_price=float(last_payment.amount or 0),
+                        user_id=self.user_id
+                    )
+                    logger.info(f"✅ {mode} agendado: payment_id={last_payment.payment_id}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao agendar {mode}: {e}")
+                return
+
+            elif step_type == 'settings':
+                logger.info(f"⚙️ Step settings: processado pelo frontend (syncToConfig)")
+                return
+
             # Delay antes do próximo step
             if delay > 0:
                 time.sleep(delay)
@@ -3985,7 +4107,7 @@ class BotManager:
             # Limpar step atual do Redis
             redis_conn = get_redis_connection()
             if redis_conn:
-                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
                 redis_conn.delete(current_step_key)
             
             # Tentar reiniciar fluxo do início

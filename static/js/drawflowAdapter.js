@@ -204,6 +204,27 @@
 
         flowSteps.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
 
+        // Subscription injection: injeta config.subscription no payment step pai
+        var subSteps = flowSteps.filter(function(s) { return s.type === 'subscription'; });
+        subSteps.forEach(function(sub) {
+            var parentPayment = flowSteps.find(function(s) {
+                return s.type === 'payment' &&
+                    (s.connections.next === sub.id || s.connections.pending === sub.id);
+            });
+            if (parentPayment) {
+                parentPayment.config.subscription = {
+                    enabled: true,
+                    duration_type: sub.config.duration_type || 'days',
+                    duration_value: sub.config.duration_value || 30,
+                    vip_chat_id: sub.config.vip_chat_id || '',
+                    vip_group_link: sub.config.vip_group_link || ''
+                };
+            } else {
+                console.warn('⚠️ Subscription ' + sub.id + ' sem payment step pai');
+            }
+        });
+        flowSteps = flowSteps.filter(function(s) { return s.type !== 'subscription'; });
+
         // AJUSTE #2: preservar start pré-existente
         var prevStart = prevBotConfig.flow_start_step_id || null;
         var onCanvas = {};
