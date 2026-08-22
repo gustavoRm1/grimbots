@@ -43,6 +43,12 @@ def create_app(skip_sync_thread: bool = False, rq_pool: bool = False):
     
     # Inicializa o Flask apontando explicitamente para as pastas front-end da raiz
     app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
+
+    # 🔥 FIX DEPLOY INTERMITENTE: sem isso, cada worker do gunicorn compila os
+    # templates UMA vez e serve da memória para sempre. Um 'git pull' sem
+    # restart fazia metade dos requests sair com HTML antigo e metade novo.
+    # Com auto-reload, o Jinja checa o mtime do arquivo a cada render.
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
     
     # ============================================================================
     # JINJA FILTERS
