@@ -3944,8 +3944,6 @@ class BotManager:
                     order_bump_accepted=False,
                     order_bump_value=0.0,
                     button_config=button_config,
-                    has_subscription=(
-                        isinstance(button_config, dict) and bool((button_config.get('subscription') or {}).get('enabled'))),
                 )
                 # ✅ UX FIX: Tratamento Amigável de Rate Limit
                 if pix_data and pix_data.get('rate_limit'):
