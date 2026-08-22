@@ -167,8 +167,17 @@
     </div>
 </div>
 <script>
-var BOT_ID = {{ bot.id }};
 var CFG_DATA = null;
+var GF_BUILD = '61a76aa-hardening';
+console.log('[flow] build', GF_BUILD);
+// 🔥 Auto-reparo: qualquer ponto do codigo recebe SEMPRE um objeto valido.
+function gfCfg(){
+    if (!CFG_DATA || typeof CFG_DATA !== 'object') {
+        CFG_DATA = { flow_enabled: true, flow_steps: [], flow_start_step_id: null };
+    }
+    return CFG_DATA;
+}
+var BOT_ID = {{ bot.id }};
 var TYPES = {
     message:      { label:'Mensagem',      icon:'fa-comment-dots',      color:'#60A5FA', bgColor:'rgba(96,165,250,0.1)',  borderColor:'rgba(96,165,250,0.2)' },
     content:      { label:'Conteudo',      icon:'fa-photo-video',       color:'#818CF8', bgColor:'rgba(129,140,248,0.1)', borderColor:'rgba(129,140,248,0.2)' },
@@ -542,7 +551,7 @@ function flowEditor() {
 
         save: function() {
             if (!this.editor || this.saving) return;
-            if (!CFG_DATA || typeof CFG_DATA !== 'object') CFG_DATA = { flow_enabled: true, flow_steps: [], flow_start_step_id: null };
+            gfCfg();
             var self = this;
             self.saving = true;
             // 🔴 BLINDAGEM: excecao sincrona aqui ficava FORA de try/catch e
@@ -551,16 +560,16 @@ function flowEditor() {
             try {
                 var exported = self.editor.export();
                 var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
-                CFG_DATA.flow_steps = grim.flow_steps;
-                CFG_DATA.flow_start_step_id = grim.flow_start_step_id;
+                gfCfg().flow_steps = grim.flow_steps;
+                gfCfg().flow_start_step_id = grim.flow_start_step_id;
                 CFG_DATA.flow_enabled = true;
-                var settingsStep = CFG_DATA.flow_steps.find(function(s){return s.type==='settings'});
+                var settingsStep = gfCfg().flow_steps.find(function(s){return s.type==='settings'});
                 if (settingsStep) {
                     var c = settingsStep.config || {};
-                    if (c.access_link !== undefined && c.access_link !== '') CFG_DATA.access_link = c.access_link;
-                    if (c.success_message !== undefined) CFG_DATA.success_message = c.success_message;
-                    if (c.pending_message !== undefined) CFG_DATA.pending_message = c.pending_message;
-                    if (c.meta_pixel_id !== undefined && c.meta_pixel_id !== '') CFG_DATA.meta_pixel_id = c.meta_pixel_id;
+                    if (c.access_link !== undefined && c.access_link !== '') gfCfg().access_link = c.access_link;
+                    if (c.success_message !== undefined) gfCfg().success_message = c.success_message;
+                    if (c.pending_message !== undefined) gfCfg().pending_message = c.pending_message;
+                    if (c.meta_pixel_id !== undefined && c.meta_pixel_id !== '') gfCfg().meta_pixel_id = c.meta_pixel_id;
                 }
                 payload = JSON.stringify(CFG_DATA);
             } catch(preErr) {
