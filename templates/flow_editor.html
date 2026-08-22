@@ -203,7 +203,7 @@ function refreshPreview(editor, id) {
             var cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
             if (cd.condition_type==='text_validation') txt = 'Se resposta ' + (cd.validation||'any') + (cd.value ? ' = "'+cd.value+'"' : '');
             else if (cd.condition_type==='button_click') txt = 'Se clicar "' + (cd.button_text||'?') + '"';
-            else if (cd.condition_type==='time_elapsed') { var _m=cd.minutes||0, _s=cd.seconds||0; txt = 'Se passarem ' + (_m?_m+' min':'') + (_m&&_s?' + ':'') + (_s?_s+' seg':'') || '5 min'; }
+            else if (cd.condition_type==='time_elapsed') { var _m=cd.minutes||0, _s=cd.seconds||0; txt = 'Se passarem ' + (_m?_m+' min':'') + (_m&&_s?' + ':'') + (_s?_s+' seg':''); if(!txt) txt = '5 min'; }
             else txt = 'Se pagamento == ' + (cd.status||'paid');
         }
         else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
@@ -379,7 +379,7 @@ function saveModal(){
     document.querySelectorAll('#mFields [data-k]').forEach(function(inp){
         var k = inp.getAttribute('data-k'); var val;
         if(inp.dataset.bool) val = inp.checked;
-        else if(inp.type==='number') val = (parseFloat(inp.value)||null);
+        else if(inp.type==='number') val = inp.value==='' ? null : Number(inp.value);
         else val = inp.value;
         if(k.indexOf('@cond:')===0){ data.__meta.conditions[0][k.slice(6)] = val; }
         else data[k] = val;
