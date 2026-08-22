@@ -203,7 +203,7 @@ function refreshPreview(editor, id) {
             var cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
             if (cd.condition_type==='text_validation') txt = 'Se resposta ' + (cd.validation||'any') + (cd.value ? ' = "'+cd.value+'"' : '');
             else if (cd.condition_type==='button_click') txt = 'Se clicar "' + (cd.button_text||'?') + '"';
-            else if (cd.condition_type==='time_elapsed') txt = 'Se passarem ' + (cd.minutes||5) + ' min';
+            else if (cd.condition_type==='time_elapsed') { var _m=cd.minutes||0, _s=cd.seconds||0; txt = 'Se passarem ' + (_m?_m+' min':'') + (_m&&_s?' + ':'') + (_s?_s+' seg':'') || '5 min'; }
             else txt = 'Se pagamento == ' + (cd.status||'paid');
         }
         else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
@@ -228,7 +228,7 @@ function buildNodeHtml(type) {
 }
 
 function defaultData(type) {
-    return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
+    return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', condition_seconds:0, custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
 }
 
 /* ═══════════ SISTEMA DE EDIÇÃO (modais) — portado do flow_drawflow ═══════════ */
@@ -238,7 +238,7 @@ var OPT_LABELS = { video:'🎬 Vídeo', photo:'🖼️ Foto', fixed:'💰 Preço
     any:'Qualquer coisa (só recebeu mensagem)', email:'Um e-mail válido', phone:'Um telefone válido',
     cpf:'Um CPF válido', contains:'Uma frase que contenha uma palavra', equals:'Exatamente igual a um texto',
     payment_status:'💰 Se o pagamento foi aprovado', text_validation:'⌨️ O que o cliente digitou (resposta)',
-    button_click:'🖱️ Em qual botão o cliente clicou', time_elapsed:'⏰ Se passou um tempo (minutos)' };
+    button_click:'🖱️ Em qual botão o cliente clicou', time_elapsed:'⏰ Se passou um tempo (minutos/segundos)' };
 function gfEsc(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 var BOX = function(s){ return '<div style="background:rgba(255,184,0,.08);border:1px solid rgba(255,184,0,.25);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.6;color:#e5e7eb;">'+s+'</div>'; };
 var EXPLAINERS = {
@@ -285,7 +285,7 @@ function buildConditionFields(cd){
     '<div class="fgroup"><label>Quantas tentativas o cliente tem? <span style="color:#6B7280">(opcional)</span></label><input data-k="@cond:max_attempts" type="number" placeholder="Vazio = ilimitado" value="'+gfEsc(cd.max_attempts)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Esgotou? Segue pelo caminho 🔴 vermelho.</p></div></div>'+
     '<div data-ct="button_click" style="display:none"><div class="fgroup"><label>Qual o texto escrito no botão?</label><input data-k="@cond:button_text" value="'+gfEsc(cd.button_text)+'"><p style="font-size:11px;color:#8B8B93;margin-top:4px">Idêntico ao botão do bloco anterior.</p></div></div>'+
     '<div data-ct="payment_status" style="display:none"><div class="fgroup"><label>Qual status do pagamento?</label>'+gfSel('@cond:status',[['paid','✅ Pago'],['pending','⏳ Pendente']],cd.status)+'</div></div>'+
-    '<div data-ct="time_elapsed" style="display:none"><div class="fgroup"><label>Quantos minutos devem passar?</label><input data-k="@cond:minutes" type="number" value="'+gfEsc(cd.minutes??5)+'"></div></div>';
+    '<div data-ct="time_elapsed" style="display:none"><div class="frow"><div class="fgroup"><label>Minutos</label><input data-k="@cond:minutes" type="number" min="0" value="'+gfEsc(cd.minutes??5)+'"></div><div class="fgroup"><label>Segundos</label><input data-k="@cond:seconds" type="number" min="0" max="59" value="'+gfEsc(cd.seconds??0)+'"></div></div><p style="font-size:11px;color:#8B8B93;margin-top:4px">Ex: 0 min + 30 seg = espera 30 segundos. 2 min + 0 seg = espera 2 minutos.</p></div>';
 }
 function applyConditionVisibility(){
     var type = document.querySelector('[data-k="@cond:condition_type"]').value;
@@ -327,7 +327,7 @@ function openModal(id){
     if(node.name==='condition'){
         c.__meta = c.__meta || {};
         if(!Array.isArray(c.__meta.conditions) || !c.__meta.conditions[0]){
-            c.__meta.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status', validation:'any', value:'', button_text:'', status:'paid', minutes:5, target_step:'', fallback_step:'', max_attempts:null, order:0 }];
+            c.__meta.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status', validation:'any', value:'', button_text:'', status:'paid', minutes:5, seconds:0, target_step:'', fallback_step:'', max_attempts:null, order:0 }];
         }
     }
 

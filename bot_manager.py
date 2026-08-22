@@ -2617,8 +2617,13 @@ class BotManager:
         
         elif condition_type == 'time_elapsed':
             minutes = condition.get('minutes', 5)
-            if not isinstance(minutes, (int, float)) or minutes < 1:
-                return False, "Condição 'time_elapsed' requer 'minutes' (número >= 1)"
+            seconds = condition.get('seconds', 0)
+            if not isinstance(minutes, (int, float)) or minutes < 0:
+                return False, "Condição 'time_elapsed' requer 'minutes' (número >= 0)"
+            if not isinstance(seconds, (int, float)) or seconds < 0 or seconds > 59:
+                return False, "Condição 'time_elapsed' requer 'seconds' (0-59)"
+            if minutes == 0 and seconds == 0:
+                return False, "Condição 'time_elapsed' requer pelo menos 1 minuto ou 1 segundo"
         
         # Validar max_attempts se presente
         max_attempts = condition.get('max_attempts')
@@ -2870,6 +2875,8 @@ class BotManager:
         # ✅ NOVO: Implementação funcional usando Redis para rastrear timestamp
         """
         required_minutes = condition.get('minutes', 5)
+        required_seconds = condition.get('seconds', 0)
+        required_total_seconds = required_minutes * 60 + required_seconds
         
         # ✅ NOVO: Buscar timestamp do step do Redis
         if bot_id and telegram_user_id and step_id:
@@ -2883,16 +2890,15 @@ class BotManager:
                         step_timestamp = int(step_timestamp) if isinstance(step_timestamp, (str, bytes)) else step_timestamp
                         import time
                         elapsed_seconds = int(time.time()) - step_timestamp
-                        elapsed_minutes = elapsed_seconds / 60
                         
-                        logger.debug(f"⏱️ Tempo decorrido: {elapsed_minutes:.1f} minutos (requerido: {required_minutes})")
-                        return elapsed_minutes >= required_minutes
+                        logger.debug(f"⏱️ Tempo decorrido: {elapsed_seconds}s (requerido: {required_total_seconds}s = {required_minutes}min {required_seconds}s)")
+                        return elapsed_seconds >= required_total_seconds
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao calcular tempo decorrido: {e}")
         
         # Fallback: usar context se disponível
         elapsed_minutes = context.get('elapsed_minutes', 0)
-        return elapsed_minutes >= required_minutes
+        return elapsed_minutes * 60 >= required_total_seconds
     
     def _validate_cpf(self, cpf: str) -> bool:
         """

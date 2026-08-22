@@ -34,7 +34,7 @@
             // payment_status
             status: 'paid',
             // time_elapsed
-            minutes: 5,
+            minutes: 5, seconds: 0,
             // roteamento
             target_step: '', fallback_step: '',
             max_attempts: null, order: 0
