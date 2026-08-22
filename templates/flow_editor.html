@@ -483,19 +483,33 @@ function flowEditor() {
 
         loadConfig: function() {
             var self = this;
+            // 🔥 FIX CONTRATO: a API retorna o config PLANO (sem envelope
+            // {success, config}). Antes: !data.success era sempre true ->
+            // CFG_DATA ficava null -> Salvar explodia em .flow_steps.
             fetch('/api/bots/' + BOT_ID + '/config')
-                .then(function(r){return r.json()})
+                .then(function(r){ return r.json(); })
                 .then(function(data){
-                    if (!data.success) return;
-                    CFG_DATA = data.config;
+                    var cfg = (data && typeof data === 'object') ? (data.config || data) : null;
+                    var ok = cfg && typeof cfg === 'object' && (('flow_steps' in cfg) || ('welcome_message' in cfg));
+                    if (!ok) {
+                        console.warn('[flow] config vazia/invalida - iniciando funil novo');
+                        CFG_DATA = { flow_enabled: true, flow_steps: [], flow_start_step_id: null };
+                    } else {
+                        CFG_DATA = cfg;
+                        if (!Array.isArray(CFG_DATA.flow_steps)) CFG_DATA.flow_steps = [];
+                    }
                     self.flow_start_step_id = CFG_DATA.flow_start_step_id || null;
-                    if (CFG_DATA.flow_steps && CFG_DATA.flow_steps.length > 0) {
+                    if (CFG_DATA.flow_steps.length > 0) {
                         var dfData = DrawflowAdapter.toDrawflow(CFG_DATA);
                         self.editor.import(dfData);
                         Object.keys(dfData.drawflow.Home.data).forEach(function(id) { refreshPreview(self.editor, id); });
-                        self.emptyCanvas = Object.keys(dfData.drawflow.Home.data).length === 0;
+                        self.emptyCanvas = false;
                     }
                     refreshStartBadges(self.flow_start_step_id);
+                })
+                .catch(function(e){
+                    console.error('[flow] falha ao carregar config:', e);
+                    CFG_DATA = { flow_enabled: true, flow_steps: [], flow_start_step_id: null };
                 });
         },
 
@@ -528,6 +542,7 @@ function flowEditor() {
 
         save: function() {
             if (!this.editor || this.saving) return;
+            if (!CFG_DATA || typeof CFG_DATA !== 'object') CFG_DATA = { flow_enabled: true, flow_steps: [], flow_start_step_id: null };
             var self = this;
             self.saving = true;
             // 🔴 BLINDAGEM: excecao sincrona aqui ficava FORA de try/catch e
