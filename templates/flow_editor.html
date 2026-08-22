@@ -235,6 +235,23 @@ function refreshStartBadges(startId) {
     });
 }
 
+// 🔥 Reconstrói o HTML visual dos nós vindos de import() (adapter salva html:'')
+function rebuildImportedDom(editor, dfData, startId) {
+    var data = dfData.drawflow.Home.data;
+    Object.keys(data).forEach(function(id) {
+        var el = document.getElementById('node-' + id);
+        if (!el) return;
+        var cont = el.querySelector('.drawflow_content_node');
+        if (!cont || cont.querySelector('.df-head')) return; // já tem corpo
+        var type = (data[id].data && data[id].data.__meta && data[id].data.__meta.type) || data[id].name || 'message';
+        cont.innerHTML = buildNodeHtml(type);
+    });
+    if (startId) { s = String(startId); }
+    document.querySelectorAll('#drawflow-canvas .drawflow-node').forEach(function(n2){
+        n2.classList.toggle('is-start', n2.id.replace('node-','') === (startId ? String(startId) : ''));
+    });
+}
+
 function buildNodeHtml(type) {
     var t = TYPES[type] || {label:type, icon:'fa-circle', color:'#888'};
     var outs = OUT_LABELS[type] || [];
@@ -511,6 +528,9 @@ function flowEditor() {
                     if (CFG_DATA.flow_steps.length > 0) {
                         var dfData = DrawflowAdapter.toDrawflow(CFG_DATA);
                         self.editor.import(dfData);
+                        // 🔥 FIX IMPORT: adapter salva html:'' (agnóstico de DOM).
+                        // Reimportado, o Drawflow renderiza card pelado. Reconstruir:
+                        rebuildImportedDom(self.editor, dfData, self.flow_start_step_id);
                         Object.keys(dfData.drawflow.Home.data).forEach(function(id) { refreshPreview(self.editor, id); });
                         self.emptyCanvas = false;
                     }

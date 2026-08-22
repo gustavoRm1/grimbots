@@ -208,12 +208,26 @@
         const dfData = DrawflowAdapter.toDrawflow(S.alpine.config);
         S.canvasWasEmpty = Object.keys(dfData.drawflow.Home.data).length === 0;
         S.editor.import(dfData);
+        rebuildImportedDomBridge(dfData.drawflow.Home.data);
         Object.keys(dfData.drawflow.Home.data).forEach(id => refreshPreview(id));
 
         // 🔥 SETTINGS: injeta valores GLOBAIS atuais no nó (usuário edita em cima do real)
         injectGlobalIntoSettingsNode();
 
         refreshStartBadges();
+    }
+
+    /** 🔥 FIX IMPORT: reconstrói DOM dos nós (adapter salva html:'') */
+    function rebuildImportedDomBridge(data) {
+        Object.keys(data).forEach(function (id) {
+            var el = document.getElementById('node-' + id);
+            if (!el) return;
+            var cont = el.querySelector('.drawflow_content_node');
+            if (!cont || cont.querySelector('.df-head')) return;
+            var d = data[id] || {};
+            var type = (d.data && d.data.__meta && d.data.__meta.type) || d.name || 'message';
+            cont.innerHTML = nodeHtml(type);
+        });
     }
 
     function findSettingsNodeId() {
