@@ -2553,7 +2553,13 @@ def bot_config_page(bot_id):
 def flow_editor_page(bot_id):
     """Editor de fluxo visual standalone (Drawflow)"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    return render_template('flow_editor.html', bot=bot)
+    resp = render_template('flow_editor.html', bot=bot)
+    # 🔥 ANTI-CACHE: impede navegador/proxy servirem HTML velho do editor
+    # (causa raiz de "bug fantasma" apos deploys: pagina antiga em memoria)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['X-Flow-Build'] = '49b9ce2'
+    return resp
 
 
 # ============================================================================
