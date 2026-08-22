@@ -3065,7 +3065,49 @@ class BotManager:
                             })
         
         return buttons
-    
+
+    # ✅ PERSONALIZAÇÃO DE FUNIL: variáveis {nome} {@usuario} {id} nas mensagens
+    def _personalize_text(self, text: str, bot_id: Optional[int], chat_id: int) -> str:
+        """
+        Substitui placeholders de personalização usando dados do BotUser.
+        Variáveis aceitas (case-insensitive):
+          {nome} {name}   -> first_name do cliente
+          {@usuario} {username} -> @username do cliente (fallback: nome)
+          {id}            -> telegram_user_id
+        Desconhecidas ficam intactas (não quebra nada).
+        """
+        if not text or ('{' not in text and '@' not in text):
+            return text
+        try:
+            from internal_logic.core.models import BotUser
+            telegram_user_id = str(chat_id)  # chat privado: chat_id == user id
+            bu = None
+            with current_app.app_context():
+                bu = BotUser.query.filter_by(
+                    bot_id=bot_id, telegram_user_id=telegram_user_id
+                ).first()
+            first = (bu.first_name if bu and bu.first_name else '') or 'Cliente'
+            uname = ((bu.username if bu and bu.username else '') or '').lstrip('@')
+
+            def _sub(m):
+                key = m.group(1).lower()
+                if key in ('nome', 'name'):
+                    return first
+                if key == 'sobrenome':
+                    return ''
+                if key in ('usuario', 'username'):
+                    return f'@{uname}' if uname else first
+                if key == 'id':
+                    return str(telegram_user_id)
+                return m.group(0)
+            import re as _re
+            personalized = _re.sub(r'\{\s*(nome|name|sobrenome|usuario|username|id)\s*\}', _sub, text, flags=_re.IGNORECASE)
+            personalized = personalized.replace('  ', ' ').replace(' ,', ',')
+            return personalized
+        except Exception as e:
+            logger.warning(f"⚠️ Personalização falhou (seguindo sem): {e}")
+            return text
+
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None, bot_id: Optional[int] = None):
         """
         # ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
@@ -3096,7 +3138,7 @@ class BotManager:
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                message_text = step_config.get('message', '')
+                message_text = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
                 media_url = step_config.get('media_url')
                 media_type = step_config.get('media_type', 'video')
                 
@@ -3134,7 +3176,7 @@ class BotManager:
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                message_text = step_config.get('message', '')
+                message_text = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
                 if not message_text or not message_text.strip():
                     logger.error(f"❌ Step 'message' não tem mensagem configurada! step_id={step.get('id')}")
                     # Enviar mensagem de aviso ao usuário
@@ -3184,7 +3226,7 @@ class BotManager:
                 self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
-                    message=step_config.get('message', ''),
+                    message=self._personalize_text(step_config.get('message', ''), bot_id, chat_id),
                     media_url=step_config.get('media_url'),
                     media_type='video',
                     buttons=buttons,
@@ -3939,7 +3981,7 @@ class BotManager:
                 logger.info(f"✅ Step access detectado - finalizando fluxo")
                 
                 link = step_config.get('link') or config.get('access_link', '')
-                message = step_config.get('message', 'Acesso liberado!')
+                message = self._personalize_text(step_config.get('message', 'Acesso liberado!'), bot_id, chat_id)
                 
                 buttons = []
                 if link:

@@ -63,6 +63,11 @@
 .btn-ghost2{background:transparent;border:1px solid #3A3F50;color:#8B8B93;padding:6px 12px;border-radius:8px;font-weight:600;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .btn-ghost2:hover{background:#242836;color:#fff}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+/* Chips de personalização {nome} {@usuario} {id} */
+.gf-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.gf-chip{background:rgba(255,184,0,.12);border:1px solid rgba(255,184,0,.35);color:#FFB800;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;cursor:pointer;transition:all .15s;font-family:inherit}
+.gf-chip:hover{background:rgba(255,184,0,.25);transform:translateY(-1px)}
+.gf-chips-hint{font-size:10px;color:#8B8B93;margin-bottom:6px}
 </style>
 {% endblock %}
 
@@ -276,6 +281,27 @@ var FIELDS = {
 };
 
 var editingId = null;
+/* 🪄 Personalização: variáveis do cliente */
+var GF_VAR_TOKENS = [
+    ['{nome}',   '👤 Nome do cliente'],
+    ['{sobrenome}', '🏷️ Sobrenome'],
+    ['{@usuario}', '@ Usuário (@username)'],
+    ['{id}',     '# ID Telegram']
+];
+function gfChips(k){
+    return '<div class="gf-chips-hint">🪄 Clique para personalizar:</div><div class="gf-chips">'
+        + GF_VAR_TOKENS.map(function(t){ return '<button type="button" class="gf-chip" onclick="gfInsertToken(\''+k+'\',\''+t[0]+'\')">'+t[1]+'</button>'; }).join('')
+        + '</div>';
+}
+function gfInsertToken(k, token){
+    var el = document.querySelector('#mFields [data-k="'+k+'"]');
+    if(!el) return;
+    var start = el.selectionStart != null ? el.selectionStart : el.value.length;
+    var end = el.selectionEnd != null ? el.selectionEnd : start;
+    el.value = el.value.slice(0,start) + token + el.value.slice(end);
+    var np = start + token.length;
+    el.focus(); el.setSelectionRange(np,np);
+}
 function gfSel(k, opts, cur){ return '<select data-k="'+k+'">' + opts.map(function(o){ var v=o[0], t=o[1]; return '<option value="'+v+'" '+(v===cur?'selected':'')+'>'+t+'</option>'; }).join('') + '</select>'; }
 function buildConditionFields(cd){
     return BOX('<b style="color:#FFB800">Como funciona:</b> a condição decide o caminho do fluxo.<br>🟢 <b>Se ATENDER</b> → bolinha <b>verde</b> (TRUE).<br>🔴 <b>Se NÃO atender</b> → bolinha <b>vermelha</b> (FALSE).') +
@@ -341,7 +367,7 @@ function openModal(id){
         if(fields) fields.forEach(function(f){
             var k=f[0], label=f[1], kind=f[2];
             var v = k.indexOf('@cond:')===0 ? '' : (c[k]);
-            if(kind==='textarea') html += '<div class="fgroup"><label>'+label+'</label><textarea data-k="'+k+'">'+gfEsc(v)+'</textarea></div>';
+            if(kind==='textarea') html += '<div class="fgroup"><label>'+label+'</label>'+(k==='message' && ['message','content','video','access'].indexOf(node.name)!==-1 ? gfChips(k) : '')+'<textarea data-k="'+k+'">'+gfEsc(v)+'</textarea></div>';
             else if(kind.indexOf('select:')===0){ var opts=kind.slice(7).split(',').map(function(o){return '<option value="'+o+'" '+(o===v?'selected':'')+'>'+(OPT_LABELS[o]||o)+'</option>';}).join(''); html += '<div class="fgroup"><label>'+label+'</label><select data-k="'+k+'">'+opts+'</select></div>'; }
             else html += '<div class="fgroup"><label>'+label+'</label><input data-k="'+k+'" type="'+kind+'" value="'+gfEsc(v)+'"></div>';
         });
