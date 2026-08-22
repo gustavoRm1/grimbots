@@ -3914,7 +3914,24 @@ class BotManager:
                     logger.info(f"💰 Usando valor do step: R$ {amount:.2f}")
                 if step_config.get('description'):
                     description = step_config.get('description')
+                # 🔥 FLOW: aliases do bloco canvas (price/product_name)
+                elif step_config.get('product_name'):
+                    description = step_config.get('product_name')
+                if step_config.get('price') and not step_config.get('amount'):
+                    amount = float(step_config.get('price'))
                 
+                # 🔥 FLOW: assinatura anexada ao pagamento (lida por
+                # create_subscription_for_payment via payment.button_config)
+                _sub_cfg = step_config.get('subscription') or {}
+                button_config = None
+                if isinstance(_sub_cfg, dict) and _sub_cfg.get('enabled') and _sub_cfg.get('vip_chat_id'):
+                    button_config = {'subscription': {
+                        'enabled': True,
+                        'duration_type': _sub_cfg.get('duration_type', 'days'),
+                        'duration_value': int(_sub_cfg.get('duration_value') or 30),
+                        'vip_chat_id': _sub_cfg.get('vip_chat_id'),
+                        'vip_group_link': _sub_cfg.get('vip_group_link', ''),
+                    }}
                 # Gerar PIX
                 pix_data = self._generate_pix_payment(
                     bot_id=bot_id,
@@ -3925,7 +3942,10 @@ class BotManager:
                     customer_user_id=telegram_user_id,
                     order_bump_shown=False,
                     order_bump_accepted=False,
-                    order_bump_value=0.0
+                    order_bump_value=0.0,
+                    button_config=button_config,
+                    has_subscription=(
+                        isinstance(button_config, dict) and bool((button_config.get('subscription') or {}).get('enabled'))),
                 )
                 # ✅ UX FIX: Tratamento Amigável de Rate Limit
                 if pix_data and pix_data.get('rate_limit'):
@@ -4000,6 +4020,69 @@ class BotManager:
                 return  # Fim do fluxo
             
             # ✅ Executar step normalmente (content, message, audio, video, buttons)
+            # 🔥 FLOW V9: Condition — roteador TRUE/FALSE
+            elif step_type == 'condition':
+                cond_list = step.get('conditions') or []
+                c0 = cond_list[0] if cond_list else {}
+                ctype = c0.get('condition_type', 'payment_status')
+                conn = step.get('connections') or {}
+                target_true = c0.get('target_step') or ''
+                target_false = c0.get('fallback_step') or ''
+
+                if ctype == 'payment_status':
+                    # Imediato: chegamos aqui após fluxo de pagamento (contexto paid)
+                    expected = c0.get('status', 'paid')
+                    matched = ('paid' == expected)
+                    nxt = target_true if matched else target_false
+                    logger.info(f"🔀 Condition payment_status matched={matched} -> {nxt or '(segue next)'}")
+                    if nxt:
+                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=recursion_depth, visited_steps=visited_steps | {str(step.get('id'))}, flow_snapshot=flow_snapshot)
+                        return
+                    # sem rotas: segue connections.next padrão abaixo
+                elif ctype == 'time_elapsed':
+                    # Aguardando: avalia quando o usuário mandar qualquer texto
+                    try:
+                        from internal_logic.core.extensions import db as _db
+                    except Exception:
+                        pass
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.setex(k, 86400, str(step.get('id')))
+                    except Exception:
+                        pass
+                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                    if msg_txt:
+                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, bot_id=bot_id, save_message=True)
+                    return  # pausa: handler de resposta (L~1795) avalia e roteia
+                else:
+                    # text_validation / button_click: aguarda resposta do usuário
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.setex(k, 86400, str(step.get('id')))
+                    except Exception:
+                        pass
+                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                    if msg_txt:
+                        buttons_c = self._build_step_buttons(step, config)
+                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, buttons=buttons_c if buttons_c else None, bot_id=bot_id, save_message=True)
+                    return  # pausa: resposta do usuário cai no avaliador existente
+
+            # 🔥 FLOW V9: Redirect — mensagem com botão de URL (não-terminal)
+            elif step_type == 'redirect':
+                url_r = step_config.get('redirect_url', '')
+                btn_txt = step_config.get('button_text') or 'Acessar'
+                msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                buttons_r = [{'text': btn_txt, 'url': url_r}] if url_r else None
+                self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt or '', buttons=buttons_r, bot_id=bot_id, save_message=True)
+                nxt_r = conn_next = (step.get('connections') or {}).get('next')
+                if nxt_r:
+                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt_r), recursion_depth=recursion_depth, visited_steps=visited_steps, flow_snapshot=flow_snapshot)
+                return
+
             else:
                 logger.info(f"🎬 Executando step tipo '{step_type}' (id={step_id})")
                 logger.info(f"🎬 Config do step: {step_config}")

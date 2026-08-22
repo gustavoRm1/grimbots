@@ -187,6 +187,16 @@
             if (e.pending) step.connections.pending = e.pending;
             if (e.retry) step.connections.retry = e.retry;
 
+            // 🔥 ALIAS PAYMENT: engine lê 'amount'/'description' no override por step
+            // (bot_manager: "Usar valores do step se especificados")
+            if (type === 'payment') {
+                if (config.price !== null && config.price !== undefined && config.price !== '') {
+                    config.amount = Number(config.price);
+                }
+                var _desc = config.product_name || config.button_text || '';
+                if (_desc && !config.description) config.description = _desc;
+            }
+
             // AJUSTE #1: adapter é o ÚNICO que escreve target_step
             (step.config.custom_buttons || []).forEach(function (btn, i) {
                 btn.target_step = e['btn:' + i] || '';
