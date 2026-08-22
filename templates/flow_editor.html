@@ -203,7 +203,7 @@ function refreshPreview(editor, id) {
             var cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
             if (cd.condition_type==='text_validation') txt = 'Se resposta ' + (cd.validation||'any') + (cd.value ? ' = "'+cd.value+'"' : '');
             else if (cd.condition_type==='button_click') txt = 'Se clicar "' + (cd.button_text||'?') + '"';
-            else if (cd.condition_type==='time_elapsed') { var _m=cd.minutes||0, _s=cd.seconds||0; txt = 'Se passarem ' + (_m?_m+' min':'') + (_m&&_s?' + ':'') + (_s?_s+' seg':''); if(!txt) txt = '5 min'; }
+            else if (cd.condition_type==='time_elapsed') txt = 'Se passarem ' + (cd.minutes||5) + ' min' + ((cd.seconds||0) ? ' + ' + cd.seconds + ' seg' : '');
             else txt = 'Se pagamento == ' + (cd.status||'paid');
         }
         else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
@@ -376,6 +376,21 @@ function saveModal(){
     var ed = window._gfEditor; if(!ed || !editingId) return;
     var node = ed.getNodeFromId(editingId);
     var data = JSON.parse(JSON.stringify(node.data));
+    // 🔥 FIX: openModal garantiu conditions[0] apenas no CLONE dele.
+    // Aqui clonamos de novo do editor — garantir ANTES de escrever,
+    // senao data.__meta.conditions[0] = undefined -> TypeError -> nada salva.
+    if(data.__meta && Array.isArray(data.__meta.conditions)){
+        if(!data.__meta.conditions[0]){
+            data.__meta.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status',
+                validation:'any', value:'', button_text:'', status:'paid', minutes:5, seconds:0,
+                target_step:'', fallback_step:'', max_attempts:null, order:0 }];
+        }
+    } else if(Array.isArray(data.__meta && data.__meta.conditions) === false && document.querySelector('[data-k="@cond:condition_type"]')){
+        data.__meta = data.__meta || { type: node.name, order:0, delay_seconds:0, conditions:[], title:'' };
+        data.__meta.conditions = [{ id:'cond_'+Date.now(), condition_type:'payment_status',
+            validation:'any', value:'', button_text:'', status:'paid', minutes:5, seconds:0,
+            target_step:'', fallback_step:'', max_attempts:null, order:0 }];
+    }
     document.querySelectorAll('#mFields [data-k]').forEach(function(inp){
         var k = inp.getAttribute('data-k'); var val;
         if(inp.dataset.bool) val = inp.checked;
