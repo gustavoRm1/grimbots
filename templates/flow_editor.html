@@ -504,32 +504,50 @@ function flowEditor() {
             if (!this.editor || this.saving) return;
             var self = this;
             self.saving = true;
-            var exported = self.editor.export();
-            var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
-            CFG_DATA.flow_steps = grim.flow_steps;
-            CFG_DATA.flow_start_step_id = grim.flow_start_step_id;
-            CFG_DATA.flow_enabled = true;
-            var settingsStep = CFG_DATA.flow_steps.find(function(s){return s.type==='settings'});
-            if (settingsStep) {
-                var c = settingsStep.config || {};
-                if (c.access_link !== undefined && c.access_link !== '') CFG_DATA.access_link = c.access_link;
-                if (c.success_message !== undefined) CFG_DATA.success_message = c.success_message;
-                if (c.pending_message !== undefined) CFG_DATA.pending_message = c.pending_message;
-                if (c.meta_pixel_id !== undefined && c.meta_pixel_id !== '') CFG_DATA.meta_pixel_id = c.meta_pixel_id;
+            // 🔴 BLINDAGEM: excecao sincrona aqui ficava FORA de try/catch e
+            // travava o spinner para sempre. Agora qualquer erro vira alerta.
+            var payload = null;
+            try {
+                var exported = self.editor.export();
+                var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
+                CFG_DATA.flow_steps = grim.flow_steps;
+                CFG_DATA.flow_start_step_id = grim.flow_start_step_id;
+                CFG_DATA.flow_enabled = true;
+                var settingsStep = CFG_DATA.flow_steps.find(function(s){return s.type==='settings'});
+                if (settingsStep) {
+                    var c = settingsStep.config || {};
+                    if (c.access_link !== undefined && c.access_link !== '') CFG_DATA.access_link = c.access_link;
+                    if (c.success_message !== undefined) CFG_DATA.success_message = c.success_message;
+                    if (c.pending_message !== undefined) CFG_DATA.pending_message = c.pending_message;
+                    if (c.meta_pixel_id !== undefined && c.meta_pixel_id !== '') CFG_DATA.meta_pixel_id = c.meta_pixel_id;
+                }
+                payload = JSON.stringify(CFG_DATA);
+            } catch(preErr) {
+                console.error("[SAVE] erro na montagem do payload:", preErr);
+                self.saving = false;
+                alert('Erro ao montar o fluxo: ' + preErr.message + ' (detalhes no Console F12)');
+                return;
             }
-            fetch('/api/bots/' + BOT_ID + '/config', {
+            var controller = new AbortController();
+            var timer = setTimeout(function(){ controller.abort(); }, 25000);
+            fetch("/api/bots/" + BOT_ID + "/config", {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(CFG_DATA)
+                body: payload,
+                signal: controller.signal
             })
-            .then(function(r){return r.json()})
+            .then(function(r){ return r.json().catch(function(){ throw new Error("Resposta nao-JSON (HTTP " + r.status + ")"); }); })
             .then(function(d){
+                clearTimeout(timer);
                 self.saving = false;
                 alert(d.success ? 'Fluxo salvo com sucesso!' : ('Erro ao salvar: ' + (d.error || 'desconhecido')));
             })
             .catch(function(e){
+                clearTimeout(timer);
                 self.saving = false;
-                alert('Erro de conexao: ' + e.message);
+                var msg = (e.name === 'AbortError') ? 'Servidor demorou mais de 25s. Tente novamente.' : ('Erro: ' + e.message);
+                console.error("[SAVE] falha:", e);
+                alert(msg);
             });
         }
     };
