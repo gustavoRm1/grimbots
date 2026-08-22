@@ -586,11 +586,18 @@ function flowEditor() {
                 body: payload,
                 signal: controller.signal
             })
-            .then(function(r){ return r.json().catch(function(){ throw new Error("Resposta nao-JSON (HTTP " + r.status + ")"); }); })
+            .then(function(r){
+                // 🔥 FIX: a API devolve o config plano em 2xx (sem success:true).
+                // Sucesso = status HTTP. Erro real so quando !r.ok.
+                return r.json().then(function(d){
+                    d.__ok = r.ok; d.__status = r.status; return d;
+                }, function(){ throw new Error('Resposta nao-JSON (HTTP ' + r.status + ')'); });
+            })
             .then(function(d){
                 clearTimeout(timer);
                 self.saving = false;
-                alert(d.success ? 'Fluxo salvo com sucesso!' : ('Erro ao salvar: ' + (d.error || 'desconhecido')));
+                if (d.__ok) { alert('Fluxo salvo com sucesso!'); }
+                else { alert('Erro ao salvar (' + d.__status + '): ' + (d.error || 'verifique o servidor')); }
             })
             .catch(function(e){
                 clearTimeout(timer);
