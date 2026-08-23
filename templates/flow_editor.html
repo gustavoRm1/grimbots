@@ -423,7 +423,11 @@ function addBtnRow(text){
     div.innerHTML='<input type="text" placeholder="Texto do botão" value="'+gfEsc(text)+'"><button type="button" class="btn-del2" onclick="this.parentElement.remove()">✕</button>';
     document.getElementById('btnList').appendChild(div);
 }
-function closeModal(){ document.getElementById('modal').classList.remove('open'); editingId=null; }
+function closeModal(){
+    if (window._gfDirty && !confirm('Descartar as alterações não salvas deste bloco?')) return;
+    window._gfDirty = false;
+    document.getElementById('modal').classList.remove('open'); editingId=null;
+}
 function saveModal(){
     var ed = window._gfEditor; if(!ed || !editingId) return;
     var node = ed.getNodeFromId(editingId);
@@ -458,10 +462,12 @@ function saveModal(){
     syncOutputs(editingId, node.name, data.custom_buttons);
     ed.updateNodeDataFromId(editingId, data);
     refreshPreview(ed, editingId);
+    window._gfDirty = false;
     closeModal();
 }
 function syncOutputs(id, type, buttons){
     var ed = window._gfEditor;
+    if (!ed || !ed.drawflow.drawflow.Home.data[id]) { console.warn('[flow] syncOutputs: node ausente', id); return; }
     var desired = DrawflowAdapter.computeOutputs(type, buttons);
     var keys = function(){ return Object.keys(ed.drawflow.drawflow.Home.data[id].outputs).sort(function(a,b){return (+a.slice(7))-(+b.slice(7));}); };
     while(keys().length > desired.length){ ed.removeNodeOutput(id, keys().pop()); }
@@ -544,6 +550,9 @@ function flowEditor() {
 
         addNode: function(type) {
             if (!this.editor) return;
+            var now = Date.now();
+            if (this._lastAddType === type && now - (this._lastAdd||0) < 400) return; // 🔥 debounce duplo clique
+            this._lastAdd = now; this._lastAddType = type;
             var n = Object.keys(this.editor.drawflow.drawflow.Home.data).length;
             var outs = DrawflowAdapter.computeOutputs(type, []).length;
             var x = 140 + (n % 4) * 290 + Math.random()*40;
@@ -616,14 +625,19 @@ function flowEditor() {
             .then(function(d){
                 clearTimeout(timer);
                 self.saving = false;
+                window._gfFlowDirty = false;
                 if (d.__ok) { alert('Fluxo salvo com sucesso!'); }
                 else { alert('Erro ao salvar (' + d.__status + '): ' + (d.error || 'verifique o servidor')); }
             })
             .catch(function(e){
                 clearTimeout(timer);
                 self.saving = false;
-                var msg = (e.name === 'AbortError') ? 'Servidor demorou mais de 25s. Tente novamente.' : ('Erro: ' + e.message);
-                console.error("[SAVE] falha:", e);
+                var msg;
+                if (e.name === 'AbortError') msg = 'Servidor demorou mais de 25s. Tente novamente.';
+                else if (e.message && e.message.indexOf('401') !== -1) msg = 'Sessão expirada. Recarregue a página (F5) e faça login novamente.';
+                else if (e.message && e.message.indexOf('403') !== -1) msg = 'Sem permissão para este bot.';
+                else msg = 'Erro: ' + (e.message || 'desconhecido');
+                console.error('[SAVE] falha:', e);
                 alert(msg);
             });
         }
@@ -631,3 +645,35 @@ function flowEditor() {
 }
 </script>
 {% endblock %}
+<script>
+// REDE DE SEGURANCA GLOBAL - nenhum erro silencioso, sempre com build no log
+(function () {
+    function report(ctx, err) {
+        try {
+            var b = (typeof GF_BUILD !== 'undefined') ? GF_BUILD : 'sem-build';
+            console.error('[flow:' + b + '] ' + ctx + ':', err);
+        } catch (_) {}
+    }
+    window.addEventListener('error', function (ev) { report('erro global', ev.error || ev.message); });
+    window.addEventListener('unhandledrejection', function (ev) { report('promise rejeitada', ev.reason); });
+})();
+// AVISO DE SAIDA COM FLUXO NAO SALVO
+(function () {
+    window._gfFlowDirty = false;
+    var evs = ['nodeCreated','nodeRemoved','connectionCreated','connectionRemoved'];
+    var tries = 0;
+    var t = setInterval(function () {
+        tries++;
+        if (window._gfEditor) {
+            clearInterval(t);
+            evs.forEach(function (e) {
+                try { window._gfEditor.on(e, function () { window._gfFlowDirty = true; }); } catch (_) {}
+            });
+        } else if (tries > 50) { clearInterval(t); }
+    }, 100);
+})();
+window.addEventListener('beforeunload', function (ev) {
+    if (window._gfFlowDirty) { ev.preventDefault(); ev.returnValue = ''; }
+});
+</script>
+
