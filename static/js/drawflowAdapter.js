@@ -117,8 +117,9 @@
                 if (!dstId || !nodes[dstId]) return;
                 // 🔥 DUPLO LADO: Drawflow desenha linhas importadas a partir do
                 // lado dos INPUTS; gravar só outputs fazia as linhas sumirem no F5.
+                // Formato do lado input (src/drawflow.js L713): {node, input}
                 nodes[srcId].outputs[k].connections.push({ node: dstId, output: 'input_1' });
-                nodes[dstId].inputs.input_1.connections.push({ node: srcId, output: k });
+                nodes[dstId].inputs.input_1.connections.push({ node: srcId, input: k });
             }
 
             var conns = step.connections || {};
