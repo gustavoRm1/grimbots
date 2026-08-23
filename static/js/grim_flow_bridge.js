@@ -133,7 +133,10 @@
                 const cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
                 if (cd.condition_type==='text_validation') txt = `Se resposta ${cd.validation||'any'}${cd.value ? ' = "'+cd.value+'"' : ''}`;
                 else if (cd.condition_type==='button_click') txt = `Se clicar "${cd.button_text||'?'}"`;
-                else if (cd.condition_type==='time_elapsed') txt = `Se passarem ${cd.minutes??5} min`;
+                else if (cd.condition_type==='time_elapsed') {
+                    const _tot = ((cd.minutes===0||cd.minutes)?cd.minutes:5)*60 + (+(cd.seconds)||0);
+                    txt = '⏱️ Dispara em ' + _tot + 's';
+                }
                 else txt = `Se pagamento == ${cd.status||'paid'}`;
             }
             else if (d.name==='audio') txt = c.audio_url ? '🎙️ Áudio carregado' : '';
