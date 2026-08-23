@@ -552,6 +552,13 @@ function flowEditor() {
                         // Reimportado, o Drawflow renderiza card pelado. Reconstruir:
                         rebuildImportedDom(self.editor, dfData, self.flow_start_step_id);
                         Object.keys(dfData.drawflow.Home.data).forEach(function(id) { refreshPreview(self.editor, id); });
+                        // 🔥 FIX: paths foram calculados ANTES da injecao de conteudo
+                        // (alturas mudam) -> recalcular apos o layout assentar.
+                        setTimeout(function () {
+                            Object.keys(dfData.drawflow.Home.data).forEach(function (id2) {
+                                try { self.editor.updateConnectionNodes("node-" + id2); } catch (_) {}
+                            });
+                        }, 90);
                         self.emptyCanvas = false;
                     }
                     refreshStartBadges(self.flow_start_step_id);
