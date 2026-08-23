@@ -3998,13 +3998,14 @@ class BotManager:
                             from rq_scheduler import Scheduler
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
                             sched = Scheduler(queue_name='marathon', connection=marathon_queue.connection)
-                            sched.enqueue_in(
+                            _cfg_json = json.dumps(config, default=str)  # nunca explode com datetime/Decimal
+                            _job = sched.enqueue_in(
                                 timedelta(seconds=max(1, required_seconds)),
                                 flow_time_elapsed_fire,
                                 self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
-                                json.dumps(config), str(step.get('id')), str(nxt)
+                                _cfg_json, str(step.get('id')), str(nxt)
                             )
-                            logger.info(f"⏱️ Timer agendado: {required_seconds}s -> {nxt}")
+                            logger.info(f"[TIMER] job={_job.id} dispara em {required_seconds}s -> {nxt}")
                         except Exception as sched_err:
                             logger.error(f"❌ Falha ao agendar timer: {sched_err}")
                     return  # fluxo pausa; continuação é feita pelo timer

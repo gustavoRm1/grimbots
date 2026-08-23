@@ -305,8 +305,9 @@ var FIELDS = {
         ['@cond:value','Palavra/Texto esperado (contains/equals)','text'],
         ['@cond:button_text','Texto do Botao esperado','text'],
         ['@cond:status','Status esperado do pagamento','select:paid,pending'],
-        ['@cond:minutes','Minutos decorridos','number'],
-        ['@cond:max_attempts','Maximo de Tentativas (vazio = sem limite)','number']
+        ['@cond:minutes','Minutos de espera (0 = só segundos)','number'],
+        ['@cond:seconds','+ Segundos','number'],
+        ['@cond:max_attempts','Máximo de Tentativas (vazio = sem limite)','number']
     ],
     downsell: 'OFFER', upsell: 'OFFER'
 };

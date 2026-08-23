@@ -4653,8 +4653,14 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         <!-- time_elapsed: minutos -->
                         <template x-if="editingStep.conditions[0].condition_type === 'time_elapsed'">
                             <div class="form-group">
-                                <label class="form-label">Minutos decorridos no step</label>
-                                <input type="number" x-model.number="editingStep.conditions[0].minutes" class="form-input w-40" min="1" placeholder="5" />
+                                <label class="form-label">Tempo de espera</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" x-model.number="editingStep.conditions[0].minutes" class="form-input w-28" min="0" placeholder="5" />
+                                    <span class="text-sm text-gray-400">min</span>
+                                    <input type="number" x-model.number="editingStep.conditions[0].seconds" class="form-input w-24" min="0" placeholder="0" />
+                                    <span class="text-sm text-gray-400">seg</span>
+                                </div>
+                                <p class="text-xs text-[#8B8B93] mt-1"><i class="fas fa-lightbulb"></i> Para testes rápidos: 0 min e 10 seg.</p>
                             </div>
                         </template>
 
