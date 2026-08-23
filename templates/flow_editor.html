@@ -246,9 +246,9 @@ function rebuildImportedDom(editor, dfData, startId) {
         var type = (data[id].data && data[id].data.__meta && data[id].data.__meta.type) || data[id].name || 'message';
         cont.innerHTML = buildNodeHtml(type);
     });
-    if (startId) { s = String(startId); }
+    var sid = String(startId || '');
     document.querySelectorAll('#drawflow-canvas .drawflow-node').forEach(function(n2){
-        n2.classList.toggle('is-start', n2.id.replace('node-','') === (startId ? String(startId) : ''));
+        n2.classList.toggle('is-start', n2.id.replace('node-','') === sid);
     });
 }
 
@@ -327,6 +327,8 @@ function gfInsertToken(k, token){
     el.value = el.value.slice(0,start) + token + el.value.slice(end);
     var np = start + token.length;
     el.focus(); el.setSelectionRange(np,np);
+    // 🔥 setar .value via JS não dispara input nativo — sinalizar dirty
+    el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 function gfSel(k, opts, cur){ return '<select data-k="'+k+'">' + opts.map(function(o){ var v=o[0], t=o[1]; return '<option value="'+v+'" '+(v===cur?'selected':'')+'>'+t+'</option>'; }).join('') + '</select>'; }
 function buildConditionFields(cd){
@@ -403,6 +405,18 @@ function openModal(id){
         html += '<div class="fgroup"><label>Botões Customizados <span style="color:#6B7280">(cada um vira uma saída)</span></label><div id="btnList"></div><button type="button" class="btn-ghost2" onclick="addBtnRow()"><i class="fas fa-plus"></i> Adicionar botão</button></div>';
     }
     document.getElementById('mFields').innerHTML = html;
+    // 🔥 FIX revisão: dirty via listener delegado ÚNICO em #mFields (não
+    // acumula por abertura). input pega input/textarea/select; click cobre
+    // adicionar/remover botões customizados.
+    var _mf = document.getElementById('mFields');
+    if (!_mf.dataset.gfHooked) {
+        _mf.dataset.gfHooked = '1';
+        _mf.addEventListener('input', function () { window._gfDirty = true; });
+        _mf.addEventListener('click', function (e) {
+            if (e.target.closest('#btnList')) window._gfDirty = true;
+        });
+    }
+    window._gfDirty = false; // abre limpo; qualquer edição marca de novo
     (c.custom_buttons||[]).forEach(function(b){ addBtnRow(b.text); });
     if(node.name==='condition'){
         var applyCt = applyConditionVisibility;
