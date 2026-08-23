@@ -244,7 +244,12 @@ function rebuildImportedDom(editor, dfData, startId) {
         var cont = el.querySelector('.drawflow_content_node');
         if (!cont || cont.querySelector('.df-head')) return; // já tem corpo
         var type = (data[id].data && data[id].data.__meta && data[id].data.__meta.type) || data[id].name || 'message';
-        cont.innerHTML = buildNodeHtml(type);
+        var _lbl = null;
+        if (type === 'condition') {
+            var _c0l = (data[id].data.__meta.conditions && data[id].data.__meta.conditions[0]) || {};
+            if (_c0l.condition_type === 'time_elapsed') _lbl = ['APÓS ' + (_c0l.minutes || 5) + ' MIN'];
+        }
+        cont.innerHTML = buildNodeHtml(type, _lbl);
     });
     var sid = String(startId || '');
     document.querySelectorAll('#drawflow-canvas .drawflow-node').forEach(function(n2){
@@ -252,9 +257,9 @@ function rebuildImportedDom(editor, dfData, startId) {
     });
 }
 
-function buildNodeHtml(type) {
+function buildNodeHtml(type, outLabelsOverride) {
     var t = TYPES[type] || {label:type, icon:'fa-circle', color:'#888'};
-    var outs = OUT_LABELS[type] || [];
+    var outs = outLabelsOverride || OUT_LABELS[type] || [];
     return '<div class="df-head"><div class="df-icon" style="background:'+t.color+'22;border:1px solid '+t.color+'44;color:'+t.color+'"><i class="fas '+t.icon+'"></i></div><div class="df-title">'+t.label+'</div><div class="df-star" title="Definir como inicio" onclick="event.stopPropagation();window._flowSetStart(parentNodeIdGf(this))">&#11088;</div></div><div class="df-body placeholder" data-df-preview>Nada configurado</div>'+outs.map(function(l){return '<div class="df-out-label">'+l+'</div>'}).join('')+'<div class="df-actions"><button class="df-btn edit" title="Editar" onclick="event.stopPropagation();openModal(parentNodeIdGf(this))"><i class="fas fa-pen"></i></button><button class="df-btn" title="Remover" onclick="event.stopPropagation();window._flowRemoveNode(parentNodeIdGf(this))"><i class="fas fa-trash"></i></button></div>';
 }
 
@@ -473,16 +478,16 @@ function saveModal(){
     if(rows.length || (data.custom_buttons&&data.custom_buttons.length)){
         data.custom_buttons = Array.from(rows).map(function(r,i){ return { text:r.value, target_step:(data.custom_buttons&&data.custom_buttons[i]?data.custom_buttons[i].target_step:'') }; });
     }
-    syncOutputs(editingId, node.name, data.custom_buttons);
+    syncOutputs(editingId, node.name, data.custom_buttons, editingStepCondType());
     ed.updateNodeDataFromId(editingId, data);
     refreshPreview(ed, editingId);
     window._gfDirty = false;
     closeModal();
 }
-function syncOutputs(id, type, buttons){
+function syncOutputs(id, type, buttons, condType){
     var ed = window._gfEditor;
     if (!ed || !ed.drawflow.drawflow.Home.data[id]) { console.warn('[flow] syncOutputs: node ausente', id); return; }
-    var desired = DrawflowAdapter.computeOutputs(type, buttons);
+    var desired = DrawflowAdapter.computeOutputs(type, buttons, condType);
     var keys = function(){ return Object.keys(ed.drawflow.drawflow.Home.data[id].outputs).sort(function(a,b){return (+a.slice(7))-(+b.slice(7));}); };
     while(keys().length > desired.length){ ed.removeNodeOutput(id, keys().pop()); }
     while(keys().length < desired.length){ ed.addNodeOutput(id); }

@@ -43,10 +43,12 @@
 
     /**
      * Semântica de cada output na ordem posicional.
-     * Retorna array de tags; tag i → output_{i+1}.
+     * condType: tipo atual da condição (para saída única em time_elapsed).
      */
-    function outputSemantics(type, customButtons) {
-        if (type === 'condition') return ['true', 'false'];
+    function outputSemantics(type, customButtons, condType) {
+        if (type === 'condition') {
+            return condType === 'time_elapsed' ? ['after'] : ['true', 'false'];
+        }
         if (type === 'payment') return ['next', 'pending', 'retry'];
         if (TERMINAL_TYPES.indexOf(type) !== -1) return [];
         var n = (customButtons || []).length;
@@ -54,8 +56,8 @@
         return ['next'];
     }
 
-    function computeOutputs(type, customButtons) {
-        return outputSemantics(type, customButtons).map(function (_, i) { return 'output_' + (i + 1); });
+    function computeOutputs(type, customButtons, condType) {
+        return outputSemantics(type, customButtons, condType).map(function (_, i) { return 'output_' + (i + 1); });
     }
 
     /** key da tag: 'next'→output_1, 'btn:2'→output_3 */
@@ -90,7 +92,8 @@
             };
 
             var outs = {};
-            computeOutputs(type, config.custom_buttons).forEach(function (k) { outs[k] = { connections: [] }; });
+            var _c0d = (config.__meta.conditions && config.__meta.conditions[0]) || {};
+            computeOutputs(type, config.custom_buttons, _c0d.condition_type).forEach(function (k) { outs[k] = { connections: [] }; });
 
             nodes[nodeId] = {
                 id: nodeId, name: type, data: config, class: type, html: '', typenode: false,
@@ -104,7 +107,8 @@
         steps.forEach(function (step) {
             var srcId = idMap[step.id];
             if (!srcId || !nodes[srcId]) return;
-            var sem = outputSemantics(step.type, step.config && step.config.custom_buttons);
+            var _c0 = (step.conditions && step.conditions[0]) || {};
+            var sem = outputSemantics(step.type, step.config && step.config.custom_buttons, _c0.condition_type);
 
             function keyOf(tag) {
                 var i = sem.indexOf(tag);
@@ -132,8 +136,14 @@
             });
 
             if (step.type === 'condition' && step.conditions && step.conditions[0]) {
-                wire('true', step.conditions[0].target_step);
-                wire('false', step.conditions[0].fallback_step);
+                var c0t = step.conditions[0];
+                if (c0t.condition_type === 'time_elapsed') {
+                    // ⏱️ saída ÚNICA: após o tempo -> target_step
+                    wire('after', c0t.target_step);
+                } else {
+                    wire('true', c0t.target_step);
+                    wire('false', c0t.fallback_step);
+                }
             }
         });
 
@@ -157,7 +167,8 @@
             var n = nodes[id];
             var meta = (n.data && n.data.__meta) || {};
             var type = meta.type || n.name || 'message';
-            var sem = outputSemantics(type, n.data && n.data.custom_buttons);
+            var _c0m = (meta.conditions && meta.conditions[0]) || {};
+            var sem = outputSemantics(type, n.data && n.data.custom_buttons, _c0m.condition_type);
             var m = {};
             sem.forEach(function (tag, i) {
                 var k = 'output_' + (i + 1);
@@ -208,8 +219,15 @@
 
             if (type === 'condition') {
                 if (!step.conditions || step.conditions.length === 0) step.conditions = [defaultCondition()];
-                step.conditions[0].target_step = e['true'] || '';
-                step.conditions[0].fallback_step = e['false'] || '';
+                var _c0e = step.conditions[0];
+                if (_c0e.condition_type === 'time_elapsed') {
+                    // ⏱️ saída única: output_1 = target (após o tempo)
+                    _c0e.target_step = e['after'] || e['true'] || '';
+                    _c0e.fallback_step = '';
+                } else {
+                    _c0e.target_step = e['true'] || '';
+                    _c0e.fallback_step = e['false'] || '';
+                }
                 step.conditions[0].order = 0;
             }
 

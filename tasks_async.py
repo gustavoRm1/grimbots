@@ -3043,3 +3043,39 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
         except Exception as e:
             logger.error(f"❌ [UPSELL JOB] Erro ao enviar upsell: {e}", exc_info=True)
             return False
+
+
+
+def flow_time_elapsed_fire(user_id, bot_id, token, chat_id, telegram_user_id, config_json, cond_step_id, next_step_id):
+    """⏱️ Disparado pelo rq-scheduler quando expira o tempo de uma condição
+    time_elapsed. Continua o fluxo pelo passo alvo (TRUE)."""
+    try:
+        import json as _json
+        from internal_logic.core.extensions import get_redis_connection
+        from bot_manager import BotManager
+
+        # Guarda: se o usuário já saiu do step (respondeu/clicou), não dispara
+        try:
+            rc = get_redis_connection()
+            cur = rc.get(f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}") if rc else None
+            cur = cur.decode() if isinstance(cur, bytes) else cur
+            if cur and cur != str(cond_step_id):
+                logger.info(f"⏱️ Timer ignorado: step atual mudou ({cur})")
+                return
+        except Exception:
+            pass
+
+        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=user_id)
+        config = _json.loads(config_json) if isinstance(config_json, str) else config_json
+        snap = None
+        try:
+            snap = local_bot_manager._get_flow_snapshot_from_redis(bot_id, str(telegram_user_id))
+        except Exception:
+            pass
+        local_bot_manager._execute_flow_recursive(
+            bot_id, token, config, int(chat_id), str(telegram_user_id), str(next_step_id),
+            recursion_depth=0, visited_steps=set(), flow_snapshot=snap
+        )
+        logger.info(f"⏱️ time_elapsed disparou -> {next_step_id}")
+    except Exception as e:
+        logger.error(f"❌ flow_time_elapsed_fire: {e}", exc_info=True)

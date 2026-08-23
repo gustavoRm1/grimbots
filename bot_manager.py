@@ -3066,48 +3066,13 @@ class BotManager:
         
         return buttons
 
-    # ✅ PERSONALIZAÇÃO DE FUNIL: variáveis {nome} {@usuario} {id} nas mensagens
+    # ✅ PERSONALIZAÇÃO DE FUNIL — delega para util compartilhado
     def _personalize_text(self, text: str, bot_id: Optional[int], chat_id: int) -> str:
-        """
-        Substitui placeholders de personalização usando dados do BotUser.
-        Variáveis aceitas (case-insensitive):
-          {nome} {name}   -> first_name do cliente
-          {@usuario} {username} -> @username do cliente (fallback: nome)
-          {id}            -> telegram_user_id
-        Desconhecidas ficam intactas (não quebra nada).
-        """
-        if not text or ('{' not in text and '@' not in text):
-            return text
         try:
-            from internal_logic.core.models import BotUser
-            telegram_user_id = str(chat_id)  # chat privado: chat_id == user id
-            bu = None
-            with current_app.app_context():
-                bu = BotUser.query.filter_by(
-                    bot_id=bot_id, telegram_user_id=telegram_user_id
-                ).first()
-            first = (bu.first_name if bu and bu.first_name else '') or 'Cliente'
-            uname = ((bu.username if bu and bu.username else '') or '').lstrip('@')
-
-            def _sub(m):
-                key = m.group(1).lower()
-                if key in ('nome', 'name'):
-                    return first
-                if key == 'sobrenome':
-                    return ''
-                if key in ('usuario', 'username'):
-                    return f'@{uname}' if uname else first
-                if key == 'id':
-                    return str(telegram_user_id)
-                return m.group(0)
-            import re as _re
-            personalized = _re.sub(r'\{\s*(nome|name|sobrenome|usuario|username|id)\s*\}', _sub, text, flags=_re.IGNORECASE)
-            personalized = personalized.replace('  ', ' ').replace(' ,', ',')
-            return personalized
-        except Exception as e:
-            logger.warning(f"⚠️ Personalização falhou (seguindo sem): {e}")
+            from internal_logic.services.flow_personalization import personalize
+            return personalize(text, bot_id, str(chat_id))
+        except Exception:
             return text
-
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None, bot_id: Optional[int] = None):
         """
         # ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
@@ -3995,6 +3960,87 @@ class BotManager:
                 return  # Para aqui, aguarda callback
             
             # ✅ Access finaliza fluxo
+            # 🔥 FLOW V9: Condition — roteador
+            elif step_type == 'condition':
+                cond_list = step.get('conditions') or []
+                c0 = cond_list[0] if cond_list else {}
+                ctype = c0.get('condition_type', 'payment_status')
+
+                if ctype == 'payment_status':
+                    # Imediato: contexto pós-pagamento (paid)
+                    expected = c0.get('status', 'paid')
+                    matched = ('paid' == expected)
+                    nxt = (c0.get('target_step') or '') if matched else (c0.get('fallback_step') or '')
+                    logger.info(f"🔀 Condition payment_status matched={matched} -> {nxt}")
+                    if nxt:
+                        snap = None
+                        try:
+                            snap = self._get_flow_snapshot_from_redis(bot_id, str(chat_id))
+                        except Exception:
+                            pass
+                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=0, visited_steps=set(), flow_snapshot=snap)
+                        return
+                elif ctype == 'time_elapsed':
+                    # ⏱️ TIMER REAL: agenda disparo via rq-scheduler
+                    required_minutes = int(c0.get('minutes', 5) or 5)
+                    required_seconds = required_minutes * 60 + int(c0.get('seconds', 0) or 0)
+                    nxt = c0.get('target_step') or ''
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            ts_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
+                            import time as _t
+                            redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
+                    except Exception:
+                        pass
+                    if nxt:
+                        try:
+                            from rq_scheduler import Scheduler
+                            from tasks_async import marathon_queue, flow_time_elapsed_fire
+                            sched = Scheduler(queue_name='marathon', connection=marathon_queue.connection)
+                            sched.enqueue_in(
+                                timedelta(seconds=max(1, required_seconds)),
+                                flow_time_elapsed_fire,
+                                self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
+                                json.dumps(config), str(step.get('id')), str(nxt)
+                            )
+                            logger.info(f"⏱️ Timer agendado: {required_seconds}s -> {nxt}")
+                        except Exception as sched_err:
+                            logger.error(f"❌ Falha ao agendar timer: {sched_err}")
+                    return  # fluxo pausa; continuação é feita pelo timer
+                else:
+                    # text_validation / button_click: aguarda resposta do usuário
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.setex(k, 86400, str(step.get('id')))
+                    except Exception:
+                        pass
+                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                    if msg_txt:
+                        buttons_c = self._build_step_buttons(step, config)
+                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, buttons=buttons_c if buttons_c else None, bot_id=bot_id, save_message=True)
+                    return  # resposta do usuário cai no avaliador existente (L~1795)
+
+            # 🔥 FLOW V9: Redirect — mensagem com botão de URL (não-terminal)
+            elif step_type == 'redirect':
+                url_r = step_config.get('redirect_url', '')
+                btn_txt = step_config.get('button_text') or 'Acessar'
+                msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                buttons_r = [{'text': btn_txt, 'url': url_r}] if url_r else None
+                self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt or '', buttons=buttons_r, bot_id=bot_id, save_message=True)
+                nxt_r = (step.get('connections') or {}).get('next')
+                if nxt_r:
+                    snap = None
+                    try:
+                        snap = self._get_flow_snapshot_from_redis(bot_id, str(chat_id))
+                    except Exception:
+                        pass
+                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt_r), recursion_depth=0, visited_steps=set(), flow_snapshot=snap)
+                return
+
+
             elif step_type == 'access':
                 logger.info(f"✅ Step access detectado - finalizando fluxo")
                 

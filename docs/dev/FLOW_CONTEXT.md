@@ -42,6 +42,7 @@ o que o adapter exportar em `save()`.
 | HTML velho intermitente pós-deploy | Jinja compila template 1x por worker gunicorn e nunca relê | `TEMPLATES_AUTO_RELOAD=True` (extensions.py) + restart no deploy |
 | Erros silenciosos / perda de edições | sem rede global de erros e sem dirty tracking | gfCfg+try/catch+timeout, 401/403 PT-BR, dirty modal/canvas com confirm, beforeunload, debounce paleta, syncOutputs defensivo |
 | Dirty do modal não ativava | setter _gfDirty=true perdido num patch que falhou + listener por-open acumularia | listener delegado ÚNICO em #mFields (dataset.gfHooked) + chips despacham input sintético |
+| time_elapsed com 2 saídas / nunca disparava | sem timer e sem gravação de timestamp | saída ÚNICA 'APÓS X MIN' + rq-scheduler (enqueue_in) + setex low_step_timestamp na entrada |
 
 ## 4. Checklist de DEPLOY (VPS)
 
