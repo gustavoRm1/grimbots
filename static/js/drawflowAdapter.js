@@ -231,6 +231,12 @@
                 step.conditions[0].order = 0;
             }
 
+            // 🔥 FIX CRÍTICO: conditions[] só existe em nós condition.
+            // Em qualquer outro tipo, limpar (evita pausa indevida no engine).
+            if (type !== 'condition' && step.conditions && step.conditions.length > 0) {
+                step.conditions = [];
+            }
+
             flowSteps.push(step);
         });
 

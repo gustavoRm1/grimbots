@@ -4191,14 +4191,21 @@ class BotManager:
                 
                 # ✅ NOVO: Priorizar condições sobre conexões diretas
                 # Se step tem condições, aguardar input do usuário (não continuar automaticamente)
+                # 🔥 FIX CRÍTICO: só pausa para condições que ESPERAM input do usuário.
+                # time_elapsed já tem timer agendado; payment_status é avaliado
+                # imediatamente. Sem isso, QUALQUER condition[] no step causava
+                # pausa indevida e o funil travava no primeiro bloco.
                 conditions = step.get('conditions', [])
-                if conditions and len(conditions) > 0:
-                    logger.info(f"⏸️ Step {step_id} tem {len(conditions)} condição(ões) - aguardando input do usuário")
-                    # ✅ NOVO: Salvar step atual com lock atômico (TTL aumentado para 2 horas)
+                INPUT_WAITING_TYPES = ('text_validation', 'button_click')
+                _needs_input = any(
+                    isinstance(c, dict) and c.get('condition_type') in INPUT_WAITING_TYPES
+                    for c in conditions
+                )
+                if _needs_input:
+                    logger.info(f"⏸️ Step {step_id} tem condição de input - aguardando resposta do usuário")
                     success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200)
                     if not success:
-                        logger.error(f"❌ Falha ao salvar step atual atomicamente - condições podem não funcionar")
-                    # Fluxo pausa aqui - será continuado quando usuário enviar mensagem/clicar botão
+                        logger.error(f"❌ Falha ao salvar step atual atomicamente")
                     return
                 
                 # Fallback: usar conexões diretas (comportamento antigo)
