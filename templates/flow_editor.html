@@ -602,7 +602,33 @@ function flowEditor() {
             var payload = null;
             try {
                 var exported = self.editor.export();
+                // 🔥 DIAGNÓSTICO: arestas em cada camada do save
+                var edgesInExport = 0;
+                try {
+                    Object.keys(exported.drawflow.Home.data).forEach(function (nid) {
+                        var nn = exported.drawflow.Home.data[nid];
+                        Object.keys(nn.outputs || {}).forEach(function (ok) {
+                            edgesInExport += ((nn.outputs[ok].connections) || []).length;
+                        });
+                    });
+                } catch (_) {}
+                console.log('[SAVE] build=' + GF_BUILD +
+                            ' | arestas export():', edgesInExport,
+                            '| nos:', Object.keys(exported.drawflow.Home.data).length);
+                if (edgesInExport === 0 && Object.keys(exported.drawflow.Home.data).length > 0) {
+                    console.warn('[SAVE] ⚠️ canvas tem nós mas export() voltou SEM conexões!');
+                }
                 var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
+                var keptEdges = 0;
+                grim.flow_steps.forEach(function (s) {
+                    keptEdges += (s.connections.next ? 1 : 0) + (s.connections.pending ? 1 : 0) + (s.connections.retry ? 1 : 0);
+                    (s.config.custom_buttons || []).forEach(function (b) { if (b.target_step) keptEdges++; });
+                    (s.conditions || []).forEach(function (c) { if (c.target_step) keptEdges++; if (c.fallback_step) keptEdges++; });
+                });
+                console.log('[SAVE] arestas persistidas:', keptEdges);
+                if (edgesInExport > 0 && keptEdges === 0) {
+                    alert('BUG CAPTURADO: ' + edgesInExport + ' conexões desenhadas, 0 persistidas. Envie o Console F12 ao suporte.');
+                }
                 gfCfg().flow_steps = grim.flow_steps;
                 gfCfg().flow_start_step_id = grim.flow_start_step_id;
                 CFG_DATA.flow_enabled = true;
