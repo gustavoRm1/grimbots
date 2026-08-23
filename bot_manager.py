@@ -3999,6 +3999,7 @@ class BotManager:
                     except Exception:
                         pass
                     if nxt:
+                        _fired = False
                         try:
                             from rq_scheduler import Scheduler
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
@@ -4011,8 +4012,28 @@ class BotManager:
                                 _cfg_json, str(step.get('id')), str(nxt)
                             )
                             logger.info(f"[TIMER] job={_job.id} dispara em {required_seconds}s -> {nxt}")
+                            _fired = True
                         except Exception as sched_err:
                             logger.error(f"❌ Falha ao agendar timer: {sched_err}")
+                        if not _fired:
+                            # 🔥 FALLBACK: timer em-thread no próprio processo
+                            # (sem depender do serviço rqscheduler na VPS)
+                            import threading as _th
+                            from flask import current_app as _ca
+                            _app = _ca._get_current_object()
+                            _cfg_json2 = json.dumps(config, default=str)
+                            def _fire_inline():
+                                import time as _t2
+                                _t2.sleep(max(1, required_seconds))
+                                try:
+                                    with _app.app_context():
+                                        from tasks_async import flow_time_elapsed_fire
+                                        flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
+                                except Exception as e2:
+                                    logger.error(f"[TIMER][thread] falha: {e2}", exc_info=True)
+                            _th.Thread(target=_fire_inline, daemon=True).start()
+                            logger.info(f"[TIMER][thread] {required_seconds}s -> {nxt}")
+
                     return  # fluxo pausa; continuação é feita pelo timer
                 else:
                     # text_validation / button_click: aguarda resposta do usuário
