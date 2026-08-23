@@ -4,7 +4,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='drawflow/drawflow.min.css') }}">
 <script src="{{ url_for('static', filename='drawflow/drawflow.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=4"></script>
 <style>
 .pal-item{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:12px 8px;background:#0F0F14;border:1px solid #2A2D36;border-radius:12px;cursor:grab;transition:all .2s}
 .pal-item:hover{border-color:#FFB800;background:#1C1E26}
@@ -615,6 +615,14 @@ function flowEditor() {
                 console.log('[SAVE] build=' + GF_BUILD +
                             ' | arestas export():', edgesInExport,
                             '| nos:', Object.keys(exported.drawflow.Home.data).length);
+                Object.keys(exported.drawflow.Home.data).forEach(function (nid) {
+                    var nn = exported.drawflow.Home.data[nid];
+                    Object.keys(nn.outputs || {}).forEach(function (ok) {
+                        (nn.outputs[ok].connections || []).forEach(function (cc) {
+                            console.log('[SAVE]   aresta:', nid, ok, '->', cc.node);
+                        });
+                    });
+                });
                 if (edgesInExport === 0 && Object.keys(exported.drawflow.Home.data).length > 0) {
                     console.warn('[SAVE] ⚠️ canvas tem nós mas export() voltou SEM conexões!');
                 }
