@@ -317,12 +317,13 @@
                 title: step.title || ''
             };
             S.editor.updateNodeDataFromId(id, data);
-            this._syncOutputs(id, step.type, data.custom_buttons);
+            var _condType = (data.__meta.conditions && data.__meta.conditions[0] && data.__meta.conditions[0].condition_type) || null;
+            this._syncOutputs(id, step.type, data.custom_buttons, _condType);
             refreshPreview(id);
         },
 
-        _syncOutputs(id, type, buttons) {
-            const desired = DrawflowAdapter.computeOutputs(type, buttons);
+        _syncOutputs(id, type, buttons, condType) {
+            const desired = DrawflowAdapter.computeOutputs(type, buttons, condType);
             let keys = () => Object.keys(S.editor.drawflow.drawflow.Home.data[id].outputs)
                               .sort((a,b)=>(+a.slice(7))-(+b.slice(7)));
             while (keys().length > desired.length) S.editor.removeNodeOutput(id, keys().pop());

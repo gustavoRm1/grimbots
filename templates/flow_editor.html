@@ -480,17 +480,22 @@ function saveModal(){
     if(rows.length || (data.custom_buttons&&data.custom_buttons.length)){
         data.custom_buttons = Array.from(rows).map(function(r,i){ return { text:r.value, target_step:(data.custom_buttons&&data.custom_buttons[i]?data.custom_buttons[i].target_step:'') }; });
     }
-    syncOutputs(editingId, node.name, data.custom_buttons, editingStepCondType());
+    var _condType = (data.__meta && Array.isArray(data.__meta.conditions) && data.__meta.conditions[0]) ? data.__meta.conditions[0].condition_type : undefined;
+    syncOutputs(editingId, node.name, data.custom_buttons, _condType);
     ed.updateNodeDataFromId(editingId, data);
     refreshPreview(ed, editingId);
     window._gfDirty = false;
     closeModal();
 }
 function editingStepCondType(){
-    // 🔥 Tipo atual da condição sendo editada (p/ saída única do timer)
     try {
-        var c0 = (editingStep && editingStep.conditions && editingStep.conditions[0]) || null;
-        return c0 ? c0.condition_type : undefined;
+        var ed = window._gfEditor;
+        if (!ed || !editingId) return undefined;
+        var node = ed.getNodeFromId(editingId);
+        var meta = (node && node.data && node.data.__meta) || {};
+        var conds = meta.conditions;
+        if (Array.isArray(conds) && conds[0]) return conds[0].condition_type;
+        return undefined;
     } catch (_) { return undefined; }
 }
 function syncOutputs(id, type, buttons, condType){
@@ -570,7 +575,7 @@ function flowEditor() {
                         // (alturas mudam) -> recalcular apos o layout assentar.
                         setTimeout(function () {
                             Object.keys(dfData.drawflow.Home.data).forEach(function (id2) {
-                                try { self.editor.updateConnectionNodes("node-" + id2); } catch (_) {}
+                                try { self.editor.updateConnectionNodes(id2); } catch (_) {}
                             });
                         }, 90);
                         self.emptyCanvas = false;
@@ -647,16 +652,19 @@ function flowEditor() {
                 if (edgesInExport === 0 && Object.keys(exported.drawflow.Home.data).length > 0) {
                     console.warn('[SAVE] ⚠️ canvas tem nós mas export() voltou SEM conexões!');
                 }
+                CFG_DATA.flow_start_step_id = self.flow_start_step_id;
                 var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
                 var keptEdges = 0;
                 grim.flow_steps.forEach(function (s) {
                     keptEdges += (s.connections.next ? 1 : 0) + (s.connections.pending ? 1 : 0) + (s.connections.retry ? 1 : 0);
                     (s.config.custom_buttons || []).forEach(function (b) { if (b.target_step) keptEdges++; });
-                    (s.conditions || []).forEach(function (c) { if (c.target_step) keptEdges++; if (c.fallback_step) keptEdges++; });
+                    if (Array.isArray(s.conditions)) s.conditions.forEach(function (c) { if (c.target_step) keptEdges++; if (c.fallback_step) keptEdges++; });
                 });
                 console.log('[SAVE] arestas persistidas:', keptEdges);
                 if (edgesInExport > 0 && keptEdges === 0) {
                     alert('BUG CAPTURADO: ' + edgesInExport + ' conexões desenhadas, 0 persistidas. Envie o Console F12 ao suporte.');
+                    self.saving = false;
+                    return;
                 }
                 gfCfg().flow_steps = grim.flow_steps;
                 gfCfg().flow_start_step_id = grim.flow_start_step_id;

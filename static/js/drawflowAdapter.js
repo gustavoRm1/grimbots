@@ -87,7 +87,7 @@
                 type: type,
                 order: (step.order !== undefined ? step.order : idx),
                 delay_seconds: step.delay_seconds || 0,
-                conditions: clone(step.conditions),
+                conditions: Array.isArray(step.conditions) ? clone(step.conditions) : [],
                 title: step.title || ''
             };
 
@@ -192,7 +192,7 @@
                 order: (meta.order !== undefined ? meta.order : 0),
                 config: config,
                 connections: {},
-                conditions: clone(meta.conditions) || [],
+                conditions: Array.isArray(meta.conditions) ? clone(meta.conditions) : [],
                 delay_seconds: meta.delay_seconds || 0,
                 position: { x: n.pos_x || 0, y: n.pos_y || 0 }
             };

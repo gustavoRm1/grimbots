@@ -3047,42 +3047,47 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
 
 
 def flow_time_elapsed_fire(user_id, bot_id, token, chat_id, telegram_user_id, config_json, cond_step_id, next_step_id):
-    """⏱️ Disparado pelo rq-scheduler quando expira o tempo de uma condição
+    """⏱️ Disparado pela native queue quando expira o tempo de uma condição
     time_elapsed. Continua o fluxo pelo passo alvo (TRUE)."""
     try:
         import json as _json
         from internal_logic.core.extensions import get_redis_connection
         from bot_manager import BotManager
 
-        # Guarda: se o usuário já saiu do step (respondeu/clicou), não dispara
+        # Guarda atômica: se o usuário já saiu do step (respondeu/clicou), não dispara
+        # Usa compare-and-delete Lua para evitar race entre timer e handler
         try:
             rc = get_redis_connection()
-            cur = rc.get(f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}") if rc else None
-            cur = cur.decode() if isinstance(cur, bytes) else cur
-            if cur and cur != str(cond_step_id):
-                logger.info(f"⏱️ Timer ignorado: usuário seguiu outro caminho ({cur})")
-                return
-            # 🔥 FIX RACE: limpa o step antigo ANTES de executar o alvo, para que
-            # uma mensagem do usuário no meio da execução não avalie as condições
-            # do nó de condição já consumido.
-            try:
-                rc.delete(f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}")
-            except Exception:
-                pass
+            if rc:
+                _lua = """
+                local cur = redis.call('GET', KEYS[1])
+                if cur == ARGV[1] then
+                    redis.call('DEL', KEYS[1])
+                    return 1
+                end
+                return 0
+                """
+                _step_key = f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                _claimed = rc.eval(_lua, 1, _step_key, str(cond_step_id))
+                if not _claimed:
+                    logger.info(f"⏱️ Timer ignorado: usuário seguiu outro caminho")
+                    return
         except Exception:
             pass
 
-        local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=user_id)
-        config = _json.loads(config_json) if isinstance(config_json, str) else config_json
-        snap = None
-        try:
-            snap = local_bot_manager._get_flow_snapshot_from_redis(bot_id, str(telegram_user_id))
-        except Exception:
-            pass
-        local_bot_manager._execute_flow_recursive(
-            bot_id, token, config, int(chat_id), str(telegram_user_id), str(next_step_id),
-            recursion_depth=0, visited_steps=set(), flow_snapshot=snap
-        )
+        app = _get_rq_app()
+        with app.app_context():
+            local_bot_manager = BotManager(socketio=None, scheduler=None, user_id=user_id)
+            config = _json.loads(config_json) if isinstance(config_json, str) else config_json
+            snap = None
+            try:
+                snap = local_bot_manager._get_flow_snapshot_from_redis(bot_id, str(telegram_user_id))
+            except Exception:
+                pass
+            local_bot_manager._execute_flow_recursive(
+                bot_id, token, config, int(chat_id), str(telegram_user_id), str(next_step_id),
+                recursion_depth=0, visited_steps=set(), flow_snapshot=snap
+            )
         logger.info(f"⏱️ time_elapsed disparou -> {next_step_id}")
     except Exception as e:
         logger.error(f"❌ flow_time_elapsed_fire: {e}", exc_info=True)

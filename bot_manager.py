@@ -326,7 +326,6 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         logger.info(f"📤 ViewContent enfileirado: Pool {pool.name} | " +
                    f"User {bot_user.telegram_user_id} | " +
                    f"Event ID: {event_id} | " +
-                   f"Task: {task.id} | " +
                    f"UTM: {bot_user.utm_source}/{bot_user.utm_campaign}")
     
     except Exception as e:
@@ -1155,8 +1154,8 @@ class BotManager:
                     logger.warning(f"⚠️ Update {update_id} já processado — ignorando duplicado (anti-duplicação)")
                     return
                 
-                # Adquirir lock (expira em 20 segundos)
-                acquired = redis_conn.set(lock_key, "1", ex=20, nx=True)
+                # Adquirir lock (expira em 120 segundos)
+                acquired = redis_conn.set(lock_key, "1", ex=120, nx=True)
                 if not acquired:
                     logger.warning(f"⚠️ Update {update_id} já está sendo processado — ignorando duplicado")
                     return
@@ -1361,13 +1360,12 @@ class BotManager:
                             try:
                                 import redis
                                 redis_conn_msg = get_redis_connection()
-                                # Lock específico para esta mensagem (chat_id + hash do texto)
+                                # Lock específico para esta mensagem (chat_id + message_id, não hash do texto)
                                 import hashlib
-                                text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:8]
-                                msg_lock_key = f"gb:{self.user_id}:lock:msg:{bot_id}:{telegram_user_id}:{text_hash}"
+                                msg_lock_key = f"gb:{self.user_id}:lock:msg:{bot_id}:{telegram_user_id}:{telegram_msg_id_str}"
                                 
                                 # Tentar adquirir lock (expira em 3 segundos)
-                                lock_acquired = redis_conn_msg.set(msg_lock_key, "1", ex=3, nx=True)
+                                lock_acquired = redis_conn_msg.set(msg_lock_key, "1", ex=10, nx=True)
                                 if not lock_acquired:
                                     logger.warning(f"⛔ Mensagem já está sendo processada: {text[:30]}... (lock: {msg_lock_key})")
                                     return  # Sair sem processar
@@ -2885,7 +2883,7 @@ class BotManager:
             try:
                 redis_conn = get_redis_connection()
                 if redis_conn:
-                    timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
+                    timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}:{step_id}"
                     step_timestamp = redis_conn.get(timestamp_key)
                     
                     if step_timestamp:
@@ -3099,7 +3097,7 @@ class BotManager:
             return personalize(text, bot_id, str(chat_id))
         except Exception:
             return text
-    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None, bot_id: Optional[int] = None):
+    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None, bot_id: Optional[int] = None, telegram_user_id: str = None):
         """
         # ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
         """
@@ -3485,8 +3483,8 @@ class BotManager:
                 # ✅ NOVO: TTL aumentado para 2 horas (7200 segundos)
                 redis_conn.set(step_key, step_id, ex=ttl)
                 
-                # ✅ NOVO: Salvar timestamp para time_elapsed
-                timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
+                # ✅ NOVO: Salvar timestamp para time_elapsed (per-step key)
+                timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}:{step_id}"
                 try:
                     redis_conn.set(timestamp_key, int(time.time()), ex=ttl)
                     logger.debug(f"⏱️ Timestamp salvo para time_elapsed: {timestamp_key}")
@@ -3993,9 +3991,17 @@ class BotManager:
                 ctype = c0.get('condition_type', 'payment_status')
 
                 if ctype == 'payment_status':
-                    # Imediato: contexto pós-pagamento (paid)
                     expected = c0.get('status', 'paid')
-                    matched = ('paid' == expected)
+                    matched = False
+                    try:
+                        from internal_logic.core.models import Payment
+                        last_payment = Payment.query.filter_by(
+                            bot_id=bot_id,
+                            customer_user_id=str(telegram_user_id)
+                        ).order_by(Payment.created_at.desc()).first()
+                        matched = bool(last_payment and last_payment.status == expected)
+                    except Exception:
+                        pass
                     nxt = (c0.get('target_step') or '') if matched else (c0.get('fallback_step') or '')
                     logger.info(f"🔀 Condition payment_status matched={matched} -> {nxt}")
                     if nxt:
@@ -4004,20 +4010,27 @@ class BotManager:
                             snap = self._get_flow_snapshot_from_redis(bot_id, str(chat_id))
                         except Exception:
                             pass
-                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=0, visited_steps=set(), flow_snapshot=snap)
+                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=recursion_depth + 1, visited_steps=visited_steps | {str(step_id)}, flow_snapshot=snap)
                         return
                 elif ctype == 'time_elapsed':
-                    # ⏱️ TIMER REAL: agenda disparo via rq-scheduler
-                    # FIX FALSY: 0 minutos e valido (0 or 5 virava 5!)
+                    # ⏱️ TIMER REAL: agenda disparo via native queue
                     _raw_min = c0.get('minutes')
                     required_minutes = int(_raw_min) if _raw_min not in (None, '') else 5
                     _raw_sec = c0.get('seconds')
                     required_seconds = required_minutes * 60 + (int(_raw_sec) if _raw_sec not in (None, '') else 0)
                     nxt = c0.get('target_step') or ''
+                    # Salvar current_step = condition step (timer guard precisa disso)
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
-                            ts_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
+                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.setex(k, required_seconds + 3600, str(step.get('id')))
+                    except Exception:
+                        pass
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            ts_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}:{step.get('id')}"
                             import time as _t
                             redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
                     except Exception:
@@ -4025,15 +4038,15 @@ class BotManager:
                     if nxt:
                         _fired = False
                         try:
-                            from rq_scheduler import Scheduler
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
-                            sched = Scheduler(queue_name='marathon', connection=marathon_queue.connection)
-                            _cfg_json = json.dumps(config, default=str)  # nunca explode com datetime/Decimal
-                            _job = sched.enqueue_in(
+                            _cfg_json = json.dumps(config, default=str)
+                            _job_id = f"gb:timer:{bot_id}:{telegram_user_id}:{str(step.get('id'))}"
+                            _job = marathon_queue.enqueue_in(
                                 timedelta(seconds=max(1, required_seconds)),
                                 flow_time_elapsed_fire,
                                 self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
-                                _cfg_json, str(step.get('id')), str(nxt)
+                                _cfg_json, str(step.get('id')), str(nxt),
+                                job_id=_job_id
                             )
                             logger.info(f"[TIMER] job={_job.id} dispara em {required_seconds}s -> {nxt}")
                             _fired = True
@@ -4129,69 +4142,6 @@ class BotManager:
                 return  # Fim do fluxo
             
             # ✅ Executar step normalmente (content, message, audio, video, buttons)
-            # 🔥 FLOW V9: Condition — roteador TRUE/FALSE
-            elif step_type == 'condition':
-                cond_list = step.get('conditions') or []
-                c0 = cond_list[0] if cond_list else {}
-                ctype = c0.get('condition_type', 'payment_status')
-                conn = step.get('connections') or {}
-                target_true = c0.get('target_step') or ''
-                target_false = c0.get('fallback_step') or ''
-
-                if ctype == 'payment_status':
-                    # Imediato: chegamos aqui após fluxo de pagamento (contexto paid)
-                    expected = c0.get('status', 'paid')
-                    matched = ('paid' == expected)
-                    nxt = target_true if matched else target_false
-                    logger.info(f"🔀 Condition payment_status matched={matched} -> {nxt or '(segue next)'}")
-                    if nxt:
-                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=recursion_depth, visited_steps=visited_steps | {str(step.get('id'))}, flow_snapshot=flow_snapshot)
-                        return
-                    # sem rotas: segue connections.next padrão abaixo
-                elif ctype == 'time_elapsed':
-                    # Aguardando: avalia quando o usuário mandar qualquer texto
-                    try:
-                        from internal_logic.core.extensions import db as _db
-                    except Exception:
-                        pass
-                    try:
-                        redis_conn = get_redis_connection()
-                        if redis_conn:
-                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
-                            redis_conn.setex(k, 86400, str(step.get('id')))
-                    except Exception:
-                        pass
-                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
-                    if msg_txt:
-                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, bot_id=bot_id, save_message=True)
-                    return  # pausa: handler de resposta (L~1795) avalia e roteia
-                else:
-                    # text_validation / button_click: aguarda resposta do usuário
-                    try:
-                        redis_conn = get_redis_connection()
-                        if redis_conn:
-                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
-                            redis_conn.setex(k, 86400, str(step.get('id')))
-                    except Exception:
-                        pass
-                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
-                    if msg_txt:
-                        buttons_c = self._build_step_buttons(step, config)
-                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, buttons=buttons_c if buttons_c else None, bot_id=bot_id, save_message=True)
-                    return  # pausa: resposta do usuário cai no avaliador existente
-
-            # 🔥 FLOW V9: Redirect — mensagem com botão de URL (não-terminal)
-            elif step_type == 'redirect':
-                url_r = step_config.get('redirect_url', '')
-                btn_txt = step_config.get('button_text') or 'Acessar'
-                msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
-                buttons_r = [{'text': btn_txt, 'url': url_r}] if url_r else None
-                self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt or '', buttons=buttons_r, bot_id=bot_id, save_message=True)
-                nxt_r = conn_next = (step.get('connections') or {}).get('next')
-                if nxt_r:
-                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt_r), recursion_depth=recursion_depth, visited_steps=visited_steps, flow_snapshot=flow_snapshot)
-                return
-
             else:
                 logger.info(f"🎬 Executando step tipo '{step_type}' (id={step_id})")
                 logger.info(f"🎬 Config do step: {step_config}")
@@ -4214,7 +4164,7 @@ class BotManager:
                 
                 # 🔥 V8 ULTRA: Executar step com tratamento de erro robusto
                 try:
-                    self._execute_step(step, token, chat_id, delay, config=config, bot_id=bot_id)
+                    self._execute_step(step, token, chat_id, delay, config=config, bot_id=bot_id, telegram_user_id=str(telegram_user_id))
                     logger.info(f"✅ Step {step_id} executado com sucesso")
                 except Exception as e:
                     logger.error(f"❌ Erro ao executar step {step_id}: {e}", exc_info=True)
@@ -4280,16 +4230,7 @@ class BotManager:
             except:
                 pass
         finally:
-            
-            # ✅ V∞: Salvar estado do flow no Redis após cada step (24h TTL)
-            try:
-                redis_conn = get_redis_connection()
-                if redis_conn:
-                    current_step_key = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
-                    redis_conn.setex(current_step_key, 86400, step_id)  # 24h
-                    logger.debug(f"✅ [FLOW V∞] Estado salvo no Redis: {step_id} (TTL: 24h)")
-            except Exception as e:
-                logger.warning(f"⚠️ [FLOW V∞] Erro ao salvar estado no Redis: {e}")
+            pass  # Estado é salvo apenas em pontos intencionais (_save_current_step_atomic, time_elapsed)
     
     def continue_flow_if_active(self, bot, chat_id, telegram_user_id):
         """
@@ -4452,7 +4393,7 @@ class BotManager:
         """
         try:
             # ✅ REDIS MIGRATION: Limpar sessões de order bump no Redis
-            user_key_orderbump = f"orderbump_{chat_id}"
+            user_key_orderbump = f"orderbump_{bot_id}_{chat_id}"
             session_key = f"gb:ob_session:{user_key_orderbump}"
             pix_cache_key = f"gb:pix_cache:{user_key_orderbump}"
             
@@ -4553,7 +4494,7 @@ class BotManager:
             import json as json_lib  # ✅ Proteção contra shadowing do módulo json
             
             # ✅ REDIS MIGRATION: user_key e chave Redis
-            user_key = f"orderbump_{chat_id}"
+            user_key = f"orderbump_{bot_id}_{chat_id}"
             redis_key = f"gb:ob_session:{user_key}"
             
             # ✅ REDIS MIGRATION: Verificar se já existe sessão
@@ -4778,9 +4719,15 @@ class BotManager:
                 cached = json_lib.loads(pix_cache_json)
                 pix_data = cached.get('pix_data')
                 logger.info(f"🔄 PIX em cache Redis reutilizado (idempotência): {pix_data.get('payment_id')}")
-                # Reenviar mensagem com PIX do cache
                 self._send_pix_message(token, chat_id, pix_data, "🔄 Reenviando seu PIX:")
                 return  # NÃO gerar novo PIX
+            
+            # ✅ LOCK ATÔMICO: Claim geração para evitar duplicata entre workers
+            pix_claim_key = f"gb:pix_claim:{user_key}"
+            claimed = redis_conn.set(pix_claim_key, "1", nx=True, ex=120)
+            if not claimed:
+                logger.info(f"🔄 PIX sendo gerado por outro worker, ignorando")
+                return
             
             # ✅ REDIS MIGRATION: Buscar sessão do Redis
             session_json = redis_conn.get(session_key)
@@ -5260,7 +5207,7 @@ class BotManager:
             base_url = f"https://api.telegram.org/bot{token}"
 
             # ✅ Robustez: normalizar media_type (evita 'VIDEO'/'Video'/None quebrando envio de mídia)
-            if media_url and (media_type is None or (isinstance(media_type, str) and not media_type.strip())):
+            if file_path and (media_type is None or (isinstance(media_type, str) and not media_type.strip())):
                 media_type = 'video'
             if isinstance(media_type, str):
                 media_type = media_type.strip().lower()
