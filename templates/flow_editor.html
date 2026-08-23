@@ -485,6 +485,13 @@ function saveModal(){
     window._gfDirty = false;
     closeModal();
 }
+function editingStepCondType(){
+    // 🔥 Tipo atual da condição sendo editada (p/ saída única do timer)
+    try {
+        var c0 = (editingStep && editingStep.conditions && editingStep.conditions[0]) || null;
+        return c0 ? c0.condition_type : undefined;
+    } catch (_) { return undefined; }
+}
 function syncOutputs(id, type, buttons, condType){
     var ed = window._gfEditor;
     if (!ed || !ed.drawflow.drawflow.Home.data[id]) { console.warn('[flow] syncOutputs: node ausente', id); return; }
