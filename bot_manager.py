@@ -4044,56 +4044,44 @@ class BotManager:
                         except Exception:
                             pass
                     if nxt:
-                        _fired = False
+                        # 🔥 TIMER DIRETO: threading.Timer não depende de RQ,
+                        # rqscheduler ou qualquer infraestrutura externa.
+                        import threading as _th
+                        from flask import has_app_context as _hac
+                        _app_ref = None
                         try:
-                            from tasks_async import marathon_queue, flow_time_elapsed_fire
-                            _cfg_json = json.dumps(config, default=str)
-                            _job_id = f"gb:timer:{bot_id}:{telegram_user_id}:{str(step.get('id'))}"
-                            _job = marathon_queue.enqueue_in(
-                                timedelta(seconds=max(1, required_seconds)),
-                                flow_time_elapsed_fire,
-                                self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
-                                _cfg_json, str(step.get('id')), str(nxt),
-                                job_id=_job_id
-                            )
-                            logger.info(f"[TIMER] job={_job.id} dispara em {required_seconds}s -> {nxt}")
-                            _fired = True
-                        except Exception as sched_err:
-                            logger.error(f"❌ Falha ao agendar timer: {sched_err}")
-                        if not _fired:
-                            # 🔥 FALLBACK: timer em-thread no próprio processo
-                            # (sem depender do serviço rqscheduler na VPS)
-                            import threading as _th
-                            # 🔥 FIX 5: current_app pode não existir (chamado via RQ worker)
-                            _app = None
-                            try:
-                                from flask import has_app_context
-                                if has_app_context():
-                                    from flask import current_app as _ca
-                                    _app = _ca._get_current_object()
-                            except Exception:
-                                _app = None
-                            _cfg_json2 = json.dumps(config, default=str)
-                            def _fire_inline():
-                                import time as _t2
-                                _t2.sleep(max(1, required_seconds))
-                                try:
-                                    if _app is not None:
-                                        with _app.app_context():
-                                            from tasks_async import flow_time_elapsed_fire
-                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
-                                    else:
-                                        # Sem contexto Flask (RQ worker): cria app próprio
-                                        from internal_logic.core.extensions import create_app as _create
-                                        with _create(skip_sync_thread=True).app_context():
-                                            from tasks_async import flow_time_elapsed_fire
-                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
-                                except Exception as e2:
-                                    logger.error(f"[TIMER][thread] falha: {e2}", exc_info=True)
-                            _th.Thread(target=_fire_inline, daemon=True).start()
-                            logger.info(f"[TIMER][thread] {required_seconds}s -> {nxt}")
+                            if _hac():
+                                from flask import current_app as _ca
+                                _app_ref = _ca._get_current_object()
+                            else:
+                                from internal_logic.core.extensions import create_app as _create
+                                _app_ref = _create(skip_sync_thread=True)
+                        except Exception:
+                            pass
 
-                    return  # fluxo pausa; continuação é feita pelo timer
+                        def _fire_flow_timer():
+                            import time as _t2
+                            _t2.sleep(max(1, required_seconds))
+                            try:
+                                if _app_ref is not None:
+                                    with _app_ref.app_context():
+                                        logger.info(f"🔥 [TIMER] Disparando! Continuando fluxo -> {nxt}")
+                                        local_mgr = BotManager(socketio=None, scheduler=None, user_id=self.user_id)
+                                        snap = None
+                                        try:
+                                            snap = local_mgr._get_flow_snapshot_from_redis(bot_id, str(telegram_user_id))
+                                        except Exception:
+                                            pass
+                                        local_mgr._execute_flow_recursive(bot_id, token, config, int(chat_id), str(telegram_user_id), str(nxt), recursion_depth=0, visited_steps=set(), flow_snapshot=snap)
+                                        logger.info(f"🔥 [TIMER] Fluxo continuado com sucesso!")
+                            except Exception as _timer_err:
+                                logger.error("[TIMER] Erro: %s", str(_timer_err))
+
+                        timer = _th.Timer(max(1, required_seconds), _fire_flow_timer)
+                        timer.daemon = True
+                        timer.start()
+                        logger.info(f"[TIMER] ⏱️ Agendado via threading.Timer: {required_seconds}s -> {nxt}")
+
                 else:
                     # text_validation / button_click: aguarda resposta do usuário
                     try:

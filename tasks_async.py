@@ -3049,6 +3049,7 @@ def send_upsell_job(bot_id: int, payment_id: str, chat_id: int, upsell: dict,
 def flow_time_elapsed_fire(user_id, bot_id, token, chat_id, telegram_user_id, config_json, cond_step_id, next_step_id):
     """⏱️ Disparado pela native queue quando expira o tempo de uma condição
     time_elapsed. Continua o fluxo pelo passo alvo (TRUE)."""
+    logger.info(f"🔥 [FIRE] flow_time_elapsed_fire EXECUTANDO! bot={bot_id} user={telegram_user_id} target={next_step_id}")
     try:
         import json as _json
         from internal_logic.core.extensions import get_redis_connection
