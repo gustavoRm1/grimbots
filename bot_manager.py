@@ -4036,6 +4036,13 @@ class BotManager:
                     except Exception:
                         pass
                     if nxt:
+                    # 🔍 DIAGNOSTICO AO VIVO: confirma no Telegram
+                    try:
+                        self.send_telegram_message(token=token, chat_id=str(chat_id),
+                            message='[DEBUG] Condicao atingida! Timer={}s. Target={}. Aguardando...'.format(required_seconds, nxt),
+                            bot_id=bot_id)
+                    except Exception:
+                        pass
                         _fired = False
                         try:
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
