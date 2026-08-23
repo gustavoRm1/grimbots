@@ -41,6 +41,7 @@ o que o adapter exportar em `save()`.
 | "Erro desconhecido" ao salvar com sucesso | PUT devolve config plano em 2xx | Sucesso = HTTP status (`d.__ok`) |
 | HTML velho intermitente pós-deploy | Jinja compila template 1x por worker gunicorn e nunca relê | `TEMPLATES_AUTO_RELOAD=True` (extensions.py) + restart no deploy |
 | Erros silenciosos / perda de edições | sem rede global de erros e sem dirty tracking | gfCfg+try/catch+timeout, 401/403 PT-BR, dirty modal/canvas com confirm, beforeunload, debounce paleta, syncOutputs defensivo |
+| Dirty do modal não ativava | setter _gfDirty=true perdido num patch que falhou + listener por-open acumularia | listener delegado ÚNICO em #mFields (dataset.gfHooked) + chips despacham input sintético |
 
 ## 4. Checklist de DEPLOY (VPS)
 
