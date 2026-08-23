@@ -2898,7 +2898,31 @@ class BotManager:
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao calcular tempo decorrido: {e}")
         
-        # Fallback: usar context se disponível
+        # 🔥 FALLBACK ROBUSTO: Redis indisponível -> usa última mensagem do BOT
+        # para o chat como referência de tempo (o step anterior foi enviado pelo bot)
+        try:
+            from internal_logic.core.models import BotMessage
+            last = BotMessage.query.filter_by(
+                bot_id=bot_id, chat_id=str(telegram_user_id)
+            ).order_by(BotMessage.created_at.desc()).first() if (bot_id and telegram_user_id) else None
+            if last is None and bot_id and telegram_user_id:
+                from sqlalchemy import desc as _desc
+                last = BotMessage.query.filter(
+                    BotMessage.bot_id == bot_id
+                ).order_by(BotMessage.created_at.desc()).first()
+            if last is not None:
+                ref_time = getattr(last, 'created_at', None) or getattr(last, 'sent_at', None)
+                if ref_time is not None:
+                    import time as _t2, datetime as _dt2
+                    now_utc = _dt2.datetime.now(_dt2.timezone.utc)
+                    ref = ref_time if ref_time.tzinfo else ref_time.replace(tzinfo=_dt2.timezone.utc)
+                    elapsed_seconds = int((now_utc - ref).total_seconds())
+                    logger.warning(f"⏱️ [FALLBACK DB] tempo decorrido: {elapsed_seconds}s >= {required_total_seconds}s?")
+                    return elapsed_seconds >= required_total_seconds
+        except Exception as fb_err:
+            logger.error(f"❌ Fallback DB do time_elapsed falhou: {fb_err}")
+
+        # Último recurso: context se disponível
         elapsed_minutes = context.get('elapsed_minutes', 0)
         return elapsed_minutes * 60 >= required_total_seconds
     
@@ -3610,7 +3634,7 @@ class BotManager:
             
             logger.info(f"🔍 Buscando step inicial: flow_start_step_id={start_step_id} (tipo: {type(start_step_id)})")
             logger.info(f"🔍 Total de steps no fluxo: {len(flow_steps)}")
-            logger.info(f"🔍 IDs dos steps: {[str(s.get('id')) for s in flow_steps if isinstance(s, dict)]}")
+            logger.debug(f"IDs dos steps: {[str(s.get('id')) for s in flow_steps if isinstance(s, dict)]}")
             
             if start_step_id:
                 # Buscar step específico marcado como inicial
@@ -3775,7 +3799,7 @@ class BotManager:
                         flow_steps = []
             
             logger.info(f"🔍 Buscando step {step_id} em {len(flow_steps)} steps disponíveis")
-            logger.info(f"🔍 IDs dos steps disponíveis: {[s.get('id') for s in flow_steps if isinstance(s, dict)]}")
+            logger.debug(f"IDs dos steps disponíveis: {[s.get('id') for s in flow_steps if isinstance(s, dict)]}")
             
             step = self._find_step_by_id(flow_steps, step_id)
             
@@ -3792,10 +3816,10 @@ class BotManager:
             delay = step.get('delay_seconds', 0)
             connections = step.get('connections', {})
             
-            logger.info(f"✅ Step {step_id} encontrado!")
+            logger.debug(f"Step encontrado")
             logger.info(f"🎯 Executando step {step_id} (tipo: {step_type}, ordem: {step.get('order', 0)})")
-            logger.info(f"🎯 Config do step: {step_config}")
-            logger.info(f"🎯 Connections: {connections}")
+            logger.debug(f"Config do step")
+            logger.debug(f"Connections")
             logger.info(f"🎯 Mensagem do step: {step_config.get('message', '')[:100] if step_config.get('message') else 'VAZIA'}")
             logger.info(f"🎯 Media URL: {step_config.get('media_url', 'NÃO CONFIGURADA')}")
             logger.info(f"🎯 Custom buttons: {len(step_config.get('custom_buttons', []))} botões")
@@ -4019,16 +4043,30 @@ class BotManager:
                             # 🔥 FALLBACK: timer em-thread no próprio processo
                             # (sem depender do serviço rqscheduler na VPS)
                             import threading as _th
-                            from flask import current_app as _ca
-                            _app = _ca._get_current_object()
+                            # 🔥 FIX 5: current_app pode não existir (chamado via RQ worker)
+                            _app = None
+                            try:
+                                from flask import has_app_context
+                                if has_app_context():
+                                    from flask import current_app as _ca
+                                    _app = _ca._get_current_object()
+                            except Exception:
+                                _app = None
                             _cfg_json2 = json.dumps(config, default=str)
                             def _fire_inline():
                                 import time as _t2
                                 _t2.sleep(max(1, required_seconds))
                                 try:
-                                    with _app.app_context():
-                                        from tasks_async import flow_time_elapsed_fire
-                                        flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
+                                    if _app is not None:
+                                        with _app.app_context():
+                                            from tasks_async import flow_time_elapsed_fire
+                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
+                                    else:
+                                        # Sem contexto Flask (RQ worker): cria app próprio
+                                        from internal_logic.core.extensions import create_app as _create
+                                        with _create(skip_sync_thread=True).app_context():
+                                            from tasks_async import flow_time_elapsed_fire
+                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
                                 except Exception as e2:
                                     logger.error(f"[TIMER][thread] falha: {e2}", exc_info=True)
                             _th.Thread(target=_fire_inline, daemon=True).start()
@@ -4242,8 +4280,6 @@ class BotManager:
             except:
                 pass
         finally:
-            # Remover step atual dos visitados (permite revisitar em branches diferentes)
-            visited_steps.discard(step_id)
             
             # ✅ V∞: Salvar estado do flow no Redis após cada step (24h TTL)
             try:

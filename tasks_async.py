@@ -3060,8 +3060,15 @@ def flow_time_elapsed_fire(user_id, bot_id, token, chat_id, telegram_user_id, co
             cur = rc.get(f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}") if rc else None
             cur = cur.decode() if isinstance(cur, bytes) else cur
             if cur and cur != str(cond_step_id):
-                logger.info(f"⏱️ Timer ignorado: step atual mudou ({cur})")
+                logger.info(f"⏱️ Timer ignorado: usuário seguiu outro caminho ({cur})")
                 return
+            # 🔥 FIX RACE: limpa o step antigo ANTES de executar o alvo, para que
+            # uma mensagem do usuário no meio da execução não avalie as condições
+            # do nó de condição já consumido.
+            try:
+                rc.delete(f"gb:{user_id}:flow_current_step:{bot_id}:{telegram_user_id}")
+            except Exception:
+                pass
         except Exception:
             pass
 
