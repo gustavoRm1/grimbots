@@ -4035,14 +4035,15 @@ class BotManager:
                             redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
                     except Exception:
                         pass
+
+                        # [DEBUG] Confirma no Telegram que a condicao foi atingida
+                        try:
+                            self.send_telegram_message(token=token, chat_id=str(chat_id),
+                                message='[DEBUG] Condicao! Timer={}s Target={}'.format(required_seconds, nxt),
+                                bot_id=bot_id)
+                        except Exception:
+                            pass
                     if nxt:
-                    # 🔍 DIAGNOSTICO AO VIVO: confirma no Telegram
-                    try:
-                        self.send_telegram_message(token=token, chat_id=str(chat_id),
-                            message='[DEBUG] Condicao atingida! Timer={}s. Target={}. Aguardando...'.format(required_seconds, nxt),
-                            bot_id=bot_id)
-                    except Exception:
-                        pass
                         _fired = False
                         try:
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
