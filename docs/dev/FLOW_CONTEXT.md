@@ -41,6 +41,17 @@ o que o adapter exportar em `save()`.
 | "Erro desconhecido" ao salvar com sucesso | PUT devolve config plano em 2xx | Sucesso = HTTP status (`d.__ok`) |
 | HTML velho intermitente pós-deploy | Jinja compila template 1x por worker gunicorn e nunca relê | `TEMPLATES_AUTO_RELOAD=True` (extensions.py) + restart no deploy |
 | Erros silenciosos / perda de edições | sem rede global de erros e sem dirty tracking | gfCfg+try/catch+timeout, 401/403 PT-BR, dirty modal/canvas com confirm, beforeunload, debounce paleta, syncOutputs defensivo |
+
+
+## 3.5 Decisões Arquiteturais (produção)
+| # | Decisão | Motivo |
+|---|---|---|
+| D1 | Timer usa marathon_queue.enqueue_in() (RQ nativo) | q_scheduler.Scheduler precisa de processo qscheduler separado que não existe na VPS. Worker já roda com --with-scheduler e promove delayed jobs nativamente |
+| D2 | job_id='gb:timer:{bot}:{uid}:{step}' no enqueue | Dedup: impede múltiplos timers para o mesmo step/usuário |
+| D3 | payment_status consulta Payment.query (não string compare) | Bug crítico: comparação de string permitia acesso gratuito |
+| D4 | _execute_step recebe 	elegram_user_id | Sem ele, downsell/upsell não funcionam (precisam do ID para agendar) |
+| D5 | PIX claim atômico via Lua script | Race condition TOCTOU: dois webhooks simultâneos podiam criar 2 PIX |
+| D6 | Funil freestyle: sem nós de config global | Cada bloco é autocontido; configurações globais ficam na aba Configurações |
 | Dirty do modal não ativava | setter _gfDirty=true perdido num patch que falhou + listener por-open acumularia | listener delegado ÚNICO em #mFields (dataset.gfHooked) + chips despacham input sintético |
 | time_elapsed com 2 saídas / nunca disparava | sem timer e sem gravação de timestamp | saída ÚNICA 'APÓS X MIN' + rq-scheduler (enqueue_in) + setex low_step_timestamp na entrada |
 
