@@ -210,6 +210,12 @@
         S.editor.import(dfData);
         rebuildImportedDomBridge(dfData.drawflow.Home.data);
         Object.keys(dfData.drawflow.Home.data).forEach(id => refreshPreview(id));
+        // 🔥 recalcular paths apos conteudo injetado (geometria stale do import)
+        setTimeout(function () {
+            Object.keys(dfData.drawflow.Home.data).forEach(function (id2) {
+                try { S.editor.updateConnectionNodes("node-" + id2); } catch (_) {}
+            });
+        }, 90);
 
         // 🔥 SETTINGS: injeta valores GLOBAIS atuais no nó (usuário edita em cima do real)
         injectGlobalIntoSettingsNode();
