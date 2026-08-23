@@ -217,7 +217,7 @@ function refreshPreview(editor, id) {
             var cd = (c.__meta && c.__meta.conditions && c.__meta.conditions[0]) || {};
             if (cd.condition_type==='text_validation') txt = 'Se resposta ' + (cd.validation||'any') + (cd.value ? ' = "'+cd.value+'"' : '');
             else if (cd.condition_type==='button_click') txt = 'Se clicar "' + (cd.button_text||'?') + '"';
-            else if (cd.condition_type==='time_elapsed') txt = 'Se passarem ' + (cd.minutes||5) + ' min' + ((cd.seconds||0) ? ' + ' + cd.seconds + ' seg' : '');
+            else if (cd.condition_type==='time_elapsed') txt = 'Se passarem ' + ((cd.minutes===0||cd.minutes)?cd.minutes:5) + ' min' + ((cd.seconds||0) ? ' + ' + cd.seconds + ' seg' : '');
             else txt = 'Se pagamento == ' + (cd.status||'paid');
         }
         else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
@@ -247,7 +247,8 @@ function rebuildImportedDom(editor, dfData, startId) {
         var _lbl = null;
         if (type === 'condition') {
             var _c0l = (data[id].data.__meta.conditions && data[id].data.__meta.conditions[0]) || {};
-            if (_c0l.condition_type === 'time_elapsed') _lbl = ['APÓS ' + (_c0l.minutes || 5) + ' MIN'];
+            if (_c0l.condition_type === 'time_elapsed') var _tot = ((_c0l.minutes===0||_c0l.minutes)?_c0l.minutes:5)*60 + (+(_c0l.seconds)||0);
+            _lbl = ['APÓS ' + _tot + 's'];
         }
         cont.innerHTML = buildNodeHtml(type, _lbl);
     });

@@ -2874,7 +2874,9 @@ class BotManager:
         
         # ✅ NOVO: Implementação funcional usando Redis para rastrear timestamp
         """
-        required_minutes = condition.get('minutes', 5)
+        # FIX FALSY: 0 minutos valido
+        _rm = condition.get('minutes')
+        required_minutes = int(_rm) if _rm not in (None, '') else 5
         required_seconds = condition.get('seconds', 0)
         required_total_seconds = required_minutes * 60 + required_seconds
         
@@ -3982,8 +3984,11 @@ class BotManager:
                         return
                 elif ctype == 'time_elapsed':
                     # ⏱️ TIMER REAL: agenda disparo via rq-scheduler
-                    required_minutes = int(c0.get('minutes', 5) or 5)
-                    required_seconds = required_minutes * 60 + int(c0.get('seconds', 0) or 0)
+                    # FIX FALSY: 0 minutos e valido (0 or 5 virava 5!)
+                    _raw_min = c0.get('minutes')
+                    required_minutes = int(_raw_min) if _raw_min not in (None, '') else 5
+                    _raw_sec = c0.get('seconds')
+                    required_seconds = required_minutes * 60 + (int(_raw_sec) if _raw_sec not in (None, '') else 0)
                     nxt = c0.get('target_step') or ''
                     try:
                         redis_conn = get_redis_connection()
