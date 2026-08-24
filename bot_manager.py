@@ -4019,6 +4019,14 @@ class BotManager:
                     _raw_sec = c0.get('seconds')
                     required_seconds = required_minutes * 60 + (int(_raw_sec) if _raw_sec not in (None, '') else 0)
                     nxt = c0.get('target_step') or ''
+
+                    # [DEBUG] Confirma no Telegram que o nó foi atingido
+                    try:
+                        self.send_telegram_message(token=token, chat_id=str(chat_id),
+                            message='[DEBUG] Condicao! Timer={}s Target={}'.format(required_seconds, nxt),
+                            bot_id=bot_id)
+                    except Exception:
+                        pass
                     # Salvar current_step = condition step (timer guard precisa disso)
                     try:
                         redis_conn = get_redis_connection()
@@ -4184,7 +4192,16 @@ class BotManager:
                 # Ô£à NOVO: Priorizar condi├º├Áes sobre conex├Áes diretas
                 # Se step tem condi├º├Áes, aguardar input do usu├írio (n├úo continuar automaticamente)
                 conditions = step.get('conditions', [])
-                if conditions and len(conditions) > 0:
+                # 🔥 CRÍTICO: só pausa para condições que ESPERAM input do usuário.
+                # time_elapsed tem timer próprio; payment_status é avaliado imediatamente.
+                # Sem este guard, QUALQUER condition[] no step causava pausa indevida
+                # e o funil travava no primeiro bloco.
+                INPUT_WAITING_TYPES = ('text_validation', 'button_click')
+                _needs_input = any(
+                    isinstance(c, dict) and c.get('condition_type') in INPUT_WAITING_TYPES
+                    for c in conditions if isinstance(c, dict)
+                )
+                if _needs_input:
                     logger.info(f"ÔÅ©´©Å Step {step_id} tem {len(conditions)} condi├º├úo(├Áes) - aguardando input do usu├írio")
                     # Ô£à NOVO: Salvar step atual com lock at├┤mico (TTL aumentado para 2 horas)
                     success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200)
