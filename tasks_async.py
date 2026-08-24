@@ -3052,7 +3052,7 @@ def flow_time_elapsed_fire(user_id, bot_id, token, chat_id, telegram_user_id, co
     logger.info(f"🔥 [FIRE] flow_time_elapsed_fire EXECUTANDO! bot={bot_id} user={telegram_user_id} target={next_step_id}")
     try:
         import json as _json
-        from internal_logic.core.extensions import get_redis_connection
+        from internal_logic.core.redis_manager import get_redis_connection
         from bot_manager import BotManager
 
         # Guarda atômica: se o usuário já saiu do step (respondeu/clicou), não dispara

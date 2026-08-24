@@ -16,7 +16,7 @@ print("=" * 60)
 # ─── 1. Redis connection ───
 print("\n[1] REDIS CONNECTION")
 try:
-    from internal_logic.core.extensions import get_redis_connection
+    from internal_logic.core.redis_manager import get_redis_connection
     rc = get_redis_connection()
     if rc:
         rc.ping()
