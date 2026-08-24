@@ -534,7 +534,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             import json as json_lib  # ✅ Proteção contra shadowing do módulo json
             parts = callback_data.replace('multi_bump_yes_', '').split('_')
             chat_id_from_callback = int(parts[0])
-            user_key = f"orderbump_{chat_id_from_callback}"
+            user_key = f"orderbump_{bot_id}_{chat_id_from_callback}"
             bump_index = int(parts[1])
             total_price = float(parts[2]) / 100  # Converter centavos para reais
             
@@ -610,7 +610,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
             import json as json_lib  # ✅ Proteção contra shadowing do módulo json
             parts = callback_data.replace('multi_bump_no_', '').split('_')
             chat_id_from_callback = int(parts[0])
-            user_key = f"orderbump_{chat_id_from_callback}"
+            user_key = f"orderbump_{bot_id}_{chat_id_from_callback}"
             bump_index = int(parts[1])
             current_price = float(parts[2]) / 100  # Converter centavos para reais
             
@@ -1302,7 +1302,7 @@ def handle_callback_query(bot_manager, bot_id: int, token: str, config: Dict[str
                 # ✅ REDIS MIGRATION: Permitir que usuário escolha dentro do funil
                 # Se já existe sessão ativa no Redis, CANCELAR automaticamente e iniciar nova
                 import json as json_lib  # ✅ Proteção contra shadowing do módulo json
-                user_key = f"orderbump_{chat_id}"
+                user_key = f"orderbump_{bot_id}_{chat_id}"
                 session_key = f"gb:ob_session:{user_key}"
                 
                 redis_conn = get_redis_connection()
