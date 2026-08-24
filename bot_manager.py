@@ -4043,15 +4043,47 @@ class BotManager:
                             redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
                     except Exception:
                         pass
-# 🔥 DELAY BLOQUEANTE + FIRE — 100% confiável sem RQ
-                    import time as _tm
-                    _tm.sleep(max(1, required_seconds))
-                    logger.info(f"⏱️ Timer completado! Continuando para {nxt}")
-
-                    from tasks_async import flow_time_elapsed_fire
-                    flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), json.dumps(config, default=str), str(step.get('id')), str(nxt))
-                    logger.info(f"[TIMER] ✅ Fluxo continuado via fire!")
-            elif step_type == 'redirect':
+                    if nxt:
+                        # 1. Tenta RQ primeiro
+                        _fired = False
+                        try:
+                            from tasks_async import marathon_queue, flow_time_elapsed_fire
+                            _cfg_json = json.dumps(config, default=str)
+                            _job_id = f"gb:timer:{bot_id}:{telegram_user_id}:{str(step.get('id'))}"
+                            _job = marathon_queue.enqueue_in(
+                                timedelta(seconds=max(1, required_seconds)),
+                                flow_time_elapsed_fire,
+                                self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
+                                _cfg_json, str(step.get('id')), str(nxt),
+                                job_id=_job_id
+                            )
+                            logger.info(f"[TIMER][rq] job={_job.id} dispara em {required_seconds}s -> {nxt}")
+                            _fired = True
+                        except Exception as sched_err:
+                            logger.error(f"[TIMER] Falha ao agendar via RQ: {sched_err}")
+                        
+                        # 2. Fallback: thread daemon (se RQ falhou)
+                        if not _fired:
+                            import threading as _th
+                            from flask import has_app_context as _hac
+                            _app_ref = None
+                            try:
+                                if _hac():
+                                    from flask import current_app as _ca
+                                    _app_ref = _ca._get_current_object()
+                            except Exception:
+                                pass
+                            _cfg_json2 = json.dumps(config, default=str)
+                            def _fire_inline():
+                                import time as _t2
+                                _t2.sleep(max(1, required_seconds))
+                                try:
+                                    from tasks_async import flow_time_elapsed_fire
+                                    flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
+                                except Exception as e2:
+                                    logger.error(f"[TIMER][thread] Erro: {e2}", exc_info=True)
+                            _th.Thread(target=_fire_inline, daemon=True).start()
+                    return  # fluxo pausa; continuação pelo timer
                 url_r = step_config.get('redirect_url', '')
                 btn_txt = step_config.get('button_text') or 'Acessar'
                 msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
