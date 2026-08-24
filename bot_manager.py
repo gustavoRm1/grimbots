@@ -4044,56 +4044,59 @@ class BotManager:
                     except Exception:
                         pass
                     if nxt:
-                        _fired = False
-                        try:
-                            from tasks_async import marathon_queue, flow_time_elapsed_fire
-                            _cfg_json = json.dumps(config, default=str)
-                            _job_id = f"gb:timer:{bot_id}:{telegram_user_id}:{str(step.get('id'))}"
-                            _job = marathon_queue.enqueue_in(
-                                timedelta(seconds=max(1, required_seconds)),
-                                flow_time_elapsed_fire,
-                                self.user_id, bot_id, token, int(chat_id), str(telegram_user_id),
-                                _cfg_json, str(step.get('id')), str(nxt),
-                                job_id=_job_id
-                            )
-                            logger.info(f"[TIMER] job={_job.id} dispara em {required_seconds}s -> {nxt}")
-                            _fired = True
-                        except Exception as sched_err:
-                            logger.error(f"❌ Falha ao agendar timer: {sched_err}")
-                        if not _fired:
-                            # 🔥 FALLBACK: timer em-thread no próprio processo
-                            # (sem depender do serviço rqscheduler na VPS)
-                            import threading as _th
-                            # 🔥 FIX 5: current_app pode não existir (chamado via RQ worker)
-                            _app = None
-                            try:
-                                from flask import has_app_context
-                                if has_app_context():
-                                    from flask import current_app as _ca
-                                    _app = _ca._get_current_object()
-                            except Exception:
-                                _app = None
-                            _cfg_json2 = json.dumps(config, default=str)
-                            def _fire_inline():
-                                import time as _t2
-                                _t2.sleep(max(1, required_seconds))
-                                try:
-                                    if _app is not None:
-                                        with _app.app_context():
-                                            from tasks_async import flow_time_elapsed_fire
-                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
-                                    else:
-                                        # Sem contexto Flask (RQ worker): cria app próprio
-                                        from internal_logic.core.extensions import create_app as _create
-                                        with _create(skip_sync_thread=True).app_context():
-                                            from tasks_async import flow_time_elapsed_fire
-                                            flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
-                                except Exception as e2:
-                                    logger.error(f"[TIMER][thread] falha: {e2}", exc_info=True)
-                            _th.Thread(target=_fire_inline, daemon=True).start()
-                            logger.info(f"[TIMER][thread] {required_seconds}s -> {nxt}")
+                        # 🔥 TIMER DIRETO via threading.Timer
+                        # Não depende de rqscheduler nem worker RQ.
+                        # Para delays curtos (<30min) é mais confiável.
+                        import threading as _th
+                        from flask import has_app_context as _hac
 
-                    return  # fluxo pausa; continuação é feita pelo timer
+                        _app_ref = None
+                        try:
+                            if _hac():
+                                from flask import current_app as _ca
+                                _app_ref = _ca._get_current_object()
+                            else:
+                                from internal_logic.core.extensions import create_app as _create_app
+                                _app_ref = _create_app(skip_sync_thread=True)
+                        except Exception:
+                            pass
+
+                        _cfg_json = json.dumps(config, default=str)
+                        _cond_id = str(step.get("id"))
+                        _target = str(nxt)
+                        _wait = max(1, required_seconds)
+                        _bot = bot_id
+                        _tok = token
+                        _chat = int(chat_id)
+                        _tuid = str(telegram_user_id)
+                        _uid = self.user_id
+
+                        def _fire_after_delay():
+                            import time as _sleep
+                            _sleep(_wait)
+                            try:
+                                if _app_ref is not None:
+                                    with _app_ref.app_context():
+                                        logger.info(f"[TIMER] 🔥 Disparando! -> {_target}")
+                                        from bot_manager import BotManager
+                                        local_mgr = BotManager(socketio=None, scheduler=None, user_id=_uid)
+                                        snap = None
+                                        try:
+                                            snap = local_mgr._get_flow_snapshot_from_redis(_bot, _tuid)
+                                        except Exception:
+                                            pass
+                                        local_mgr._execute_flow_recursive(
+                                            _bot, _tok, json.loads(_cfg_json), _chat, _tuid,
+                                            _target, recursion_depth=0, visited_steps=set(), flow_snapshot=snap
+                                        )
+                                        logger.info(f"[TIMER] ✅ Fluxo continuado com sucesso!")
+                            except Exception as e2:
+                                logger.error(f"[TIMER] Erro ao disparar: {e2}", exc_info=True)
+
+                        timer_thread = _th.Thread(target=_fire_after_delay, daemon=True)
+                        timer_thread.start()
+                        logger.info(f"[TIMER] ⏱️ Agendado via thread: {_wait}s -> {_target}")
+
                 else:
                     # text_validation / button_click: aguarda resposta do usuário
                     try:
