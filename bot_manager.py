@@ -4096,6 +4096,7 @@ class BotManager:
                         timer_thread = threading.Thread(target=_fire_after_delay, daemon=True)
                         timer_thread.start()
                         logger.info(f"[TIMER] Agendado: {_wait_s}s -> {_target}")
+                    return  # fluxo pausa; continuação pelo timer
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
