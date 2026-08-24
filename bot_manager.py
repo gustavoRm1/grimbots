@@ -4043,7 +4043,7 @@ class BotManager:
                             redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
                     except Exception:
                         pass
-                    # 🔥 DELAY BLOQUEANTE + FIRE — 100% confiável sem RQ
+# 🔥 DELAY BLOQUEANTE + FIRE — 100% confiável sem RQ
                     import time as _tm
                     _tm.sleep(max(1, required_seconds))
                     logger.info(f"⏱️ Timer completado! Continuando para {nxt}")
@@ -4143,8 +4143,8 @@ class BotManager:
                     for c in conditions if isinstance(c, dict)
                 )
                 if _needs_input:
-                    logger.info(f"ÔÅ©´©Å Step {step_id} tem {len(conditions)} condi├º├úo(├Áes) - aguardando input do usu├írio")
-                    # Ô£à NOVO: Salvar step atual com lock at├┤mico (TTL aumentado para 2 horas)
+                    logger.info(f"🔍 Step {step_id} tem {len(conditions)} condição(ões) - aguardando input do usuário")
+                    # NOVO: Salvar step atual com lock atômico (TTL aumentado para 2 horas)
 
                     success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200)
                     if not success:
