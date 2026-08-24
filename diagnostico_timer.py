@@ -105,7 +105,7 @@ except Exception as e:
 print("\n[8] REDIS KEYS DE FLOW (bot 126)")
 try:
     keys = rc.keys("*126*")
-    flow_keys = [k.decode() if isinstance(k, bytes) else k for k in keys if b"flow" in k or b"gb:" in k]
+    flow_keys = [k.decode() if isinstance(k, bytes) else k for k in keys if "flow" in k or "gb:" in k]
     if flow_keys:
         for k in flow_keys[:10]:
             print(f"    {k}")
