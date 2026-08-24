@@ -4043,74 +4043,14 @@ class BotManager:
                             redis_conn.setex(ts_key, required_seconds + 3600, int(_t.time()))
                     except Exception:
                         pass
-                    if nxt:
-                        # 🔥 TIMER DIRETO via threading.Timer
-                        # Não depende de rqscheduler nem worker RQ.
-                        # Para delays curtos (<30min) é mais confiável.
-                        import threading as _th
-                        from flask import has_app_context as _hac
+                    # 🔥 DELAY BLOQUEANTE + FIRE — 100% confiável sem RQ
+                    import time as _tm
+                    _tm.sleep(max(1, required_seconds))
+                    logger.info(f"⏱️ Timer completado! Continuando para {nxt}")
 
-                        _app_ref = None
-                        try:
-                            if _hac():
-                                from flask import current_app as _ca
-                                _app_ref = _ca._get_current_object()
-                            else:
-                                from internal_logic.core.extensions import create_app as _create_app
-                                _app_ref = _create_app(skip_sync_thread=True)
-                        except Exception:
-                            pass
-
-                        _cfg_json = json.dumps(config, default=str)
-                        # TIMER DIRETO via threading.Timer (sem RQ/rqscheduler)
-                        from flask import has_app_context as _hac
-                        _app_ref = None
-                        try:
-                            if _hac():
-                                from flask import current_app as _ca
-                                _app_ref = _ca._get_current_object()
-                        except Exception:
-                            from internal_logic.core.extensions import create_app as _create_app
-                            _app_ref = _create_app(skip_sync_thread=True)
-
-                        _cfg_json = json.dumps(config, default=str)
-                        _cond_id = str(step.get('id'))
-                        _target = str(nxt)
-                        _wait_s = max(1, required_seconds)
-                        _bot_id = bot_id
-                        _tok = token
-                        _chat_int = int(chat_id)
-                        _tuid = str(telegram_user_id)
-                        _mgr_uid = self.user_id
-
-                        def _fire_after_delay():
-                            import time as _tm
-                            _tm.sleep(_wait_s)
-                            try:
-                                from tasks_async import flow_time_elapsed_fire
-                                flow_time_elapsed_fire(_mgr_uid, _bot_id, _tok, _chat_int, _tuid, _cfg_json, _cond_id, _target)
-                                logger.info("[TIMER] Fluxo continuado via Lua guard!")
-                            except Exception as fire_err:
-                                logger.error(f"[TIMER] Erro no fire: {fire_err}", exc_info=True)
-
-                        timer_thread = threading.Thread(target=_fire_after_delay, daemon=True)
-                        timer_thread.start()
-                        logger.info(f"[TIMER] Agendado: {_wait_s}s -> {_target}")
-                    return  # fluxo pausa; continuação pelo timer
-                    try:
-                        redis_conn = get_redis_connection()
-                        if redis_conn:
-                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
-                            redis_conn.setex(k, 86400, str(step.get('id')))
-                    except Exception:
-                        pass
-                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
-                    if msg_txt:
-                        buttons_c = self._build_step_buttons(step, config)
-                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, buttons=buttons_c if buttons_c else None, bot_id=bot_id, save_message=True)
-                    return  # resposta do usuário cai no avaliador existente (L~1795)
-
-            # 🔥 FLOW V9: Redirect — mensagem com botão de URL (não-terminal)
+                    from tasks_async import flow_time_elapsed_fire
+                    flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), json.dumps(config, default=str), str(step.get('id')), str(nxt))
+                    logger.info(f"[TIMER] ✅ Fluxo continuado via fire!")
             elif step_type == 'redirect':
                 url_r = step_config.get('redirect_url', '')
                 btn_txt = step_config.get('button_text') or 'Acessar'
