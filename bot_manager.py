@@ -4013,21 +4013,12 @@ class BotManager:
                         self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, str(nxt), recursion_depth=recursion_depth + 1, visited_steps=visited_steps | {str(step_id)}, flow_snapshot=snap)
                         return
                 elif ctype == 'time_elapsed':
-                    # ⏱️ TIMER REAL: agenda disparo via native queue
                     _raw_min = c0.get('minutes')
                     required_minutes = int(_raw_min) if _raw_min not in (None, '') else 5
                     _raw_sec = c0.get('seconds')
                     required_seconds = required_minutes * 60 + (int(_raw_sec) if _raw_sec not in (None, '') else 0)
                     nxt = c0.get('target_step') or ''
 
-                    # [DEBUG] Confirma no Telegram que o nó foi atingido
-                    try:
-                        self.send_telegram_message(token=token, chat_id=str(chat_id),
-                            message='[DEBUG] Condicao! Timer={}s Target={}'.format(required_seconds, nxt),
-                            bot_id=bot_id)
-                    except Exception:
-                        pass
-                    # Salvar current_step = condition step (timer guard precisa disso)
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
@@ -4044,7 +4035,6 @@ class BotManager:
                     except Exception:
                         pass
                     if nxt:
-                        # 1. Tenta RQ primeiro
                         _fired = False
                         try:
                             from tasks_async import marathon_queue, flow_time_elapsed_fire
@@ -4061,29 +4051,36 @@ class BotManager:
                             _fired = True
                         except Exception as sched_err:
                             logger.error(f"[TIMER] Falha ao agendar via RQ: {sched_err}")
-                        
-                        # 2. Fallback: thread daemon (se RQ falhou)
                         if not _fired:
-                            import threading as _th
-                            from flask import has_app_context as _hac
-                            _app_ref = None
-                            try:
-                                if _hac():
-                                    from flask import current_app as _ca
-                                    _app_ref = _ca._get_current_object()
-                            except Exception:
-                                pass
                             _cfg_json2 = json.dumps(config, default=str)
                             def _fire_inline():
-                                import time as _t2
-                                _t2.sleep(max(1, required_seconds))
+                                import time as _tm
+                                _tm.sleep(max(1, required_seconds))
                                 try:
                                     from tasks_async import flow_time_elapsed_fire
                                     flow_time_elapsed_fire(self.user_id, bot_id, token, int(chat_id), str(telegram_user_id), _cfg_json2, str(step.get('id')), str(nxt))
                                 except Exception as e2:
                                     logger.error(f"[TIMER][thread] Erro: {e2}", exc_info=True)
-                            _th.Thread(target=_fire_inline, daemon=True).start()
+                            threading.Thread(target=_fire_inline, daemon=True).start()
+                            logger.info(f"[TIMER][thread] fallback: {required_seconds}s -> {nxt}")
                     return  # fluxo pausa; continuação pelo timer
+                else:
+                    # text_validation / button_click: aguarda resposta do usuário
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            k = f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.setex(k, 86400, str(step.get('id')))
+                    except Exception:
+                        pass
+                    msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
+                    if msg_txt:
+                        buttons_c = self._build_step_buttons(step, config)
+                        self.send_telegram_message(token=token, chat_id=str(chat_id), message=msg_txt, buttons=buttons_c if buttons_c else None, bot_id=bot_id, save_message=True)
+                    return
+
+            # 🔥 FLOW V9: Redirect — mensagem com botão de URL (não-terminal)
+            elif step_type == 'redirect':
                 url_r = step_config.get('redirect_url', '')
                 btn_txt = step_config.get('button_text') or 'Acessar'
                 msg_txt = self._personalize_text(step_config.get('message', ''), bot_id, chat_id)
