@@ -88,16 +88,19 @@ except Exception as e:
 # ─── 7. Bot 126 config ───
 print("\n[7] BOT 126 CONFIG")
 try:
-    from internal_logic.core.models import Bot, BotConfig
-    b = Bot.query.get(126)
-    if b and b.config:
-        fs = b.config.get_flow_steps()
-        print(f"  Steps: {len(fs)}")
-        for s in fs:
-            print(f"    {s['id']} ({s['type']}) conn={json.dumps(s.get('connections',{}))} conditions={len(s.get('conditions',[]))}")
-        print(f"  start={b.config.flow_start_step_id}")
-    else:
-        print("  ❌ Bot 126 sem config")
+    from internal_logic.core.extensions import create_app
+    app = create_app()
+    with app.app_context():
+        from internal_logic.core.models import Bot, BotConfig
+        b = Bot.query.get(126)
+        if b and b.config:
+            fs = b.config.get_flow_steps()
+            print(f"  Steps: {len(fs)}")
+            for s in fs:
+                print(f"    {s['id']} ({s['type']}) conn={json.dumps(s.get('connections',{}))} conditions={len(s.get('conditions',[]))}")
+            print(f"  start={b.config.flow_start_step_id}")
+        else:
+            print("  ❌ Bot 126 sem config")
 except Exception as e:
     print(f"  ❌ ERRO: {e}")
 
@@ -105,7 +108,7 @@ except Exception as e:
 print("\n[8] REDIS KEYS DE FLOW (bot 126)")
 try:
     keys = rc.keys("*126*")
-    flow_keys = [k.decode() if isinstance(k, bytes) else k for k in keys if "flow" in k or "gb:" in k]
+    flow_keys = [k.decode() if isinstance(k, bytes) else k for k in keys if b"flow" in k or b"gb:" in k]
     if flow_keys:
         for k in flow_keys[:10]:
             print(f"    {k}")
