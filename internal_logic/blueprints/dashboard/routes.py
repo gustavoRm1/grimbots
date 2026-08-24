@@ -2667,17 +2667,25 @@ def update_bot_config(bot_id):
             # ✅ VALIDAÇÃO: Tratar None como array vazio
             if main_buttons is None:
                 main_buttons = []
-            # ✅ VALIDAÇÃO: Impedir preços negativos
+            # ✅ NORMALIZAÇÃO: Preencher campos vazios em order bumps habilitados
             for button in main_buttons:
-                if isinstance(button, dict) and 'price' in button:
-                    try:
-                        price = float(button['price'])
-                        if price < 0:
-                            logger.warning(f"⚠️ Preço negativo detectado: {price} -> ajustando para 0")
+                if isinstance(button, dict):
+                    for bump in button.get('order_bumps', []):
+                        if isinstance(bump, dict) and bump.get('enabled'):
+                            if not bump.get('description', '').strip():
+                                bump['description'] = 'Oferta Exclusiva'
+                            if not bump.get('message', '').strip():
+                                bump['message'] = 'Aproveite esta oferta especial!'
+                    # ✅ VALIDAÇÃO: Impedir preços negativos
+                    if 'price' in button:
+                        try:
+                            price = float(button['price'])
+                            if price < 0:
+                                logger.warning(f"⚠️ Preço negativo detectado: {price} -> ajustando para 0")
+                                button['price'] = 0
+                        except (ValueError, TypeError):
+                            logger.warning(f"⚠️ Preço inválido detectado: {button['price']} -> ajustando para 0")
                             button['price'] = 0
-                    except (ValueError, TypeError):
-                        logger.warning(f"⚠️ Preço inválido detectado: {button['price']} -> ajustando para 0")
-                        button['price'] = 0
             config.set_main_buttons(main_buttons)
         
         # 4. Botões de redirecionamento

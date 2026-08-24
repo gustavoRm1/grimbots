@@ -2474,7 +2474,7 @@ window.botConfigApp = function() {
                                 }
                                 
                                 if (!bump.description || !bump.description.trim()) {
-                                    throw new Error(`A descrição do Order Bump #${j+1} do botão #${i+1} não pode estar vazia.`);
+                                    bump.description = "Oferta Exclusiva";
                                 }
                                 
                                 if (bump.price !== null && bump.price !== '' && bump.price !== undefined) {
