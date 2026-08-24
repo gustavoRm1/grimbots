@@ -4044,35 +4044,6 @@ class BotManager:
                     except Exception:
                         pass
                     if nxt:
-                        # 🔥 TIMER DIRETO via threading.Timer
-                        # Não depende de rqscheduler nem worker RQ.
-                        # Para delays curtos (<30min) é mais confiável.
-                        import threading as _th
-                        from flask import has_app_context as _hac
-
-                        _app_ref = None
-                        try:
-                            if _hac():
-                                from flask import current_app as _ca
-                                _app_ref = _ca._get_current_object()
-                            else:
-                                from internal_logic.core.extensions import create_app as _create_app
-                                _app_ref = _create_app(skip_sync_thread=True)
-                        except Exception:
-                            pass
-
-                        _cfg_json = json.dumps(config, default=str)
-                        # TIMER DIRETO via threading.Timer (sem RQ/rqscheduler)
-                        from flask import has_app_context as _hac
-                        _app_ref = None
-                        try:
-                            if _hac():
-                                from flask import current_app as _ca
-                                _app_ref = _ca._get_current_object()
-                        except Exception:
-                            from internal_logic.core.extensions import create_app as _create_app
-                            _app_ref = _create_app(skip_sync_thread=True)
-
                         _cfg_json = json.dumps(config, default=str)
                         _cond_id = str(step.get('id'))
                         _target = str(nxt)
@@ -4097,6 +4068,8 @@ class BotManager:
                         timer_thread.start()
                         logger.info(f"[TIMER] Agendado: {_wait_s}s -> {_target}")
                     return  # fluxo pausa; continuação pelo timer
+                else:
+                    # text_validation / button_click: aguarda resposta do usuário
                     try:
                         redis_conn = get_redis_connection()
                         if redis_conn:
@@ -4203,8 +4176,8 @@ class BotManager:
                     for c in conditions if isinstance(c, dict)
                 )
                 if _needs_input:
-                    logger.info(f"ÔÅ©´©Å Step {step_id} tem {len(conditions)} condi├º├úo(├Áes) - aguardando input do usu├írio")
-                    # Ô£à NOVO: Salvar step atual com lock at├┤mico (TTL aumentado para 2 horas)
+                    logger.info(f"🔍 Step {step_id} tem {len(conditions)} condição(ões) - aguardando input do usuário")
+                    # NOVO: Salvar step atual com lock atômico (TTL aumentado para 2 horas)
 
                     success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200)
                     if not success:
