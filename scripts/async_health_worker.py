@@ -83,16 +83,66 @@ logger.info("✅ Contexto Flask inicializado com sucesso")
 # FUNÇÕES ASSÍNCRONAS DE VERIFICAÇÃO
 # =============================================================================
 
+def _expected_webhook_url(bot_id: int) -> str:
+    """
+    Retorna a URL de webhook esperada para um bot.
+
+    Args:
+        bot_id: ID do bot
+
+    Returns:
+        str: URL de webhook esperada, ou '' se WEBHOOK_URL não configurado.
+    """
+    base = os.environ.get('WEBHOOK_URL', '')
+    if not base:
+        return ''
+    return f"{base}/webhook/telegram/{bot_id}"
+
+
+async def check_webhook_status(client: httpx.AsyncClient, bot: 'Bot') -> Tuple[str, str]:
+    """
+    Verifica se o webhook do Telegram aponta corretamente para a plataforma.
+
+    Args:
+        client: Cliente HTTPX assíncrono (compartilhado)
+        bot: Instância de Bot
+
+    Returns:
+        Tuple[str, str]: (config_url, 'ok'|'missing'|'mismatch'|'error')
+    """
+    expected = _expected_webhook_url(bot.id)
+    if not expected:
+        return ('', 'error')
+
+    url = f"https://api.telegram.org/bot{bot.token}/getWebhookInfo"
+    try:
+        response = await client.get(url, timeout=5.0)
+        if response.status_code == 200:
+            data = response.json().get('result') or {}
+            configured = data.get('url', '')
+            if configured == expected:
+                return (configured, 'ok')
+            if not configured:
+                return (configured, 'missing')
+            return (configured, 'mismatch')
+        return ('', 'error')
+    except (httpx.TimeoutException, httpx.ConnectError, Exception):
+        # Inconclusivo — tratado como erro para não dar falso-positivo de online
+        return ('', 'error')
+
+
 async def check_bot_status(client: httpx.AsyncClient, pool_bot: PoolBot) -> Tuple[PoolBot, str]:
     """
     Verifica o status de um bot via API do Telegram (assíncrono).
+    
+    Retorna 'online', 'degraded' (getMe ok, webhook fora do ar) ou 'offline'.
     
     Args:
         client: Cliente HTTPX assíncrono (compartilhado)
         pool_bot: Instância de PoolBot para verificar
         
     Returns:
-        Tuple[PoolBot, str]: (pool_bot, status) onde status é 'online' ou 'offline'
+        Tuple[PoolBot, str]: (pool_bot, status) onde status é 'online', 'degraded' ou 'offline'
     """
     # Extrair token do bot
     bot = pool_bot.bot
@@ -106,14 +156,24 @@ async def check_bot_status(client: httpx.AsyncClient, pool_bot: PoolBot) -> Tupl
         # Timeout de 5 segundos para evitar bloqueios
         response = await client.get(url, timeout=5.0)
         
-        # Se 200 e ok=True, bot está online
+        # Se 200 e ok=True, bot existe e responde (vivo)
+        me_ok = False
         if response.status_code == 200:
             data = response.json()
             if data.get('ok') is True:
-                return (pool_bot, 'online')
-        
-        # Qualquer outro caso é offline
-        return (pool_bot, 'offline')
+                me_ok = True
+
+        if not me_ok:
+            return (pool_bot, 'offline')
+
+        # Bot vivo — verificar se o webhook está configurado corretamente
+        _, webhook_state = await check_webhook_status(client, bot)
+        if webhook_state == 'ok':
+            return (pool_bot, 'online')
+        if webhook_state in ('missing', 'mismatch'):
+            return (pool_bot, 'degraded')
+        # getWebhookInfo inconclusivo → considera online (getMe respondeu)
+        return (pool_bot, 'online')
         
     except httpx.TimeoutException:
         # Timeout é considerado offline
@@ -142,10 +202,24 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     # 1. EAGER LOAD - Busca pools ativos (pool_bots é lazy='dynamic', não joinedload)
     # ==========================================================================
     pools = RedirectPool.query.filter_by(is_active=True).all()
-    
-    if not pools:
-        return (0, 0.0)
-    
+
+    # ==========================================================================
+    # 1.5 BOTS AVULSOS - Bots is_running=True que NÃO estão em nenhum pool ativo.
+    #     Fix D: antigamente esses bots eram 100% invisíveis ao health worker,
+    #     então o dashboard os mostrava online mesmo quando o bot morria.
+    # ==========================================================================
+    # Mapear bot_ids presentes nos pools
+    pooled_bot_ids = set()
+    for pool in pools:
+        for pb in list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []:
+            pooled_bot_ids.add(pb.bot_id)
+
+    # Buscar bots marcados como ativos mas sem pool (avulsos)
+    loose_bots = Bot.query.filter(
+        Bot.is_running == True,  # noqa: E712
+        ~Bot.id.in_(pooled_bot_ids) if pooled_bot_ids else True
+    ).all()
+
     # ==========================================================================
     # 2. COLETAR TODOS OS POOL_BOTS PARA VERIFICAÇÃO MASSIVA
     # ==========================================================================
@@ -154,10 +228,17 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
         # Converter lazy load para lista (já está eager loaded)
         pool_bots = list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []
         all_pool_bots.extend(pool_bots)
+
+    # Se não há pools nem bots avulsos, nada a fazer
+    if not pools and not loose_bots:
+        return (0, 0.0)
     
     # ==========================================================================
     # 3. VERIFICAÇÃO MASSIVA PARALELA COM asyncio.gather()
     # ==========================================================================
+    # Mapa de resultados de bots avulsos: bot_id -> status
+    loose_bot_statuses = {}
+
     if all_pool_bots:
         # Criar tasks para verificação paralela de TODOS os bots
         tasks = [
@@ -177,7 +258,7 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
             pool_bot, status = result
             
             # Atualizar status do pool_bot
-            if status == 'online':
+            if status in ('online', 'degraded'):
                 if pool_bot.status != 'online':
                     pool_bot.status = 'online'
                     pool_bot.consecutive_failures = 0
@@ -187,6 +268,41 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
                     pool_bot.status = 'offline'
                     pool_bot.consecutive_failures += 1
                 pool_bot.last_health_check = get_brazil_time()
+
+    # ==========================================================================
+    # 3.5 VERIFICAÇÃO DOS BOTS AVULSOS (sem PoolBot)
+    # ==========================================================================
+    if loose_bots:
+        async def _check_loose(bot):
+            # getMe — bot responde?
+            me_ok = False
+            try:
+                resp = await client.get(
+                    f"https://api.telegram.org/bot{bot.token}/getMe", timeout=5.0
+                )
+                if resp.status_code == 200 and resp.json().get('ok') is True:
+                    me_ok = True
+            except Exception:
+                me_ok = False
+
+            if not me_ok:
+                return (bot.id, 'offline')
+
+            # Webhook aponta para a plataforma?
+            _, webhook_state = await check_webhook_status(client, bot)
+            if webhook_state in ('missing', 'mismatch'):
+                return (bot.id, 'degraded')
+            return (bot.id, 'online')
+
+        loose_results = await asyncio.gather(
+            *[_check_loose(b) for b in loose_bots],
+            return_exceptions=True
+        )
+        for r in loose_results:
+            if isinstance(r, Exception):
+                continue
+            bot_id, st = r
+            loose_bot_statuses[bot_id] = st
     
     # ==========================================================================
     # 4. RECALCULAR MÉTRICAS DOS POOLS
@@ -283,7 +399,64 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
             except Exception as e:
                 logger.debug(f"Erro ao emitir WebSocket: {e}")
 
-    if bots_changed:
+    # ==========================================================================
+    # 6.5 SINC BOTS AVULSOS (sem PoolBot) - Fix D
+    #     Dashboard reflete is_running real para bots que não estão em pools,
+    #     incluindo detecção de webhook degradado.
+    # ==========================================================================
+    loose_changed = False
+    for bot_id, st in loose_bot_statuses.items():
+        bot = Bot.query.get(bot_id)
+        if not bot:
+            continue
+
+        # FIX CRÍTICO: NUNCA mexe em bot desligado pelo usuário
+        if getattr(bot, 'manually_disabled', False):
+            continue
+
+        old_is_running = bot.is_running
+
+        if st == 'online':
+            if not bot.is_running:
+                bot.is_running = True
+                bot.health_status = 'online'
+                bots_changed += 1
+                loose_changed = True
+                logger.info(
+                    f"🟢 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                    f"marcado como ONLINE — getMe ok"
+                )
+        elif st == 'degraded':
+            # Bot responde mas webhook está fora/aponta errado → parcial
+            bot.health_status = 'degraded'
+            bot.last_health_check = get_brazil_time()
+            loose_changed = True
+            logger.warning(
+                f"🟡 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                f"DEGRADED — webhook do Telegram não aponta para a plataforma"
+            )
+        else:  # offline
+            if bot.is_running:
+                bot.is_running = False
+                bot.health_status = 'offline'
+                bots_changed += 1
+                loose_changed = True
+                logger.warning(
+                    f"🔴 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                    f"marcado como OFFLINE — não responde ao Telegram"
+                )
+                # Notificar usuário via WebSocket
+                try:
+                    socketio.emit('bot_status_update', {
+                        'bot_id': bot.id,
+                        'bot_name': getattr(bot, 'name', 'Bot'),
+                        'is_running': False,
+                        'message': f'Bot {getattr(bot, "name", "Bot")} ficou offline!'
+                    }, room=f'user_{bot.user_id}')
+                except Exception as e:
+                    logger.debug(f"Erro ao emitir WebSocket: {e}")
+
+    if bots_changed or loose_changed:
         db.session.commit()
         logger.info(
             f"🔄 Sync Bot.is_running: {bots_changed} bots atualizados"

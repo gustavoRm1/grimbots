@@ -3625,10 +3625,15 @@ def api_update_bot_token(bot_id):
 
         # ✅ SEMPRE INICIAR BOT APÓS TROCA DE TOKEN
         try:
+            # force_webhook=True: garante que o webhook do Telegram é recadastrado
+            # com o NOVO token mesmo que um auto-start concorrente já tenha
+            # re-registrado o bot no Redis (evita race que deixava o webhook
+            # vazio/antigo — bug que impedia o bot de receber mensagens).
             bot_manager.start_bot(
                 bot_id=bot_id,
                 token=new_token,
-                config=bot.config.to_dict() if bot.config else {}
+                config=bot.config.to_dict() if bot.config else {},
+                force_webhook=True
             )
             bot.is_running = True
             bot.manually_disabled = False

@@ -720,7 +720,8 @@ class BotManager:
         error.error_type = 'connection_error'
         raise error
     
-    def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):
+    def start_bot(self, bot_id: int, token: str, config: Dict[str, Any],
+                  force_webhook: bool = False):
         """
         Inicia um bot Telegram - Delegado ao BotRunner
         
@@ -730,8 +731,10 @@ class BotManager:
             bot_id: ID do bot no banco
             token: Token do bot
             config: Configuração do bot
+            force_webhook: Se True, força reconfiguração do webhook com o
+                token informado (necessário após troca de token).
         """
-        return self.runner.start_bot(bot_id, token, config)
+        return self.runner.start_bot(bot_id, token, config, force_webhook=force_webhook)
     
     def stop_bot(self, bot_id: int):
         """

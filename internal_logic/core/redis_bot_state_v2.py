@@ -178,6 +178,50 @@ class NamespacedRedisBotState:
         except Exception as e:
             logger.error(f"❌ Erro ao obter dados do bot {bot_id}: {e}")
             return None
+
+    def update_bot_token(self, bot_id: int, token: str) -> bool:
+        """
+        Atualiza APENAS o token de um bot já ativo no Redis, sem tocar no resto.
+
+        Necessário após troca de token: sem isso o campo 'token' do Redis
+        permanecia com o token antigo e todo o processamento de mensagens
+        (que lê o token do Redis, não do DB) continuava usando o token velho.
+
+        Args:
+            bot_id: ID do bot
+            token: Novo token do Telegram
+
+        Returns:
+            True se atualizado com sucesso.
+        """
+        try:
+            bot_data_raw = self.redis.hget(self.ACTIVE_BOTS_HASH, str(bot_id))
+            if not bot_data_raw:
+                logger.warning(
+                    f"⚠️ update_bot_token: bot {bot_id} não está ativo para user "
+                    f"{self.user_id} — ignorando"
+                )
+                return False
+
+            bot_data = json.loads(bot_data_raw)
+            bot_data['token'] = token
+            self.redis.hset(
+                self.ACTIVE_BOTS_HASH,
+                field=str(bot_id),
+                value=json.dumps(bot_data)
+            )
+            self._update_heartbeat(bot_id)
+            logger.info(
+                f"✅ Token atualizado no Redis para bot {bot_id} (user {self.user_id})"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"❌ Erro ao atualizar token do bot {bot_id} para user "
+                f"{self.user_id}: {e}"
+            )
+            return False
     
     def get_all_active_bots(self) -> Dict[int, Dict[str, Any]]:
         """

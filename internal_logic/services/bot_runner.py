@@ -60,7 +60,8 @@ class BotRunner:
         
         logger.info("✅ BotRunner inicializado")
     
-    def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]) -> bool:
+    def start_bot(self, bot_id: int, token: str, config: Dict[str, Any],
+                  force_webhook: bool = False) -> bool:
         """
         Inicia um bot Telegram - Com estado centralizado em Redis
         
@@ -68,15 +69,20 @@ class BotRunner:
             bot_id: ID do bot no banco
             token: Token do bot
             config: Configuração do bot
+            force_webhook: Se True, reconfigura o webhook com o token
+                informado mesmo que o bot já esteja ativo no Redis.
+                Necessário após troca de token (evita race com auto-start
+                concorrente que deixaria o webhook apontando o token antigo).
             
         Returns:
             bool: True se iniciado com sucesso
         """
         # Verificar se bot já está ativo no Redis
-        if self.bot_state.is_bot_active(bot_id):
+        already_active = self.bot_state.is_bot_active(bot_id)
+        if already_active and not force_webhook:
             logger.warning(f"Bot {bot_id} já está ativo no Redis")
             return False
-        
+
         # Adquirir lock de auto-start para prevenir race conditions
         if not self.bot_state.acquire_autostart_lock(bot_id, timeout=30):
             logger.warning(f"🔒 Bot {bot_id} está sendo iniciado por outro worker - aguardando")
@@ -90,13 +96,19 @@ class BotRunner:
         
         try:
             # Configurar webhook para receber mensagens do Telegram
+            # SEMPRE re-configura quando force_webhook (troca de token),
+            # mesmo para bot já ativo — garante token novo no Telegram.
             self._setup_webhook(token, bot_id)
             
-            # Registrar bot no Redis (única fonte de verdade)
-            self.bot_state.register_bot(bot_id, token, config, worker_pid=os.getpid())
-            
-            # Iniciar heartbeat para manter bot ativo no Redis
-            self.bot_state.start_heartbeat_thread(bot_id, interval=60)
+            # Se bot já estava ativo (force_webhook) e o Redis já tem o registro,
+            # atualizar somente o token no registro existente.
+            if already_active and force_webhook:
+                self.bot_state.update_bot_token(bot_id, token)
+            else:
+                # Registrar bot no Redis (única fonte de verdade)
+                self.bot_state.register_bot(bot_id, token, config, worker_pid=os.getpid())
+                # Iniciar heartbeat para manter bot ativo no Redis
+                self.bot_state.start_heartbeat_thread(bot_id, interval=60)
             
             # Iniciar thread de monitoramento
             thread = threading.Thread(
@@ -105,7 +117,8 @@ class BotRunner:
                 daemon=True
             )
             thread.start()
-            self.bot_threads[bot_id] = thread
+            if bot_id not in self.bot_threads:
+                self.bot_threads[bot_id] = thread
             
             logger.info(f"✅ Bot {bot_id} iniciado com webhook configurado (Redis 100%)")
             return True
