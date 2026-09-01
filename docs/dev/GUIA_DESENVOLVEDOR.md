@@ -167,6 +167,23 @@ python3 -c "from bot_manager import BotManager; print('import OK')"
 
 **Prevenção**: `INPUT_WAITING_TYPES` no backend + cleanup no adapter frontend.
 
+### Bug #5: Health worker derruba bots online em massa (Set/2026)
+
+**O que aconteceu**: 33 bots avulsos (não-pool) ficaram `offline` no dashboard em um único ciclo, mesmo estando 100% funcionais (ex: bot 48 ACESSO RESTRITO).
+
+**Causa**: O Fix D adicionou verificação de bots avulsos no `async_health_worker.py`, mas marcava `offline` com **uma única falha** do `getMe`. Quando o worker disparava ~70 bots × 2 chamadas HTTP em paralelo, a API do Telegram rate-limitava (502/429), derrubando todos de uma vez. Pior: a query filtrava `is_running=True`, então os derrubados ficavam **invisíveis** e nunca eram re-marcados online.
+
+**Correção (Fix E + G + query ampliada)**:
+1. **Fix G**: `asyncio.Semaphore(15)` limita chamadas HTTP concorrentes à API (não satura mais).
+2. **Fix E**: só marca `offline` após `LOOSE_OFFLINE_THRESHOLD=3` falhas consecutivas de `getMe`; reseta `consecutive_failures` quando responde; recupera `is_running=True` automaticamente ao ver `getMe ok`.
+3. **Query ampliada**: varre TODOS os bots não-`manually_disabled` e sem pool (independente de `is_running`), pois é o health worker quem recalcula a saúde.
+
+**Prevenção / regras do health worker**:
+- **Nunca derrubar bot com UMA falha** — sempre exigir consistência (threshold de falhas consecutivas / circuit breaker), igual ao código de pools já fazia.
+- **Não filter por `is_running` na entrada** de um verificador de saúde — isso impede a auto-recuperação.
+- **Não disparar dezenas de chamadas HTTP simultâneas** à API do Telegram (usa semáforo).
+- `manually_disabled=True` é o ÚNICO sinal de que o usuário desligou de propósito — o health worker nunca deve mexer nesses.
+
 ---
 
 ## Regra de ouro
