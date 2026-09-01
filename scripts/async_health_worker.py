@@ -65,6 +65,20 @@ except ImportError:
     sys.exit(1)
 
 # =============================================================================
+# CONSTANTES DE SAÚDE (Fix E + Fix G)
+# =============================================================================
+# Quantidade de ciclos (≈15s cada) consecutivos de falha de getMe necessária
+# para um bot AVULSO (sem PoolBot) ser considerado offline de verdade.
+# Exige consistência — evita derrubar bot por um único 502/429/rate-limit
+# transitório da API do Telegram, que era a causa do falso-offline em massa.
+LOOSE_OFFLINE_THRESHOLD = 3
+
+# Máximo de chamadas HTTP concorrentes à API do Telegram por ciclo.
+# Antes o worker disparava ~70 bots × 2 chamadas no mesmo instante,
+# saturando a API e causando 502/429 (falso-offline). Fix G limita isso.
+MAX_CONCURRENT = 15
+
+# =============================================================================
 # SETUP DO CONTEXTO FLASK (EXECUTADO UMA ÚNICA VEZ)
 # =============================================================================
 logger.info("🚀 Inicializando Async Health Worker...")
@@ -186,6 +200,14 @@ async def check_bot_status(client: httpx.AsyncClient, pool_bot: PoolBot) -> Tupl
         return (pool_bot, 'offline')
 
 
+async def _limited_check_bot_status(sem: asyncio.Semaphore,
+                                    client: httpx.AsyncClient,
+                                    pool_bot: PoolBot) -> Tuple[PoolBot, str]:
+    """Envolve check_bot_status com o semáforo Fix G (limite de concorrência)."""
+    async with sem:
+        return await check_bot_status(client, pool_bot)
+
+
 async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     """
     Executa um ciclo completo de health check (assíncrono).
@@ -197,7 +219,11 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
         Tuple[int, float]: (pools_atualizados, tempo_execucao)
     """
     start_time = datetime.now()
-    
+
+    # Fix G: Semáforo para limitar chamadas HTTP concorrentes à API do Telegram.
+    # Previne 502/429/rate-limit do falso-offline em massa.
+    sem = asyncio.Semaphore(MAX_CONCURRENT)
+
     # ==========================================================================
     # 1. EAGER LOAD - Busca pools ativos (pool_bots é lazy='dynamic', não joinedload)
     # ==========================================================================
@@ -240,9 +266,9 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     loose_bot_statuses = {}
 
     if all_pool_bots:
-        # Criar tasks para verificação paralela de TODOS os bots
+        # Criar tasks para verificação paralela de TODOS os bots (limitado pelo semáforo Fix G)
         tasks = [
-            check_bot_status(client, pool_bot)
+            _limited_check_bot_status(sem, client, pool_bot)
             for pool_bot in all_pool_bots
         ]
         
@@ -274,22 +300,24 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     # ==========================================================================
     if loose_bots:
         async def _check_loose(bot):
-            # getMe — bot responde?
+            # getMe — bot responde? (Fix G: limitado pelo semáforo)
             me_ok = False
-            try:
-                resp = await client.get(
-                    f"https://api.telegram.org/bot{bot.token}/getMe", timeout=5.0
-                )
-                if resp.status_code == 200 and resp.json().get('ok') is True:
-                    me_ok = True
-            except Exception:
-                me_ok = False
+            async with sem:
+                try:
+                    resp = await client.get(
+                        f"https://api.telegram.org/bot{bot.token}/getMe", timeout=5.0
+                    )
+                    if resp.status_code == 200 and resp.json().get('ok') is True:
+                        me_ok = True
+                except Exception:
+                    me_ok = False
 
             if not me_ok:
                 return (bot.id, 'offline')
 
-            # Webhook aponta para a plataforma?
-            _, webhook_state = await check_webhook_status(client, bot)
+            # Webhook aponta para a plataforma? (semáforo para getWebhookInfo)
+            async with sem:
+                _, webhook_state = await check_webhook_status(client, bot)
             if webhook_state in ('missing', 'mismatch'):
                 return (bot.id, 'degraded')
             return (bot.id, 'online')
@@ -416,7 +444,13 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
 
         old_is_running = bot.is_running
 
+        # Fix E: gestão de falhas consecutivas nos bots avulsos.
+        # Resetar contador quando o bot responde; só marcar offline quando
+        # falhar >= LOOSE_OFFLINE_THRESHOLD ciclos consecutivos. Evita derrubar
+        # bot por uma única falha transitória (502/429/rate-limit).
         if st == 'online':
+            if bot.consecutive_failures != 0:
+                bot.consecutive_failures = 0
             if not bot.is_running:
                 bot.is_running = True
                 bot.health_status = 'online'
@@ -428,6 +462,7 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
                 )
         elif st == 'degraded':
             # Bot responde mas webhook está fora/aponta errado → parcial
+            bot.consecutive_failures = 0
             bot.health_status = 'degraded'
             bot.last_health_check = get_brazil_time()
             loose_changed = True
@@ -435,15 +470,18 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
                 f"🟡 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
                 f"DEGRADED — webhook do Telegram não aponta para a plataforma"
             )
-        else:  # offline
-            if bot.is_running:
+        else:  # offline (getMe falhou neste ciclo)
+            bot.consecutive_failures = getattr(bot, 'consecutive_failures', 0) + 1
+            bot.last_health_check = get_brazil_time()
+            if bot.consecutive_failures >= LOOSE_OFFLINE_THRESHOLD and bot.is_running:
                 bot.is_running = False
                 bot.health_status = 'offline'
                 bots_changed += 1
                 loose_changed = True
                 logger.warning(
                     f"🔴 Bot {bot_id} ({getattr(bot, 'name', '?')}) "
-                    f"marcado como OFFLINE — não responde ao Telegram"
+                    f"marcado como OFFLINE — {bot.consecutive_failures} "
+                    f"falhas consecutivas de getMe"
                 )
                 # Notificar usuário via WebSocket
                 try:
@@ -455,6 +493,12 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
                     }, room=f'user_{bot.user_id}')
                 except Exception as e:
                     logger.debug(f"Erro ao emitir WebSocket: {e}")
+            elif bot.consecutive_failures < LOOSE_OFFLINE_THRESHOLD:
+                logger.debug(
+                    f"⚠️ Bot {bot_id} ({getattr(bot, 'name', '?')}) "
+                    f"falha {bot.consecutive_failures}/{LOOSE_OFFLINE_THRESHOLD} "
+                    f"— aguardando consistência antes de marcar offline"
+                )
 
     if bots_changed or loose_changed:
         db.session.commit()
