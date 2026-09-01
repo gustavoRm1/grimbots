@@ -230,9 +230,13 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
     pools = RedirectPool.query.filter_by(is_active=True).all()
 
     # ==========================================================================
-    # 1.5 BOTS AVULSOS - Bots is_running=True que NÃO estão em nenhum pool ativo.
-    #     Fix D: antigamente esses bots eram 100% invisíveis ao health worker,
-    #     então o dashboard os mostrava online mesmo quando o bot morria.
+    # 1.5 BOTS AVULSOS - Bots (não manually_disabled) que NÃO estão em pool ativo.
+    #     Fix D: antes esses bots eram 100% invisíveis ao health worker, então o
+    #     dashboard os mostrava online mesmo quando o bot morria.
+    #     Fix E (ref): verifica TODOS os bots não-manually_disabled e sem pool,
+    #     independente de is_running, pois o health worker é quem recalcula o
+    #     estado de saúde. Assim recupera automaticamente bots derrubados por
+    #     falso-negativo (getMe ok → online) e derruba os realmente mortos.
     # ==========================================================================
     # Mapear bot_ids presentes nos pools
     pooled_bot_ids = set()
@@ -240,9 +244,10 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
         for pb in list(pool.pool_bots) if hasattr(pool.pool_bots, '__iter__') else []:
             pooled_bot_ids.add(pb.bot_id)
 
-    # Buscar bots marcados como ativos mas sem pool (avulsos)
+    # Buscar bots sem pool e NÃO desligados manualmente pelo usuário.
+    # != True cobre NULL (bots antigos sem o flag definido).
     loose_bots = Bot.query.filter(
-        Bot.is_running == True,  # noqa: E712
+        Bot.manually_disabled != True,  # noqa: E712
         ~Bot.id.in_(pooled_bot_ids) if pooled_bot_ids else True
     ).all()
 
