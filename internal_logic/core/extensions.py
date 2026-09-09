@@ -15,6 +15,48 @@ from flask_limiter.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FIX DNS / IPv6 (Set/2026)
+# ============================================================================
+# O container LXD não tem rota IPv6 disponível. Quando getaddrinfo retorna
+# registros AAAA antes dos A, o urllib3/httpx tenta conectar via IPv6 e fica
+# preso em timeout (Lookup timed out / EAI_AGAIN) — sintoma observado em massa
+# ao sincronizar webhooks com a API do Telegram. Forçamos preferência IPv4
+# (com fallback para o comportamento original quando não houver registro A).
+_ipv4_shim_applied = False
+
+
+def _prefer_ipv4_resolution():
+    """
+    Aplica shim de resolução DNS preferindo IPv4 (idempotente por processo).
+
+    Seguro: só altera o caminho quando family=AF_UNSPEC (chamadas sem família
+    explícita, o padrão de requests/urllib3/httpx). Se não houver registro A,
+    mantém o resultado original (não quebra endpoints IPv6-only).
+    """
+    global _ipv4_shim_applied
+    if _ipv4_shim_applied:
+        return
+
+    import socket
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _getaddrinfo_ipv4_first(host, port, family=0, type=0, proto=0, flags=0):
+        if family == socket.AF_UNSPEC:
+            try:
+                ipv4_results = _orig_getaddrinfo(host, port, socket.AF_INET,
+                                                 type, proto, flags)
+                if ipv4_results:
+                    return ipv4_results
+            except socket.gaierror:
+                pass
+        return _orig_getaddrinfo(host, port, family, type, proto, flags)
+
+    socket.getaddrinfo = _getaddrinfo_ipv4_first
+    _ipv4_shim_applied = True
+    logger.info("🐍 DNS shim ativado (preferência IPv4) — evita Lookup timed out")
+
+
 # Instâncias vazias — serão inicializadas via init_app() dentro de create_app()
 db = SQLAlchemy()
 socketio = SocketIO()
@@ -36,6 +78,10 @@ def create_app(skip_sync_thread: bool = False, rq_pool: bool = False):
                           e o agendamento de reconciliações (útil para workers RQ)
         rq_pool: Se True, usa pool_size=5 para workers RQ (vs 25 do Gunicorn)
     """
+    # FIX DNS: aplicado aqui para cobrir TODOS os processos que constroem o app
+    # (gunicorn, RQ workers, celery, health worker) de forma idempotente.
+    _prefer_ipv4_resolution()
+
     # Mapeamento absoluto da raiz do projeto (dois níveis acima de 'core')
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
     template_dir = os.path.join(base_dir, 'templates')

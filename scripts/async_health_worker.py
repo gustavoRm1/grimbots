@@ -39,6 +39,7 @@ import os
 import sys
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import List, Tuple
 
@@ -79,6 +80,18 @@ LOOSE_OFFLINE_THRESHOLD = 3
 MAX_CONCURRENT = 15
 
 # =============================================================================
+# SELF-HEALING DE WEBHOOK (Fix H, Set/2026)
+# =============================================================================
+# Se o webhook de um bot estiver vazio/apontando errado (degraded), o health
+# worker tenta re-registrá-lo usando o token ATUAL do DB (fonte da verdade).
+# Cooldown de 5min por bot evita martelar bots com token genuinamente inválido
+# (401) ou em falha transitória persistente de rede.
+WEBHOOK_HEAL_COOLDOWN = 300  # segundos
+
+# Memória de última tentativa de heal por bot (monotonic time)
+_last_heal_attempt = {}
+
+# =============================================================================
 # SETUP DO CONTEXTO FLASK (EXECUTADO UMA ÚNICA VEZ)
 # =============================================================================
 logger.info("🚀 Inicializando Async Health Worker...")
@@ -111,6 +124,70 @@ def _expected_webhook_url(bot_id: int) -> str:
     if not base:
         return ''
     return f"{base}/webhook/telegram/{bot_id}"
+
+
+async def _heal_webhook(client: httpx.AsyncClient, bot: 'Bot') -> bool:
+    """
+    Re-registra o webhook do bot usando o token ATUAL do DB (self-healing).
+
+    Chamado quando o health check detecta webhook 'missing'/'mismatch'. Usa
+    drop_pending_updates=False (igual ao webhook_syncer) para NÃO perder leads
+    que estejam pendentes. Cooldown de WEBHOOK_HEAL_COOLDOWN por bot para não
+    martelar a API em casos sem solução (ex: token inválido 401).
+
+    Args:
+        client: Cliente HTTPX assíncrono compartilhado
+        bot: Instância de Bot (token vindo do DB — fonte da verdade)
+
+    Returns:
+        bool: True se o webhook foi re-registrado com sucesso
+    """
+    bot_id = bot.id
+
+    now = time.monotonic()
+    if now - _last_heal_attempt.get(bot_id, 0) < WEBHOOK_HEAL_COOLDOWN:
+        return False
+    _last_heal_attempt[bot_id] = now
+
+    expected = _expected_webhook_url(bot_id)
+    token = getattr(bot, 'token', None)
+    if not expected or not token:
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/setWebhook"
+    payload = {
+        "url": expected,
+        "drop_pending_updates": False,
+        "max_connections": 100,
+        "allowed_updates": ["message", "callback_query", "edited_message"]
+    }
+
+    try:
+        resp = await client.post(
+            url,
+            json=payload,
+            timeout=10.0,
+            headers={"Content-Type": "application/json"}
+        )
+        if resp.status_code == 200 and resp.json().get('ok') is True:
+            logger.warning(
+                f"🔁 Webhook do Bot {bot_id} re-registrado (self-healing): {expected}"
+            )
+            return True
+        logger.warning(
+            f"⚠️ Self-healing webhook bot {bot_id} falhou: "
+            f"HTTP {resp.status_code} {resp.text[:150]}"
+        )
+        return False
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.debug(
+            f"⚠️ Self-healing webhook bot {bot_id}: erro transitório "
+            f"({type(e).__name__})"
+        )
+        return False
+    except Exception as e:
+        logger.warning(f"⚠️ Self-healing webhook bot {bot_id}: erro {e}")
+        return False
 
 
 async def check_webhook_status(client: httpx.AsyncClient, bot: 'Bot') -> Tuple[str, str]:
@@ -185,8 +262,13 @@ async def check_bot_status(client: httpx.AsyncClient, pool_bot: PoolBot) -> Tupl
         if webhook_state == 'ok':
             return (pool_bot, 'online')
         if webhook_state in ('missing', 'mismatch'):
+            # SELF-HEALING: webhook vazio/errado → re-registrar com token do DB
+            healed = await _heal_webhook(client, bot)
+            if healed:
+                return (pool_bot, 'online')
             return (pool_bot, 'degraded')
-        # getWebhookInfo inconclusivo → considera online (getMe respondeu)
+        # getWebhookInfo inconclusivo → tenta heal uma vez; senão online (getMe ok)
+        await _heal_webhook(client, bot)
         return (pool_bot, 'online')
         
     except httpx.TimeoutException:
@@ -324,7 +406,9 @@ async def run_health_cycle(client: httpx.AsyncClient) -> Tuple[int, float]:
             async with sem:
                 _, webhook_state = await check_webhook_status(client, bot)
             if webhook_state in ('missing', 'mismatch'):
-                return (bot.id, 'degraded')
+                # SELF-HEALING: re-registrar webhook com token do DB
+                healed = await _heal_webhook(client, bot)
+                return (bot.id, 'online' if healed else 'degraded')
             return (bot.id, 'online')
 
         loose_results = await asyncio.gather(
