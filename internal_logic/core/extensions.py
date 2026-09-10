@@ -3,15 +3,15 @@ Extensions - Instâncias Flask sem aplicação vinculada (Application Factory Pa
 Todas as extensões são inicializadas aqui sem o app, depois vinculadas via init_app()
 """
 
+import ipaddress
 import logging
-from flask import Flask
+import os
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
-import os
-from flask_limiter.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,30 @@ db = SQLAlchemy()
 socketio = SocketIO()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+
+
+def _limiter_client_key():
+    """
+    Chave por visitante REAL atrás de proxies (rate limit por IP verdadeiro).
+
+    A cadeia Cloudflare -> NPM -> lxd proxy (L4) faz o gunicorn enxergar sempre
+    o mesmo remote_addr; sem essa chave o rate limit vira um balde global
+    (200/dia para o site inteiro). Confia em CF-Connecting-IP (setado pelo
+    Cloudflare) — o firewall é blindado para só aceitar origin dos ranges
+    CF/ponte interna — e valida o valor antes de usar, com fallback.
+    """
+    cf_ip = (request.headers.get('CF-Connecting-IP') or '').strip()
+    if cf_ip:
+        try:
+            ipaddress.ip_address(cf_ip)
+            return cf_ip
+        except ValueError:
+            pass
+    return request.remote_addr or 'unknown'
+
+
 limiter = Limiter(
-    key_func=get_remote_address,
+    key_func=_limiter_client_key,
     default_limits=["200 per day", "50 per hour"],
     storage_uri=os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 )
@@ -117,6 +139,7 @@ def create_app(skip_sync_thread: bool = False, rq_pool: bool = False):
     socketio.init_app(app, message_queue=app.config.get('SOCKETIO_MESSAGE_QUEUE'))
     login_manager.init_app(app)
     csrf.init_app(app)
+    app.config['RATELIMIT_HEADERS_ENABLED'] = True
     limiter.init_app(app)
     
     # Configurar login_manager
