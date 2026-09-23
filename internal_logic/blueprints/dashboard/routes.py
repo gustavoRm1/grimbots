@@ -2078,8 +2078,14 @@ def update_pool_meta_pixel_config(pool_id):
     
     if 'meta_access_token' in data:
         token = data['meta_access_token'].strip()
-        # Só atualizar se não for o marcador de campo mascarado
-        if token and not token.startswith('...'):
+        # Marcador de campo mascarado = token inalterado → manter o existente
+        if token.startswith('...'):
+            pass
+        # Campo vazio = intenção de apagar → remover de fato
+        elif not token:
+            pool.meta_access_token = None
+        # Preenchido = novo token
+        else:
             pool.meta_access_token = token
     
     if 'meta_tracking_enabled' in data:
