@@ -324,6 +324,18 @@
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.badge-pool {
+    background: rgba(99, 102, 241, 0.15);
+    color: #A5B4FC;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-nopool {
+    background: rgba(107, 114, 128, 0.15);
+    color: #9CA3AF;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
 /* ===================================================
    RESPONSIVIDADE DESKTOP - CORREÇÕES
    =================================================== */
@@ -877,6 +889,8 @@
                             <th>Valor</th>
                             <th>Status</th>
                             <th>Data</th>
+                            <th>Entrou no Bot</th>
+                            <th>Pool de Origem</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -907,6 +921,14 @@
                             </span>
                         </td>
                                 <td class="text-gray-400 text-sm" x-text="formatDate(payment.created_at)"></td>
+                                <td class="text-gray-400 text-sm" x-text="formatDateTime(payment.entered_bot_at)"></td>
+                                <td>
+                                    <span class="badge-status"
+                                          :class="payment.pool_name ? 'badge-pool' : 'badge-nopool'"
+                                          :title="payment.pool_pixel_id ? ('Pixel ' + payment.pool_pixel_id) : ''">
+                                        <span x-text="payment.pool_name || 'Sem pool'"></span>
+                                    </span>
+                                </td>
                     </tr>
                     </template>
                 </tbody>
@@ -933,6 +955,13 @@
                     <div class="flex justify-between items-center">
                         <div class="text-lg font-bold" style="color: var(--brand-gold-300);">R$ <span x-text="formatMoney(payment.amount)"></span></div>
                         <div class="text-xs text-gray-500" x-text="formatDate(payment.created_at)"></div>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-xs text-gray-500">Entrou no bot: <span class="font-medium text-gray-400" x-text="formatDateTime(payment.entered_bot_at)"></span></div>
+                        <span class="badge-status"
+                              :class="payment.pool_name ? 'badge-pool' : 'badge-nopool'"
+                              :title="payment.pool_pixel_id ? ('Pixel ' + payment.pool_pixel_id) : ''"
+                              x-text="payment.pool_name || 'Sem pool'"></span>
                     </div>
                 </div>
             </template>
@@ -2466,7 +2495,11 @@ function dashboardApp() {
                         customer_name: data.customer_name || 'Cliente',
                         amount: data.amount,
                         status: 'paid',
-                        created_at: new Date().toISOString()
+                        created_at: new Date().toISOString(),
+                        entered_bot_at: data.entered_bot_at || null,
+                        pool_name: data.pool_name || null,
+                        pool_slug: data.pool_slug || null,
+                        pool_pixel_id: data.pool_pixel_id || null
                     });
                 }
                 
@@ -3938,6 +3971,18 @@ function dashboardApp() {
             return date.toLocaleString('pt-BR', {
                 day: '2-digit',
                 month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+
+        formatDateTime(dateStr) {
+            if (!dateStr) return '—';
+            const date = new Date(dateStr);
+            return date.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
             });

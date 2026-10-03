@@ -37,6 +37,46 @@ def _get_bot_manager(user_id: int):
 # get_brazil_time é importado do models (linha 13)
 
 
+def _redis_tracking_pool_id(tracking_token):
+    """Fallback: lê pool_id do payload tracking:{token} no Redis."""
+    if not tracking_token:
+        return None
+    try:
+        import json
+        from internal_logic.core.redis_manager import get_redis_connection
+        raw = get_redis_connection(decode_responses=True).get(f"tracking:{tracking_token}")
+        if raw:
+            return json.loads(raw).get('pool_id')
+    except Exception:
+        logger.warning(f"Erro ao ler tracking:{tracking_token} do Redis (fallback pool)")
+    return None
+
+
+def _payment_pool(payment, pools_by_id, pools_by_pixel):
+    """Resolve pool de origem: pool_id -> campaign_code -> meta_pixel_id -> Redis -> None."""
+    pool = pools_by_id.get(payment.pool_id)
+    if not pool and payment.campaign_code:
+        pool = pools_by_pixel.get(str(payment.campaign_code).strip())
+    if not pool and payment.meta_pixel_id:
+        pool = pools_by_pixel.get(str(payment.meta_pixel_id).strip())
+    if not pool:
+        pool = pools_by_id.get(_redis_tracking_pool_id(payment.tracking_token))
+    return pool
+
+
+def _payment_telegram_user_id(payment):
+    """Normaliza customer_user_id (String) para int telegram_user_id."""
+    raw = payment.customer_user_id
+    if not raw:
+        return None
+    tg = str(raw)
+    if tg.startswith('user_'):
+        tg = tg.replace('user_', '')
+    if tg.isdigit():
+        return int(tg)
+    return None
+
+
 @dashboard_bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -3415,9 +3455,35 @@ def api_paginated_payments():
     pages = max(1, (total + per_page - 1) // per_page)
     
     payments = base_query.order_by(Payment.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
-    
+
+    pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
+    pools_by_id = {p.id: p for p in pools}
+    pools_by_pixel = {str(p.meta_pixel_id).strip(): p for p in pools if p.meta_pixel_id}
+
+    page_bot_ids = list({bot.id for _, bot in payments})
+    tg_ids = [tg for tg in (_payment_telegram_user_id(p) for p, _ in payments) if tg is not None]
+    bot_user_map = {}
+    if page_bot_ids and tg_ids:
+        for bu in BotUser.query.filter(
+            BotUser.bot_id.in_(page_bot_ids),
+            BotUser.telegram_user_id.in_(tg_ids),
+        ).all():
+            bot_user_map[(bu.bot_id, bu.telegram_user_id)] = bu
+
     payments_list = []
     for payment, bot in payments:
+        bot_user = None
+        tg = _payment_telegram_user_id(payment)
+        if tg is not None:
+            bot_user = bot_user_map.get((payment.bot_id, tg))
+
+        entered_bot_at = None
+        if bot_user:
+            entry = bot_user.first_interaction or bot_user.click_timestamp
+            entered_bot_at = entry.isoformat() if entry else None
+
+        pool = _payment_pool(payment, pools_by_id, pools_by_pixel)
+
         payments_list.append({
             'id': payment.id,
             'customer_name': payment.customer_name,
@@ -3425,6 +3491,10 @@ def api_paginated_payments():
             'amount': float(payment.amount),
             'status': payment.status,
             'created_at': payment.created_at.isoformat() if payment.created_at else None,
+            'entered_bot_at': entered_bot_at,
+            'pool_name': pool.name if pool else None,
+            'pool_slug': pool.slug if pool else None,
+            'pool_pixel_id': pool.meta_pixel_id if pool else None,
             'bot_id': bot.id,
             'bot_name': bot.name,
             'bot_username': getattr(bot, 'username', '')
