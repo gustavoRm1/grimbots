@@ -65,7 +65,7 @@ def _payment_pool(payment, pools_by_id, pools_by_pixel):
 
 
 def _payment_telegram_user_id(payment):
-    """Normaliza customer_user_id (String) para int telegram_user_id."""
+    """Normaliza customer_user_id para a string sigla telegram_user_id (varchar no banco)."""
     raw = payment.customer_user_id
     if not raw:
         return None
@@ -73,7 +73,7 @@ def _payment_telegram_user_id(payment):
     if tg.startswith('user_'):
         tg = tg.replace('user_', '')
     if tg.isdigit():
-        return int(tg)
+        return tg
     return None
 
 
@@ -3466,9 +3466,9 @@ def api_paginated_payments():
     if page_bot_ids and tg_ids:
         for bu in BotUser.query.filter(
             BotUser.bot_id.in_(page_bot_ids),
-            BotUser.telegram_user_id.in_(tg_ids),
+            db.cast(BotUser.telegram_user_id, db.String).in_(tg_ids),
         ).all():
-            bot_user_map[(bu.bot_id, bu.telegram_user_id)] = bu
+            bot_user_map[(bu.bot_id, str(bu.telegram_user_id))] = bu
 
     payments_list = []
     for payment, bot in payments:
