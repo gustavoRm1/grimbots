@@ -4472,6 +4472,18 @@ class BotManager:
     
     def _handle_callback_query(self, bot_id: int, token: str, config: Dict[str, Any], 
                                callback: Dict[str, Any]):
+        # ✅ CORREÇÃO: rebuscar config FRESCA do DB (evita cache Redis desatualizado
+        # que zerava flow_steps e travava a retomada do fluxo em cliques de botão).
+        try:
+            from flask import current_app
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import Bot
+            with current_app.app_context():
+                _fresh_bot = db.session.get(Bot, bot_id)
+                if _fresh_bot and _fresh_bot.config:
+                    config = _fresh_bot.config.to_dict()
+        except Exception as _fresh_err:
+            logger.warning(f"⚠️ Não foi possível rebuscar config fresca em callback (usando cache): {_fresh_err}")
         handle_callback(self, bot_id, token, config, callback)
     
     def _handle_verify_payment(self, bot_id: int, token: str, chat_id: int, 
