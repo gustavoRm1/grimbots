@@ -3766,6 +3766,41 @@ class BotManager:
     def _is_ai_step(step) -> bool:
         return isinstance(step, dict) and str(step.get('type') or '').strip() == 'ai'
 
+    @staticmethod
+    def _normalize_for_dedup(text) -> str:
+        """Normaliza texto para comparação: minúsculas, sem acentos/pontuação/emojis, espaços colapsados."""
+        if not text:
+            return ''
+        import unicodedata
+        # NFKD separa acentos em marcas combinantes, que são removidas em seguida.
+        decomposed = unicodedata.normalize('NFKD', str(text)).lower()
+        no_accents = ''.join(c for c in decomposed if not unicodedata.combining(c))
+        cleaned = ''.join(c if (c.isalnum() or c.isspace()) else ' ' for c in no_accents)
+        return ' '.join(cleaned.split())
+
+    @staticmethod
+    def _is_redundant_question(message, question) -> bool:
+        """
+        ✅ ADITIVO / RESTRITO AO BLOCO 'ai': True quando `question` já está
+        contida/repetida em `message` — evita enviar a mesma pergunta duas vezes
+        (o Gateway costuma devolver `next_question` já embutida em `message`).
+
+        Ordem: vazio → igualdade → SUFIXO → contido. Checar o sufixo antes do
+        'in' reduz o risco de suprimir uma pergunta legítima citada no meio da
+        resposta. Comparação ignora pontuação, espaços e emojis.
+        """
+        q = BotManager._normalize_for_dedup(question)
+        if not q:
+            return True
+        m = BotManager._normalize_for_dedup(message)
+        if not m:
+            return False
+        if m == q:
+            return True
+        if m.endswith(q):
+            return True
+        return q in m
+
     def _ai_flow_steps(self, config) -> list:
         raw = (config or {}).get('flow_steps') or []
         if isinstance(raw, str):
@@ -4104,7 +4139,7 @@ class BotManager:
                     token=token, chat_id=str(chat_id), message=message_text,
                     bot_id=bot_id, save_message=True
                 )
-            if question and question != message_text:
+            if question and not self._is_redundant_question(message_text, question):
                 self.send_telegram_message(
                     token=token, chat_id=str(chat_id), message=question,
                     bot_id=bot_id, save_message=True
