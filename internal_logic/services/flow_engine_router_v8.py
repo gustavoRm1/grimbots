@@ -295,8 +295,15 @@ class MessageRouterV8:
             elif message_type == "callback":
                 # Callback query: processar botão/clique
                 logger.info(f"🔘 [FLOW ENGINE] Callback query: {callback_data}")
-                # O Flow Engine já processa callbacks internamente via _execute_flow_recursive
-                # Apenas garantir que não processe via tradicional
+                # ✅ CORREÇÃO: delegar ao handler tradicional de callback (antes apenas
+                # retornava 'blocked' sem processar, travando botões do fluxo).
+                callback = {
+                    'id': message.get('id'),
+                    'data': callback_data,
+                    'from': message.get('from', {}),
+                    'message': message.get('message', {})
+                }
+                self.bot_manager._handle_callback_query(bot_id, token, config, callback)
                 return {
                     'processed': True,
                     'engine': 'flow',
@@ -308,36 +315,15 @@ class MessageRouterV8:
                 # Mensagem de texto: processar via flow
                 text = message.get('text', '').strip()
                 logger.info(f"💬 [FLOW ENGINE] Mensagem de texto: '{text[:50]}...'")
-                
-                # Buscar step atual do Redis
-                try:
-                    if self.redis_conn:
-                        current_step_key = f"gb:{self.bot_manager.user_id}:flow_current_step:{bot_id}:{telegram_user_id}"
-                        current_step_id = self.redis_conn.get(current_step_key)
-                        
-                        if current_step_id:
-                            current_step_id = current_step_id.decode('utf-8')
-                            logger.info(f"📍 [FLOW ENGINE] Step atual: {current_step_id}")
-                            
-                            # Processar mensagem no contexto do step atual
-                            # O _execute_flow_recursive já faz isso, mas vamos garantir
-                            # que o sistema tradicional não interfira
-                            return {
-                                'processed': True,
-                                'engine': 'flow',
-                                'action': 'text_processed',
-                                'current_step': current_step_id,
-                                'blocked_traditional': True
-                            }
-                except Exception as e:
-                    logger.error(f"❌ Erro ao buscar step atual: {e}")
-                
-                # Se não há step atual, iniciar flow
-                self.bot_manager._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
+                # ✅ CORREÇÃO: delegar ao handler de texto, que avalia as condições do
+                # step atual e retoma o fluxo (antes apenas retornava 'blocked' quando
+                # havia step ativo, sem avaliar condições nem avançar).
+                self.bot_manager._handle_text_message(bot_id, token, config, chat_id, message)
                 return {
                     'processed': True,
                     'engine': 'flow',
-                    'action': 'flow_started'
+                    'action': 'text_processed',
+                    'blocked_traditional': True
                 }
             
             else:

@@ -1737,6 +1737,17 @@ class BotManager:
             from datetime import datetime, timedelta
             
             with current_app.app_context():
+                # ✅ CORREÇÃO: rebuscar config FRESCA do DB para o resume do fluxo.
+                # O config recebido pode vir do cache Redis (gb:{user}:bots:active) desatualizado
+                # quando o Flow Editor é salvo (DB-only) sem invalidar o cache — isso fazia
+                # flow_steps chegar vazio e o fluxo não retomar em mensagens de texto.
+                try:
+                    _fresh_bot = db.session.get(Bot, bot_id)
+                    if _fresh_bot and _fresh_bot.config:
+                        config = _fresh_bot.config.to_dict()
+                except Exception as _fresh_err:
+                    logger.warning(f"⚠️ Não foi possível rebuscar config fresca (usando cache): {_fresh_err}")
+                
                 # Buscar usuário
                 user_from = message.get('from', {})
                 telegram_user_id = str(user_from.get('id', ''))
@@ -2581,9 +2592,10 @@ class BotManager:
         if not isinstance(condition, dict):
             return False, "Condição deve ser um objeto"
         
-        condition_type = condition.get('type')
+        # ✅ CORREÇÃO: aceitar 'condition_type' (padrão do Flow Editor/Drawflow) e 'type' (legado)
+        condition_type = condition.get('condition_type') or condition.get('type')
         if not condition_type or not isinstance(condition_type, str):
-            return False, "Condição deve ter 'type' (string)"
+            return False, "Condição deve ter 'condition_type' ou 'type' (string)"
         
         valid_types = ['text_validation', 'button_click', 'payment_status', 'time_elapsed']
         if condition_type not in valid_types:
@@ -2693,7 +2705,8 @@ class BotManager:
             redis_conn = None
         
         for condition in sorted_conditions:
-            condition_type = condition.get('type')
+            # ✅ CORREÇÃO: aceitar 'condition_type' (padrão do Flow Editor/Drawflow) e 'type' (legado)
+            condition_type = condition.get('condition_type') or condition.get('type')
             condition_id = condition.get('id', f"cond_{sorted_conditions.index(condition)}")
             
             # ✅ NOVO: Verificar max_attempts (apenas para condições de texto/button)
