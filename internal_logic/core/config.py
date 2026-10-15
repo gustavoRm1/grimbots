@@ -65,6 +65,13 @@ class Config:
     
     # SocketIO
     SOCKETIO_MESSAGE_QUEUE = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
+
+    # ✅ Grimbots AI Gateway (bloco 'ai' do Flow Editor) — camada ADITIVA/opt-in.
+    # Não afeta o motor tradicional: só é usado quando um step tipo 'ai' roda.
+    GRIMBOTS_AI_API_URL = os.environ.get('GRIMBOTS_AI_API_URL', '').rstrip('/')
+    GRIMBOTS_AI_API_KEY = os.environ.get('GRIMBOTS_AI_API_KEY', '')
+    GRIMBOTS_AI_TIMEOUT = float(os.environ.get('GRIMBOTS_AI_TIMEOUT', '90') or '90')
+    GRIMBOTS_AI_MOCK = os.environ.get('GRIMBOTS_AI_MOCK', 'false').lower() in {'1', 'true', 'yes'}
     
     @classmethod
     def init_app(cls, app, rq_pool=False):
@@ -117,3 +124,9 @@ class Config:
         app.config['SESSION_COOKIE_SAMESITE'] = cls.SESSION_COOKIE_SAMESITE
         app.config['REMEMBER_COOKIE_SAMESITE'] = cls.REMEMBER_COOKIE_SAMESITE
         app.config['PREFERRED_URL_SCHEME'] = cls.PREFERRED_URL_SCHEME
+
+        # Grimbots AI Gateway (bloco 'ai') — aditivo/opt-in
+        app.config['GRIMBOTS_AI_API_URL'] = cls.GRIMBOTS_AI_API_URL
+        app.config['GRIMBOTS_AI_API_KEY'] = cls.GRIMBOTS_AI_API_KEY
+        app.config['GRIMBOTS_AI_TIMEOUT'] = cls.GRIMBOTS_AI_TIMEOUT
+        app.config['GRIMBOTS_AI_MOCK'] = cls.GRIMBOTS_AI_MOCK

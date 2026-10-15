@@ -1,0 +1,21 @@
+{
+  "action": "present_offer",
+  "funnel_stage": "qualification",
+  "handoff_human": false,
+  "intent": "objecao",
+  "lead_temperature": "warm",
+  "message": "Entendo que pode parecer caro, mas com esse plano voce ganha muito mais.",
+  "model": "grimbots-sales:latest",
+  "next_question": null,
+  "request_id": "req-test-1",
+  "risk": "low",
+  "usage": {
+    "input_tokens": 692,
+    "latency_ms": 6131,
+    "output_tokens": 83
+  },
+  "validation": {
+    "errors": [],
+    "valid": true
+  }
+}

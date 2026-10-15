@@ -1,0 +1,64 @@
+{
+  "allowed_actions": [
+    "continue",
+    "ask_question",
+    "present_offer",
+    "send_checkout"
+  ],
+  "available_offers": [
+    {
+      "active": true,
+      "checkout_url": "",
+      "id": "premium",
+      "name": "Plano Premium",
+      "price": "49.9"
+    },
+    {
+      "active": false,
+      "checkout_url": "",
+      "id": "basico",
+      "name": "Plano Basico",
+      "price": "19.97"
+    }
+  ],
+  "bot_config": {
+    "boldness": 3,
+    "commercial_goal": "qualificar_e_converter",
+    "emoji_level": "moderate",
+    "message_length": "short",
+    "name": "Maya",
+    "personality": [
+      "confiante",
+      "carinhosa"
+    ],
+    "tone": "intimo"
+  },
+  "bot_id": "140",
+  "bot_user_id": "8142273932",
+  "conversation_id": "c140-8142273932",
+  "conversation_state": {
+    "ai_enabled": true,
+    "funnel_stage": "qualification",
+    "human_takeover": false,
+    "lead_temperature": "warm"
+  },
+  "conversation_summary": "",
+  "lead": {
+    "interest": "",
+    "name": "Ana",
+    "objection": "preco"
+  },
+  "mode": "auto",
+  "recent_messages": [
+    {
+      "content": "Oi! Me conte o que voce precisa.",
+      "role": "assistant"
+    },
+    {
+      "content": "Gostei, mas achei caro.",
+      "role": "user"
+    }
+  ],
+  "request_id": "gb-140-8142273932-abc1234567",
+  "seller_id": "1"
+}

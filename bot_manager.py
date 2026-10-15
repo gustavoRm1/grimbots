@@ -1803,6 +1803,20 @@ class BotManager:
                             current_step = self._find_step_by_id(flow_steps, current_step_id)
                             
                             if current_step:
+                                # ✅ BLOCO 'ai' (ADITIVO): turno conversacional da IA.
+                                # O bloco 'ai' nao usa conditions[] -> nao passa por
+                                # _evaluate_conditions; senao o texto seria tratado
+                                # como "resposta nao reconhecida".
+                                if self._is_ai_step(current_step):
+                                    logger.info(f"🤖 Step IA ativo: {current_step_id} - turno da Grimbots AI API")
+                                    self._handle_ai_turn(
+                                        bot_id, token, config, chat_id, telegram_user_id,
+                                        current_step, text, bot_user=bot_user
+                                    )
+                                    bot_user.last_interaction = now
+                                    db.session.commit()
+                                    return
+
                                 # ✅ QI 500: Avaliar condições do step com parâmetros completos
                                 next_step_id = self._evaluate_conditions(
                                     current_step, 
@@ -3727,6 +3741,385 @@ class BotManager:
                 logger.error(f"❌ Erro ao enviar mensagem de erro: {e2}")
             raise  # Re-raise para caller decidir fallback
     
+    # ══════════════════════════════════════════════════════════════════════
+    # ✅ BLOCO 'ai' — Grimbots AI API  (CAMADA ADITIVA / OPT-IN)
+    # So executa quando step.type == 'ai'. Nenhum outro tipo de step e
+    # afetado por estes metodos. Falha/timeout -> fallback_message.
+    # Contrato: POST /v1/agent/respond (internal_logic/services/ai_service.py)
+    # ══════════════════════════════════════════════════════════════════════
+
+    AI_DEFAULT_FALLBACK = "⚠️ Não consegui processar agora. Pode reenviar sua mensagem?"
+
+    @staticmethod
+    def _is_ai_step(step) -> bool:
+        return isinstance(step, dict) and str(step.get('type') or '').strip() == 'ai'
+
+    def _ai_flow_steps(self, config) -> list:
+        raw = (config or {}).get('flow_steps') or []
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                raw = []
+        return raw if isinstance(raw, list) else []
+
+    def _ai_state_key(self, bot_id: int, telegram_user_id: str) -> str:
+        return f"gb:{self.user_id}:flow_ai_state:{bot_id}:{telegram_user_id}"
+
+    def _ai_state_get(self, bot_id: int, telegram_user_id: str) -> Dict[str, Any]:
+        """Estado conversacional persistido entre turnos (fail-open)."""
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return {}
+            raw = redis_conn.get(self._ai_state_key(bot_id, telegram_user_id))
+            if not raw:
+                return {}
+            if isinstance(raw, bytes):
+                raw = raw.decode('utf-8', 'ignore')
+            state = json.loads(raw)
+            return state if isinstance(state, dict) else {}
+        except Exception:
+            return {}
+
+    def _ai_state_set(self, bot_id: int, telegram_user_id: str, state: Dict[str, Any]):
+        """Persiste intencao/temperatura do lead (7 dias). Nunca derruba o turno."""
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return
+            redis_conn.setex(
+                self._ai_state_key(bot_id, telegram_user_id),
+                60 * 60 * 24 * 7,
+                json.dumps(state, ensure_ascii=False)
+            )
+        except Exception as e:
+            logger.debug(f"⚠️ [IA] falha ao salvar estado: {e}")
+
+    def _ai_build_history(self, bot_id: int, telegram_user_id: str, limit: int = 20) -> list:
+        """Ultimas mensagens do dialogo no formato [{role, content}] (max 20)."""
+        try:
+            from internal_logic.core.models import BotMessage
+            rows = BotMessage.query.filter(
+                BotMessage.bot_id == bot_id,
+                BotMessage.telegram_user_id == str(telegram_user_id),
+                BotMessage.message_text.isnot(None)
+            ).order_by(BotMessage.created_at.desc()).limit(limit).all()
+        except Exception as e:
+            logger.warning(f"⚠️ [IA] falha ao buscar historico: {e}")
+            return []
+
+        history = []
+        for msg in reversed(list(rows)):
+            text = (msg.message_text or '').strip()
+            if not text:
+                continue
+            history.append({
+                'role': 'assistant' if msg.direction == 'outgoing' else 'user',
+                'content': text
+            })
+        return history
+
+    @staticmethod
+    def _ai_bot_config(step_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Mapeia a config do bloco para o bot_config estruturado da API."""
+        personality = step_config.get('personality') or ''
+        if isinstance(personality, str):
+            personality = [p.strip() for p in personality.split(',') if p.strip()]
+        return {
+            'name': step_config.get('bot_name') or 'Assistente',
+            'personality': personality,
+            'tone': step_config.get('tone') or 'amigavel',
+            'boldness': step_config.get('boldness') or 3,
+            'message_length': step_config.get('message_length') or 'short',
+            'emoji_level': step_config.get('emoji_level') or 'moderate',
+            'commercial_goal': step_config.get('commercial_goal') or 'qualificar_e_converter'
+        }
+
+    def _ai_build_offers(self, config, step: Dict[str, Any], step_config: Dict[str, Any]) -> list:
+        """
+        Ofertas enviadas a API. Sem oferta ativa o Gateway REBAIXA
+        send_checkout -> handoff_human, entao a oferta e obrigatoria para vender.
+        Fonte 1: ofertas digitadas no bloco. Fonte 2: bloco Pagamento ligado na saida CHECKOUT.
+        """
+        offers = []
+        for raw in (step_config.get('offers') or []):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get('name') or '').strip()
+            price = raw.get('price')
+            if not name or price in (None, ''):
+                continue
+            offers.append({
+                'id': str(raw.get('id') or f"offer-{len(offers) + 1}"),
+                'name': name,
+                'price': str(price),
+                'checkout_url': str(raw.get('checkout_url') or ''),
+                'active': bool(raw.get('active', True))
+            })
+
+        if not offers:
+            checkout_step_id = (step.get('connections') or {}).get('checkout')
+            if checkout_step_id:
+                pay_step = self._find_step_by_id(self._ai_flow_steps(config), checkout_step_id)
+                if pay_step and str(pay_step.get('type')) == 'payment':
+                    pay_cfg = pay_step.get('config') or {}
+                    price = pay_cfg.get('price')
+                    if price is None:
+                        price = pay_cfg.get('amount')
+                    if price not in (None, '', 0, 0.0):
+                        offers.append({
+                            'id': 'checkout-offer',
+                            'name': str(pay_cfg.get('product_name') or pay_cfg.get('button_text') or 'Produto'),
+                            'price': str(price),
+                            'checkout_url': '',
+                            'active': True
+                        })
+        return offers
+
+    def _ai_route(self, bot_id: int, token: str, config: Dict[str, Any], chat_id: int,
+                  telegram_user_id: str, step: Dict[str, Any], conn_key: str) -> bool:
+        """Segue pela saida do bloco (checkout/handoff). Retorna False se nao conectada."""
+        target = (step.get('connections') or {}).get(conn_key)
+        if not target:
+            return False
+        target = str(target)
+
+        # Limpa o step 'ai' ativo: senao a proxima mensagem volta para a IA
+        # mesmo apos o fluxo ja ter seguido para outro bloco.
+        try:
+            redis_conn = get_redis_connection()
+            if redis_conn:
+                redis_conn.delete(f"gb:{self.user_id}:flow_current_step:{bot_id}:{telegram_user_id}")
+        except Exception:
+            pass
+
+        flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+        try:
+            self._execute_flow_recursive(
+                bot_id, token, config, chat_id, telegram_user_id, target,
+                recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
+            )
+            return True
+        except Exception as e:
+            logger.error(f"❌ [IA] erro ao rotear para step '{target}': {e}", exc_info=True)
+            return False
+
+    def _ai_log_generation(self, bot_id: int, telegram_user_id: str, payload: Dict[str, Any],
+                           result=None, error_code: str = None):
+        """Auditoria de cada chamada. Fail-open: nunca quebra o turno."""
+        try:
+            from internal_logic.core.extensions import db
+            from internal_logic.core.models import AIGeneration
+            db.session.add(AIGeneration(
+                bot_id=bot_id,
+                telegram_user_id=str(telegram_user_id),
+                request_id=str(payload.get('request_id') or ''),
+                mode=str(payload.get('mode') or ''),
+                intent=(result.intent if result else None),
+                action=(result.action if result else None),
+                lead_temperature=(result.lead_temperature if result else None),
+                funnel_stage=(result.funnel_stage if result else None),
+                risk=(result.risk if result else None),
+                latency_ms=int((result.usage or {}).get('latency_ms') or 0) if result else 0,
+                input_tokens=int((result.usage or {}).get('input_tokens') or 0) if result else 0,
+                output_tokens=int((result.usage or {}).get('output_tokens') or 0) if result else 0,
+                response_valid=bool(result.valid) if result else False,
+                error_code=error_code
+            ))
+            db.session.commit()
+        except Exception as e:
+            logger.debug(f"⚠️ [IA] falha ao gravar ai_generations: {e}")
+            try:
+                from internal_logic.core.extensions import db
+                db.session.rollback()
+            except Exception:
+                pass
+
+    def _handle_ai_turn(self, bot_id: int, token: str, config: Dict[str, Any], chat_id: int,
+                        telegram_user_id: str, step: Dict[str, Any], user_text: str,
+                        bot_user=None):
+        """
+        Um turno da Grimbots AI API para o step ativo tipo 'ai'.
+
+        Executa a acao devolvida pela API:
+          continue/ask_question/present_offer/pause -> envia mensagem e segue no bloco
+          do_not_respond                             -> silencio, segue no bloco
+          send_checkout                              -> saida CHECKOUT (gera PIX)
+          handoff_human                              -> saida HUMANO
+        Qualquer falha -> fallback_message (mantem o step ativo).
+        """
+        import uuid as _uuid
+        from internal_logic.services.ai_service import get_ai_service, build_payload, AIGatewayError
+
+        step_config = step.get('config') or {}
+        fallback_message = self._personalize_text(
+            step_config.get('fallback_message') or self.AI_DEFAULT_FALLBACK, bot_id, chat_id
+        )
+
+        # ── IA desligada neste bloco: encaminha para HUMANO (ou fallback) ──
+        if step_config.get('enabled', True) is False:
+            logger.info(f"⏸️ [IA] bloco {step.get('id')} desligado - seguindo para HUMANO")
+            if not self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=fallback_message,
+                    bot_id=bot_id, save_message=True
+                )
+            return
+
+        # ── Contexto ──
+        history = self._ai_build_history(bot_id, telegram_user_id)
+        current_text = (user_text or '').strip()
+        if current_text and (not history or history[-1].get('content') != current_text
+                             or history[-1].get('role') != 'user'):
+            history.append({'role': 'user', 'content': current_text})
+        history = history[-20:]  # contrato: maximo 20
+        if not history:
+            history = [{'role': 'user', 'content': current_text or 'Olá'}]
+
+        state = self._ai_state_get(bot_id, telegram_user_id)
+
+        try:
+            payload = build_payload(
+                request_id=f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}",
+                seller_id=str(self.user_id or 'seller'),
+                bot_id=str(bot_id),
+                conversation_id=f"c{bot_id}-{telegram_user_id}",
+                bot_user_id=str(telegram_user_id),
+                bot_config=self._ai_bot_config(step_config),
+                conversation_state={
+                    'funnel_stage': (step_config.get('funnel_stage')
+                                     or state.get('funnel_stage') or 'qualification'),
+                    'lead_temperature': state.get('lead_temperature') or 'warm',
+                    'human_takeover': bool(state.get('human_takeover', False)),
+                    'ai_enabled': True
+                },
+                lead={
+                    'name': (bot_user.first_name if bot_user and bot_user.first_name else ''),
+                    'interest': state.get('interest') or '',
+                    'objection': state.get('objection') or ''
+                },
+                recent_messages=history,
+                conversation_summary=str(state.get('summary') or ''),
+                available_offers=self._ai_build_offers(config, step, step_config),
+                allowed_actions=step_config.get('allowed_actions') or None,
+                mode=step_config.get('mode') or 'auto'
+            )
+        except AIGatewayError as build_err:
+            logger.warning(f"⚠️ [IA] payload invalido: {build_err}")
+            self.send_telegram_message(
+                token=token, chat_id=str(chat_id), message=fallback_message,
+                bot_id=bot_id, save_message=True
+            )
+            return
+
+        # ── Chamada ao Gateway ──
+        try:
+            service = get_ai_service()
+            result = service.respond(payload)
+        except AIGatewayError as err:
+            logger.warning(f"⚠️ [IA] Grimbots AI API falhou ({err.code}): {err.message}")
+            self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
+            self.send_telegram_message(
+                token=token, chat_id=str(chat_id), message=fallback_message,
+                bot_id=bot_id, save_message=True
+            )
+            return
+        except Exception as unexpected:
+            logger.error(f"❌ [IA] erro inesperado: {unexpected}", exc_info=True)
+            self._ai_log_generation(bot_id, telegram_user_id, payload, None, 'UNEXPECTED')
+            self.send_telegram_message(
+                token=token, chat_id=str(chat_id), message=fallback_message,
+                bot_id=bot_id, save_message=True
+            )
+            return
+
+        self._ai_log_generation(bot_id, telegram_user_id, payload, result, None)
+        if not result.valid:
+            logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
+
+        # Persiste temperatura/intencao para o proximo turno
+        self._ai_state_set(bot_id, telegram_user_id, {
+            'lead_temperature': result.lead_temperature,
+            'funnel_stage': result.funnel_stage,
+            'intent': result.intent,
+            'objection': (payload.get('lead') or {}).get('objection') or ''
+        })
+
+        action = result.action
+        message_text = self._personalize_text((result.message or '').strip(), bot_id, chat_id)
+        question = (result.next_question or '').strip() if action == 'ask_question' else ''
+
+        logger.info(
+            f"🤖 [IA] action={action} intent={result.intent} temp={result.lead_temperature} "
+            f"risk={result.risk} latency={(result.usage or {}).get('latency_ms')}ms"
+        )
+
+        # ── do_not_respond: silencio, permanece no bloco ──
+        if action == 'do_not_respond':
+            return
+
+        # ── continue / ask_question / present_offer / pause ──
+        if action in ('continue', 'ask_question', 'present_offer', 'pause'):
+            if message_text:
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=message_text,
+                    bot_id=bot_id, save_message=True
+                )
+            if question and question != message_text:
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=question,
+                    bot_id=bot_id, save_message=True
+                )
+            return
+
+        # ── send_checkout: saida CHECKOUT -> bloco Pagamento (gera PIX) ──
+        if action == 'send_checkout':
+            if (step.get('connections') or {}).get('checkout'):
+                if message_text:
+                    self.send_telegram_message(
+                        token=token, chat_id=str(chat_id), message=message_text,
+                        bot_id=bot_id, save_message=True
+                    )
+                if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'checkout'):
+                    return
+            else:
+                logger.warning(
+                    f"⚠️ [IA] action=send_checkout mas a saida CHECKOUT do bloco "
+                    f"{step.get('id')} nao esta ligada a nenhum bloco"
+                )
+            self.send_telegram_message(
+                token=token, chat_id=str(chat_id), message=fallback_message,
+                bot_id=bot_id, save_message=True
+            )
+            return
+
+        # ── handoff_human: saida HUMANO ──
+        if action == 'handoff_human' or result.handoff_human:
+            if message_text:
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=message_text,
+                    bot_id=bot_id, save_message=True
+                )
+            if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
+                return
+            logger.warning(
+                f"⚠️ [IA] action=handoff_human mas a saida HUMANO do bloco "
+                f"{step.get('id')} nao esta ligada a nenhum bloco"
+            )
+            self.send_telegram_message(
+                token=token, chat_id=str(chat_id), message=fallback_message,
+                bot_id=bot_id, save_message=True
+            )
+            return
+
+        # ── Acao desconhecida (defensivo): fallback ──
+        logger.warning(f"⚠️ [IA] acao desconhecida '{action}' - usando fallback")
+        self.send_telegram_message(
+            token=token, chat_id=str(chat_id), message=fallback_message,
+            bot_id=bot_id, save_message=True
+        )
+
     def _execute_flow_recursive(self, bot_id: int, token: str, config: Dict[str, Any],
                                 chat_id: int, telegram_user_id: str, step_id: str,
                                 recursion_depth: int = 0, visited_steps: set = None,
@@ -4134,7 +4527,24 @@ class BotManager:
                 )
                 
                 return  # Fim do fluxo
-            
+
+            # ✅ BLOCO 'ai' (ADITIVO): entra na conversa e PAUSA o fluxo aguardando
+            # o proximo texto do lead. Cada texto vira um turno da Grimbots AI API.
+            elif step_type == 'ai':
+                logger.info(f"🤖 Step 'ai' {step_id} - abrindo turno da IA")
+                intro_message = self._personalize_text(step_config.get('intro_message') or '', bot_id, chat_id)
+                if intro_message.strip():
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=intro_message,
+                        bot_id=bot_id,
+                        save_message=True
+                    )
+                if not self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200):
+                    logger.error(f"❌ Falha ao salvar step 'ai' {step_id} - IA pode nao receber os turnos")
+                return
+
             # ✅ Executar step normalmente (content, message, audio, video, buttons)
             else:
                 logger.info(f"🎬 Executando step tipo '{step_type}' (id={step_id})")

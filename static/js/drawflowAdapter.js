@@ -50,6 +50,7 @@
             return condType === 'time_elapsed' ? ['after'] : ['true', 'false'];
         }
         if (type === 'payment') return ['next', 'pending', 'retry'];
+        if (type === 'ai') return ['checkout', 'handoff'];
         if (TERMINAL_TYPES.indexOf(type) !== -1) return [];
         var n = (customButtons || []).length;
         if (n > 0) { var t = []; for (var i = 0; i < n; i++) t.push('btn:' + i); return t; }
@@ -130,6 +131,10 @@
             wire('next', conns.next);
             wire('pending', conns.pending);
             wire('retry', conns.retry);
+            // bloco 'ai' (aditivo): saidas CHECKOUT/HUMANO. Para os demais tipos
+            // keyOf() devolve null e o wire() vira no-op.
+            wire('checkout', conns.checkout);
+            wire('handoff', conns.handoff);
 
             (step.config && step.config.custom_buttons || []).forEach(function (btn, i) {
                 wire('btn:' + i, btn.target_step);
@@ -201,6 +206,9 @@
             if (e.next) step.connections.next = e.next;
             if (e.pending) step.connections.pending = e.pending;
             if (e.retry) step.connections.retry = e.retry;
+            // bloco 'ai' (aditivo): arestas das saidas CHECKOUT/HUMANO
+            if (e.checkout) step.connections.checkout = e.checkout;
+            if (e.handoff) step.connections.handoff = e.handoff;
 
             // 🔥 ALIAS PAYMENT: engine lê 'amount'/'description' no override por step
             // (bot_manager: "Usar valores do step se especificados")

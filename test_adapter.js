@@ -230,6 +230,92 @@ section('TESTE 5: 12 nodes, refresh full (import→export→import→export), ze
 }
 
 // ─────────────────────────────────────────────────────────────
+// TESTE 6: bloco 'ai' (aditivo) — semântica + round-trip + regressão
+// ─────────────────────────────────────────────────────────────
+section('TESTE 6: bloco "ai" (Grimbots AI API)');
+{
+    // 6.1 semântica posicional das duas saídas
+    check("outputSemantics('ai') == ['checkout','handoff']",
+        JSON.stringify(adapter.outputSemantics('ai')) === JSON.stringify(['checkout','handoff']),
+        adapter.outputSemantics('ai'));
+    check("computeOutputs('ai').length == 2", adapter.computeOutputs('ai').length === 2);
+    check("ai ignorada pelo ramo de custom_buttons (sempre 2 saídas)",
+        adapter.outputSemantics('ai', [{text:'a'},{text:'b'},{text:'c'}]).length === 2);
+
+    // 6.2 REGRESSÃO: os tipos existentes não mudaram
+    check("payment mantém next/pending/retry",
+        JSON.stringify(adapter.outputSemantics('payment')) === JSON.stringify(['next','pending','retry']));
+    check("condition mantém true/false",
+        JSON.stringify(adapter.outputSemantics('condition')) === JSON.stringify(['true','false']));
+    check("message sem botões ainda é ['next']",
+        JSON.stringify(adapter.outputSemantics('message', [])) === JSON.stringify(['next']));
+    check("message com 2 botões ainda vira btn:0/btn:1",
+        JSON.stringify(adapter.outputSemantics('message', [{text:'a'},{text:'b'}])) ===
+        JSON.stringify(['btn:0','btn:1']));
+    check("settings/access continuam terminais", adapter.outputSemantics('settings').length === 0);
+
+    // 6.3 round-trip completo: editor → banco → editor
+    const aiCfg = {
+        bot_name:'Maya', mode:'auto', enabled:true,
+        intro_message:'Oi!', fallback_message:'fallback',
+        allowed_actions:['continue','send_checkout','handoff_human'],
+        offers:[{id:'premium', name:'Plano Premium', price:49.9, active:true}],
+        custom_buttons:[]
+    };
+    const gc = {
+        flow_start_step_id: 'ai1',
+        flow_steps: [
+            { id:'ai1', type:'ai', order:0, config: JSON.parse(JSON.stringify(aiCfg)),
+              connections:{ checkout:'pay1', handoff:'hum1' }, conditions:[], delay_seconds:0,
+              position:{x:100,y:100} },
+            { id:'pay1', type:'payment', order:1, config:{ price:49.9, product_name:'Plano Premium', custom_buttons:[] },
+              connections:{ next:'end1' }, conditions:[], delay_seconds:0, position:{x:400,y:100} },
+            { id:'hum1', type:'message', order:2, config:{ message:'Vou chamar alguem', custom_buttons:[] },
+              connections:{}, conditions:[], delay_seconds:0, position:{x:400,y:300} },
+            { id:'end1', type:'message', order:3, config:{ message:'obrigado', custom_buttons:[] },
+              connections:{}, conditions:[], delay_seconds:0, position:{x:700,y:100} }
+        ]
+    };
+
+    const df = adapter.toDrawflow(gc);
+    const aiNode = df.drawflow.Home.data['ai1'];
+    check('ai1 importa com 2 outputs', Object.keys(aiNode.outputs).length === 2, Object.keys(aiNode.outputs));
+    check('saida 1 (CHECKOUT) ligada em pay1',
+        (aiNode.outputs['output_1'].connections[0] || {}).node === 'pay1',
+        aiNode.outputs['output_1'].connections);
+    check('saida 2 (HUMANO) ligada em hum1',
+        (aiNode.outputs['output_2'].connections[0] || {}).node === 'hum1',
+        aiNode.outputs['output_2'].connections);
+    const dfAiExport = adapter.toGrimbots(df, gc);
+    const aiExported = dfAiExport.flow_steps.find(s => s.id === 'ai1');
+    check('ai1 NÃO ganha connections.next', !('next' in aiExported.connections), aiExported.connections);
+    check('ai1 sai do export com conditions[] vazio', aiExported.conditions.length === 0);
+
+    // save → reload → save (as arestas não podem sumir no F5)
+    const gcAfterSave = adapter.toGrimbots(df, gc);
+    const aiStep = gcAfterSave.flow_steps.find(s => s.id === 'ai1');
+    check('save: connections.checkout == pay1', aiStep.connections.checkout === 'pay1', aiStep.connections);
+    check('save: connections.handoff == hum1', aiStep.connections.handoff === 'hum1', aiStep.connections);
+    check('save: config do bloco ai preservado',
+        JSON.stringify(aiStep.config.offers) === JSON.stringify(aiCfg.offers) &&
+        aiStep.config.bot_name === 'Maya');
+    check('save: conditions[] zerado no bloco ai', aiStep.conditions.length === 0);
+
+    const dfReload = adapter.toDrawflow(gcAfterSave);
+    const aiReload = dfReload.drawflow.Home.data['ai1'];
+    check('reload: CHECKOUT religado em pay1',
+        (aiReload.outputs['output_1'].connections[0] || {}).node === 'pay1',
+        aiReload.outputs['output_1'].connections);
+    check('reload: HUMANO religado em hum1',
+        (aiReload.outputs['output_2'].connections[0] || {}).node === 'hum1',
+        aiReload.outputs['output_2'].connections);
+
+    // fluxo comum (message→payment) continua intacto no mesmo export
+    const payStep = gcAfterSave.flow_steps.find(s => s.id === 'pay1');
+    check('fluxo vizinho: payment.next preservado', payStep.connections.next === 'end1', payStep.connections);
+}
+
+// ─────────────────────────────────────────────────────────────
 console.log('\n' + '='.repeat(64));
 console.log(`RESULTADO: ${passed} PASS, ${failed} FAIL`);
 process.exit(failed > 0 ? 1 : 0);

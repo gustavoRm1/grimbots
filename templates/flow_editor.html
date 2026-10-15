@@ -4,7 +4,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='drawflow/drawflow.min.css') }}">
 <script src="{{ url_for('static', filename='drawflow/drawflow.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/drawflowAdapter.js') }}?v=6"></script>
 <style>
 .pal-item{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:12px 8px;background:#0F0F14;border:1px solid #2A2D36;border-radius:12px;cursor:grab;transition:all .2s}
 .pal-item:hover{border-color:#FFB800;background:#1C1E26}
@@ -28,6 +28,8 @@
 .drawflow .drawflow-node.payment .output_1{background:#10B981!important;border-color:#fff!important}
 .drawflow .drawflow-node.payment .output_2{background:#F59E0B!important;border-color:#fff!important}
 .drawflow .drawflow-node.payment .output_3{background:#EF4444!important;border-color:#fff!important}
+.drawflow .drawflow-node.ai .output_1{background:#10B981!important;border-color:#fff!important}
+.drawflow .drawflow-node.ai .output_2{background:#EF4444!important;border-color:#fff!important}
 .drawflow svg.connection path.main-path{stroke:#fff;stroke-width:2.5;fill:none;stroke-opacity:.9}
 .drawflow svg.connection.selected path.main-path,.drawflow svg.connection:hover path.main-path{stroke:#FFB800;stroke-width:3.5}
 .df-head{display:flex;align-items:center;gap:9px;padding:9px 12px;background:#1C1E26;border-radius:12px 12px 0 0;border-bottom:1px solid #2A2D36;position:relative}
@@ -168,7 +170,7 @@
 </div>
 <script>
 var CFG_DATA = null;
-var GF_BUILD = '61a76aa-hardening';
+var GF_BUILD = 'ai-block-v1';
 console.log('[flow] build', GF_BUILD);
 // 🔥 Auto-reparo: qualquer ponto do codigo recebe SEMPRE um objeto valido.
 function gfCfg(){
@@ -186,14 +188,15 @@ var TYPES = {
     payment:      { label:'Pagamento',     icon:'fa-qrcode',            color:'#4ADE80', bgColor:'rgba(74,222,128,0.1)',  borderColor:'rgba(74,222,128,0.2)' },
     access:       { label:'Acesso',        icon:'fa-key',               color:'#FB923C', bgColor:'rgba(251,146,60,0.1)',  borderColor:'rgba(251,146,60,0.2)' },
     condition:    { label:'Condicao',      icon:'fa-code-branch',       color:'#FFB800', bgColor:'rgba(255,184,0,0.1)',   borderColor:'rgba(255,184,0,0.2)' },
+    ai:           { label:'Atendimento IA', icon:'fa-robot',            color:'#A78BFA', bgColor:'rgba(167,139,250,0.1)', borderColor:'rgba(167,139,250,0.2)' },
     subscription: { label:'Assinatura',    icon:'fa-crown',             color:'#FFB800', bgColor:'rgba(255,184,0,0.1)',   borderColor:'rgba(255,184,0,0.2)' },
     downsell:     { label:'Downsell',      icon:'fa-arrow-down',        color:'#EF4444', bgColor:'rgba(239,68,68,0.1)',   borderColor:'rgba(239,68,68,0.2)' },
     upsell:       { label:'Upsell',        icon:'fa-arrow-up',          color:'#22C55E', bgColor:'rgba(34,197,94,0.1)',   borderColor:'rgba(34,197,94,0.2)' },
     redirect:     { label:'Redirecionar',  icon:'fa-external-link-alt', color:'#C084FC', bgColor:'rgba(192,132,252,0.1)', borderColor:'rgba(192,132,252,0.2)' },
     settings:     { label:'Configuracoes', icon:'fa-cog',               color:'#9CA3AF', bgColor:'rgba(156,163,175,0.1)', borderColor:'rgba(156,163,175,0.2)' }
 };
-var OUT_LABELS = { condition:['TRUE','FALSE'], payment:['PAGO','PENDENTE','RETRY'] };
-var STEP_DESCS = { message:'Texto simples', content:'Midia + Texto', audio:'Voice Note', buttons:'Acoes inline', payment:'Gera PIX', access:'Link VIP', condition:'True / False', subscription:'Acesso VIP', downsell:'Oferta alternativa', upsell:'Oferta adicional', redirect:'Link externo', settings:'Configuracoes globais' };
+var OUT_LABELS = { condition:['TRUE','FALSE'], payment:['PAGO','PENDENTE','RETRY'], ai:['CHECKOUT','HUMANO'] };
+var STEP_DESCS = { message:'Texto simples', content:'Midia + Texto', audio:'Voice Note', buttons:'Acoes inline', payment:'Gera PIX', access:'Link VIP', condition:'True / False', ai:'Conversa e vende (IA)', subscription:'Acesso VIP', downsell:'Oferta alternativa', upsell:'Oferta adicional', redirect:'Link externo', settings:'Configuracoes globais' };
 
 function parentNodeIdGf(el) {
     while (el && !el.classList.contains('drawflow-node')) el = el.parentElement;
@@ -221,6 +224,7 @@ function refreshPreview(editor, id) {
             else txt = 'Se pagamento == ' + (cd.status||'paid');
         }
         else if (d.name==='audio') txt = c.audio_url ? 'Audio carregado' : '';
+        else if (d.name==='ai') txt = (c.bot_name||'IA') + ' \u2014 ' + (c.mode||'auto') + (c.enabled===false ? ' \u2716 pausada' : '');
         else if ((c.custom_buttons||[]).length) txt = c.custom_buttons.map(function(b){return '['+(b.text||'?')+']'}).join(' ');
         else txt = c.message || '';
         body.textContent = txt || 'Nada configurado';
@@ -265,7 +269,10 @@ function buildNodeHtml(type, outLabelsOverride) {
 }
 
 function defaultData(type) {
-    return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', condition_seconds:0, custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
+    return { message:'', media_url:'', media_type:'video', audio_enabled:false, audio_url:'', pricing_mode:'fixed', discount_percentage:50, price:null, description:'', product_name:'', button_text:'', access_link:'', redirect_url:'', duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'', trigger_product:'', delay_minutes:5, open_in:'browser', success_message:'', pending_message:'', meta_pixel_id:'', condition_type:'payment_status', condition_value:'', condition_seconds:0,
+    // ✅ Bloco 'ai' (aditivo) - chaves usadas apenas quando type === 'ai'
+    enabled:true, bot_name:'', personality:'', tone:'amigavel', boldness:3, message_length:'short', emoji_level:'moderate', commercial_goal:'qualificar_e_converter', mode:'auto', funnel_stage:'qualification', intro_message:'Ol\u00e1! \uD83D\uDC4B Me conte o que voc\u00ea precisa e eu te ajudo na hora.', fallback_message:'\u26A0\uFE0F N\u00e3o consegui processar agora. Pode reenviar sua mensagem?', allowed_actions:[], offers:[],
+    custom_buttons:[], subscription:{ enabled:false, duration_type:'days', duration_value:null, vip_chat_id:'', vip_group_link:'' }, __meta:{ type:type, order:0, delay_seconds:0, conditions:[], title:'' } };
 }
 
 /* ═══════════ SISTEMA DE EDIÇÃO (modais) — portado do flow_drawflow ═══════════ */
@@ -288,7 +295,8 @@ var EXPLAINERS = {
     subscription: BOX('<b style="color:#FFB800">👑 Como funciona:</b> define o <b>acesso VIP</b> recebido na compra.<br>✅ Pago → registro com validade · 👥 entra no grupo VIP<br>🚪 Saiu do grupo → cancela sozinho · 💸 Reembolso → cancela<br>⚠️ <b>ID do Grupo VIP é obrigatório</b> (@getidsbot no grupo; começa com -100).'),
     downsell: BOX('<b style="color:#FFB800">⬇️ Como funciona:</b> cliente <b>recusou/abandonou</b> a oferta principal? Envie uma <b>segunda chance mais barata</b>.<br>🤖 Botão de compra automático (texto vazio = bot monta).<br>💰 Preço fixo ou % de desconto (mínimo R$ 0,50).<br>⏱️ Delay em minutos antes de disparar.'),
     upsell: BOX('<b style="color:#FFB800">⬆️ Como funciona:</b> depois que o cliente <b>PAGA</b>, espera X minutos e envia esta <b>oferta extra</b>.<br>🤖 Botão de compra automático (texto vazio = bot monta).<br>💰 Preço fixo ou % de desconto (mínimo R$ 0,50).<br>⏱️ Delay em minutos após o pagamento.'),
-    redirect: BOX('<b style="color:#FFB800">🔗 Como funciona:</b> envia <b>mensagem com botão de link</b>.<br>👆 O Telegram abre o link no navegador do cliente.<br>⚪ A saída branca continua o fluxo após o clique.')
+    redirect: BOX('<b style="color:#FFB800">🔗 Como funciona:</b> envia <b>mensagem com botão de link</b>.<br>👆 O Telegram abre o link no navegador do cliente.<br>⚪ A saída branca continua o fluxo após o clique.'),
+    ai: BOX('<b style="color:#FFB800">🤖 Como funciona:</b> este bloco <b>conversa e vende sozinho</b> — cada mensagem do cliente vira um turno da Grimbots AI API (intenção, temperatura, próxima ação).<br>🟢 <b>CHECKOUT</b> — quando a IA decide fechar, gera o PIX. <i>Ligue no bloco Pagamento.</i><br>🔴 <b>HUMANO</b> — quando a IA passa para uma pessoa. <i>Opcional.</i><br>📥 <b>Entrada</b>: ligue o bloco anterior aqui; o fluxo <b>pausa</b> aguardando o cliente.<br>⚠️ <b>Não ligar a saída CHECKOUT = a IA não consegue fechar venda.</b><br>⚙️ Requer <code>GRIMBOTS_AI_API_URL</code>/<code>GRIMBOTS_AI_API_KEY</code> no <code>.env</code> — sem isso cai no <i>fallback</i>.')
 };
 var FIELDS = {
     common: [ ['message','Mensagem','textarea'], ['media_url','URL da Midia ou file_id (opcional)','text'] ],
@@ -377,6 +385,87 @@ function applyOfferVisibility(){
     document.querySelectorAll('#mFields [data-pm]').forEach(function(g){ g.style.display=(g.getAttribute('data-pm')===pm)?'':'none'; });
     var a = document.querySelector('[data-audio-url]'); if(a) a.style.display = au?'':'none';
 }
+/* ═══════════ BLOCO 'ai' (ADITIVO) — formulario dedicado ═══════════ */
+var AI_ACTIONS = [
+    ['continue',        '\u2192 Continuar a conversa'],
+    ['ask_question',    '\u2753 Fazer uma pergunta'],
+    ['present_offer',   '\uD83C\uDF81 Apresentar a oferta'],
+    ['send_checkout',   '\uD83D\uDCB3 Enviar para o checkout (sa\u00edda CHECKOUT)'],
+    ['handoff_human',   '\uD83D\uDD74\uFE0F Passar para um humano (sa\u00edda HUMANO)'],
+    ['pause',           '\u23F8 Pausar a conversa'],
+    ['do_not_respond',  '\uD83E\uDD2B N\u00e3o responder agora']
+];
+var AI_TONES = [['amigavel','\uD83D\uDE0A Amig\u00e1vel'],['direto','\uD83D\uDC41\uFE0F Direto'],['intimo','\u2764\uFE0F \u00cdntimo'],['profissional','\uD83D\uDCBC Profissional'],['urgente','\u26A0\uFE0F Urgente']];
+var AI_LENGTHS = [['short','Curta'],['medium','M\u00e9dia'],['long','Longa']];
+var AI_EMOJI = [['none','Nenhum'],['moderate','Moderado'],['high','Muito']];
+var AI_FUNNEL = [['new','\uD83C\uDF31 Novo'],['connection','\uD83E\uDD1D Conex\u00e3o'],['qualification','\uD83E\uDD14 Qualifica\u00e7\u00e3o'],['offer','\uD83C\uDF81 Oferta'],['checkout','\uD83D\uDCB3 Checkout'],['customer','\u2705 Cliente'],['human','\uD83D\uDD74\uFE0F Humano']];
+var AI_MODES = [['shadow','\uD83D\uDD0D Shadow (s\u00f3 observa)'],['suggestion','\uD83D\uDCA1 Sugest\u00e3o (n\u00e3o age)'],['auto','\uD83E\uDD16 Auto (age sozinha)']];
+function buildAiFields(c){
+    var acts = Array.isArray(c.allowed_actions) ? c.allowed_actions : [];
+    var html = EXPLAINERS.ai;
+    html += '<div class="fgroup"><label>Nome do agente <span style="color:#6B7280">(como a IA se apresenta, m\u00e1x 60)</span></label><input data-k="bot_name" maxlength="60" value="'+gfEsc(c.bot_name)+'" placeholder="Maya"></div>';
+    html += '<div class="fgroup"><label>Objetivo comercial</label><input data-k="commercial_goal" value="'+gfEsc(c.commercial_goal)+'" placeholder="qualificar_e_converter"></div>';
+    html += '<div class="fgroup"><label>Personalidade <span style="color:#6B7280">(separada por v\u00edrgula)</span></label><input data-k="personality" value="'+gfEsc(c.personality)+'" placeholder="confiante, carinhosa, direta"></div>';
+    html += '<div class="frow">'+
+        '<div class="fgroup"><label>Tom</label>'+gfSel('tone',AI_TONES,c.tone)+'</div>'+
+        '<div class="fgroup"><label>Intensidade (1\u20135)</label><input data-k="boldness" type="number" min="1" max="5" value="'+gfEsc(c.boldness??3)+'"></div></div>';
+    html += '<div class="frow">'+
+        '<div class="fgroup"><label>Tamanho da resposta</label>'+gfSel('message_length',AI_LENGTHS,c.message_length)+'</div>'+
+        '<div class="fgroup"><label>Emojis</label>'+gfSel('emoji_level',AI_EMOJI,c.emoji_level)+'</div></div>';
+    html += '<div class="frow">'+
+        '<div class="fgroup"><label>Etapa do funil</label>'+gfSel('funnel_stage',AI_FUNNEL,c.funnel_stage)+'</div>'+
+        '<div class="fgroup"><label>Modo</label>'+gfSel('mode',AI_MODES,c.mode)+'</div></div>';
+    html += '<div class="fgroup"><label>Mensagem de abertura <span style="color:#6B7280">(enviada ao entrar no bloco; vazio = nada)</span></label>'+gfChips('intro_message')+'<textarea data-k="intro_message">'+gfEsc(c.intro_message)+'</textarea></div>';
+    html += '<div class="fgroup"><label>Mensagem de fallback <span style="color:#6B7280">(erro, timeout ou sa\u00edda n\u00e3o ligada)</span></label><textarea data-k="fallback_message">'+gfEsc(c.fallback_message)+'</textarea></div>';
+    html += '<div class="fgroup"><label>A\u00e7\u00f5es permitidas <span style="color:#6B7280">(desmarque para restringir)</span></label><div style="display:grid;gap:7px;margin-top:4px">';
+    AI_ACTIONS.forEach(function(a){
+        var on = (acts.length === 0) || acts.indexOf(a[0]) !== -1;
+        html += '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e5e7eb;text-transform:none;font-weight:600;letter-spacing:0;margin:0;"><input type="checkbox" data-ai-act="'+a[0]+'" '+(on?'checked':'')+' style="width:16px;height:16px;accent-color:#FFB800;">'+a[1]+'</label>';
+    });
+    html += '</div></div>';
+    html += '<div class="fgroup"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:#e5e7eb;margin:0;"><input type="checkbox" data-k="enabled" data-bool="1" '+(c.enabled===false?'':'checked')+' style="width:18px;height:18px;accent-color:#FFB800;"> \uD83E\uDD16 IA ativa neste bloco</label></div>';
+    html += '<div class="fgroup"><label>Ofertas <span style="color:#6B7280">(obrigat\u00f3ria p/ fechar venda; vazio = l\u00ea o bloco Pagamento ligado na sa\u00edda CHECKOUT)</span></label><div id="offerList"></div><button type="button" class="btn-ghost2" onclick="addOfferRow()"><i class="fas fa-plus"></i> Adicionar oferta</button></div>';
+    return html;
+}
+function addOfferRow(o){
+    o = o || {};
+    var div = document.createElement('div');
+    div.className = 'offer-row';
+    div.style.cssText = 'background:#0F0F14;border:1px solid #2B303D;border-radius:8px;padding:9px 10px;margin-bottom:8px;';
+    div.innerHTML =
+        '<div class="frow"><div class="fgroup" style="margin-bottom:8px"><label>Nome</label><input data-offer-field="name" placeholder="Plano Premium" value="'+gfEsc(o.name)+'"></div>'+
+        '<div class="fgroup" style="margin-bottom:8px"><label>Pre\u00e7o (R$)</label><input data-offer-field="price" type="number" step="0.01" min="0" placeholder="49.90" value="'+gfEsc(o.price==null?'':o.price)+'"></div></div>'+
+        '<div class="frow"><div class="fgroup" style="margin-bottom:0"><label>ID <span style="color:#6B7280">(opcional)</span></label><input data-offer-field="id" value="'+gfEsc(o.id)+'"></div>'+
+        '<div class="fgroup" style="margin-bottom:0;display:flex;align-items:center"><label style="margin:0;color:#e5e7eb;text-transform:none;font-weight:600;font-size:12px;display:flex;align-items:center;gap:7px;"><input type="checkbox" data-offer-field="active" '+(o.active===false?'':'checked')+' style="width:16px;height:16px;accent-color:#FFB800;"> Ativa</label></div></div>'+
+        '<button type="button" class="btn-del2" style="margin-top:9px;width:100%" onclick="this.parentElement.remove()">\u2715 Remover oferta</button>';
+    document.getElementById('offerList').appendChild(div);
+}
+function gfCollectAiFields(data){
+    data.allowed_actions = Array.prototype.slice
+        .call(document.querySelectorAll('#mFields [data-ai-act]'))
+        .filter(function(x){ return x.checked; })
+        .map(function(x){ return x.getAttribute('data-ai-act'); });
+    var offers = [];
+    document.querySelectorAll('#offerList .offer-row').forEach(function(row){
+        var get = function(k){
+            var el = row.querySelector('[data-offer-field="'+k+'"]');
+            if (!el) return '';
+            return el.type === 'checkbox' ? el.checked : el.value;
+        };
+        var name = String(get('name') || '').trim();
+        var price = get('price');
+        if (!name || price === '' || price == null) return;
+        var num = Number(price);
+        if (!isFinite(num)) return;
+        offers.push({
+            id: String(get('id') || '').trim(),
+            name: name,
+            price: num,
+            active: !!get('active')
+        });
+    });
+    data.offers = offers;
+}
 function openModal(id){
     editingId = String(id);
     var ed = window._gfEditor; if(!ed) return;
@@ -394,6 +483,7 @@ function openModal(id){
 
     var html = '';
     if(node.name==='condition'){ html = buildConditionFields(c.__meta.conditions[0]); }
+    else if(node.name==='ai'){ html = buildAiFields(c); }
     else if(FIELDS[node.name]==='OFFER'){ html = EXPLAINERS[node.name] + buildOfferFields(c); }
     else {
         if(EXPLAINERS[node.name]) html += EXPLAINERS[node.name];
@@ -420,11 +510,12 @@ function openModal(id){
         _mf.dataset.gfHooked = '1';
         _mf.addEventListener('input', function () { window._gfDirty = true; });
         _mf.addEventListener('click', function (e) {
-            if (e.target.closest('#btnList')) window._gfDirty = true;
+            if (e.target.closest('#btnList') || e.target.closest('#offerList') || e.target.closest('[data-ai-act]')) window._gfDirty = true;
         });
     }
     window._gfDirty = false; // abre limpo; qualquer edição marca de novo
     (c.custom_buttons||[]).forEach(function(b){ addBtnRow(b.text); });
+    if(node.name==='ai'){ (Array.isArray(c.offers)?c.offers:[]).forEach(function(o){ addOfferRow(o); }); }
     if(node.name==='condition'){
         var applyCt = applyConditionVisibility;
         document.querySelector('[data-k="@cond:condition_type"]').addEventListener('change', applyCt);
@@ -481,6 +572,9 @@ function saveModal(){
         data.custom_buttons = Array.from(rows).map(function(r,i){ return { text:r.value, target_step:(data.custom_buttons&&data.custom_buttons[i]?data.custom_buttons[i].target_step:'') }; });
     }
     var _condType = (data.__meta && Array.isArray(data.__meta.conditions) && data.__meta.conditions[0]) ? data.__meta.conditions[0].condition_type : undefined;
+    // ✅ Bloco 'ai' (aditivo): as a\u00e7\u00f5es e as ofertas n\u00e3o usam data-k,
+    // ent\u00e3o precisam ser coletadas \u00e0 parte do loop gen\u00e9rico acima.
+    if(node.name==='ai'){ gfCollectAiFields(data); }
     syncOutputs(editingId, node.name, data.custom_buttons, _condType);
     ed.updateNodeDataFromId(editingId, data);
     refreshPreview(ed, editingId);
@@ -656,7 +750,8 @@ function flowEditor() {
                 var grim = DrawflowAdapter.toGrimbots(exported, CFG_DATA);
                 var keptEdges = 0;
                 grim.flow_steps.forEach(function (s) {
-                    keptEdges += (s.connections.next ? 1 : 0) + (s.connections.pending ? 1 : 0) + (s.connections.retry ? 1 : 0);
+                    keptEdges += (s.connections.next ? 1 : 0) + (s.connections.pending ? 1 : 0) + (s.connections.retry ? 1 : 0)
+                              + (s.connections.checkout ? 1 : 0) + (s.connections.handoff ? 1 : 0);
                     (s.config.custom_buttons || []).forEach(function (b) { if (b.target_step) keptEdges++; });
                     if (Array.isArray(s.conditions)) s.conditions.forEach(function (c) { if (c.target_step) keptEdges++; if (c.fallback_step) keptEdges++; });
                 });

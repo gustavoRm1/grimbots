@@ -1334,6 +1334,62 @@ class BotMessage(db.Model):
         }
     
 
+class AIGeneration(db.Model):
+    """Auditoria de cada chamada a Grimbots AI API (bloco 'ai' do Flow Editor).
+
+    Tabela NOVA - nao altera nenhuma tabela existente.
+    """
+    __tablename__ = 'ai_generations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
+    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
+
+    # Requisicao
+    request_id = db.Column(db.String(80), index=True)
+    mode = db.Column(db.String(20))            # shadow | suggestion | auto
+
+    # Resposta
+    intent = db.Column(db.String(30))
+    action = db.Column(db.String(30))          # continue | ask_question | ...
+    lead_temperature = db.Column(db.String(20))
+    funnel_stage = db.Column(db.String(30))
+    risk = db.Column(db.String(20))
+    latency_ms = db.Column(db.Integer, default=0)
+    input_tokens = db.Column(db.Integer, default=0)
+    output_tokens = db.Column(db.Integer, default=0)
+    response_valid = db.Column(db.Boolean, default=True)
+
+    # Falha / erro
+    error_code = db.Column(db.String(50))      # RATE_LIMITED, AI_TIMEOUT, ...
+
+    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+
+    __table_args__ = (
+        db.Index('idx_ai_gen_bot_created', 'bot_id', 'created_at'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'bot_id': self.bot_id,
+            'telegram_user_id': self.telegram_user_id,
+            'request_id': self.request_id,
+            'mode': self.mode,
+            'intent': self.intent,
+            'action': self.action,
+            'lead_temperature': self.lead_temperature,
+            'funnel_stage': self.funnel_stage,
+            'risk': self.risk,
+            'latency_ms': self.latency_ms,
+            'input_tokens': self.input_tokens,
+            'output_tokens': self.output_tokens,
+            'response_valid': self.response_valid,
+            'error_code': self.error_code,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class WebhookEvent(db.Model):
     """Registro bruto de webhooks recebidos para auditoria e replay."""
     __tablename__ = 'webhook_events'
