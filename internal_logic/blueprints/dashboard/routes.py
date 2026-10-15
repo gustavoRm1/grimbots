@@ -2801,7 +2801,48 @@ def update_bot_config(bot_id):
         
         # Retornar configuração atualizada
         updated_config = config.to_dict()
-        
+
+        # ✅ INVALIDAR/REFRESCAR CACHES DE FLUXO (ADITIVO):
+        # O Flow Editor grava apenas no DB. Sem isto, o runtime pode servir
+        # config obsoleta de gb:{user}:bots:active e ponteiros/snapshots velhos,
+        # travando o bot (ex: texto sem step ativo -> no-op silencioso).
+        # Falhas aqui NUNCA devem quebrar o save.
+        try:
+            import json as _json
+            from internal_logic.core.redis_manager import get_redis_connection
+            _rc = get_redis_connection()
+            if _rc:
+                _owner_id = bot.user_id
+                _active_hash = f"gb:{_owner_id}:bots:active"
+                try:
+                    _raw = _rc.hget(_active_hash, str(bot_id))
+                    if _raw:
+                        _data = _json.loads(_raw)
+                        _data['config'] = updated_config
+                        _rc.hset(_active_hash, str(bot_id), _json.dumps(_data, default=str))
+                        logger.info(f"🔄 Cache de config (bots:active) do bot {bot_id} refrescado")
+                except Exception as _hash_err:
+                    logger.warning(f"⚠️ Falha ao refrescar cache bots:active do bot {bot_id}: {_hash_err}")
+
+                _patterns = (
+                    f"flow_snapshot:{bot_id}:*",
+                    f"flow_step_timestamp:{bot_id}:*",
+                    f"lock:flow_step:{bot_id}:*",
+                    f"gb:*:flow_current_step:{bot_id}:*",
+                )
+                _deleted = 0
+                for _pat in _patterns:
+                    try:
+                        for _k in _rc.scan_iter(match=_pat, count=500):
+                            _rc.delete(_k)
+                            _deleted += 1
+                    except Exception as _scan_err:
+                        logger.warning(f"⚠️ Falha ao varrer {_pat}: {_scan_err}")
+                if _deleted:
+                    logger.info(f"🧹 {_deleted} chave(s) de estado de fluxo do bot {bot_id} invalidadas")
+        except Exception as _inv_err:
+            logger.warning(f"⚠️ Falha ao invalidar caches de fluxo do bot {bot_id}: {_inv_err}")
+
         # Adicionar metadados novamente
         pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
         has_meta_pixel = False

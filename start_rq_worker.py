@@ -5,11 +5,21 @@ Suporta 4 filas: tasks, gateway, webhook, marathon
 ✅ Usa connection pool para maior performance
 """
 
+import logging
 import os
 import sys
 
 # Adicionar diretório atual ao path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# ✅ OBSERVABILIDADE: configurar logging ANTES do worker rodar.
+# Sem isso o root logger fica em WARNING e todo logger.info/debug do app
+# (ex: [ROUTER V8], 🤖 Step 'ai', [IA]) é silenciado no journalctl,
+# tornando o diagnóstico do fluxo/IA impossível. Nível ajustável via LOG_LEVEL.
+logging.basicConfig(
+    level=os.environ.get('LOG_LEVEL', 'INFO').upper(),
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+)
 
 try:
     from rq import Worker, Queue

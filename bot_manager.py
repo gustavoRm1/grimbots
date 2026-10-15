@@ -1937,7 +1937,17 @@ class BotManager:
                                     # Não limpar Redis - permite nova tentativa
                                     return
                         else:
-                            logger.debug(f"💬 Nenhum step ativo - mensagem será apenas salva")
+                            logger.warning(f"💬 Nenhum step ativo para {telegram_user_id} - verificando reinício do fluxo")
+                            # ✅ ADITIVO (restrito ao bloco 'ai'): se o fluxo está ativo e o
+                            # step inicial é um bloco 'ai', reiniciar o fluxo para o lead não
+                            # ficar mudo (ex: 'oi' enviado sem /start). Nenhum outro tipo de
+                            # fluxo é afetado por este ramo.
+                            if self._ai_should_autostart(config):
+                                logger.info(f"🤖 Sem step ativo, mas fluxo 'ai' ativo - reiniciando fluxo")
+                                self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
+                                bot_user.last_interaction = now
+                                db.session.commit()
+                                return
                     except Exception as e:
                         logger.error(f"❌ Erro ao processar condições: {e}", exc_info=True)
                     
@@ -2043,7 +2053,9 @@ class BotManager:
                 ).first()
                 
                 # Preparar mensagem de boas-vindas
-                welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
+                # ✅ FIX: aplica o default também quando a string é vazia (evita
+                # enviar mensagem vazia/invisível quando welcome_message == "").
+                welcome_message = (config.get('welcome_message') or '').strip() or 'Olá! Bem-vindo!'
                 welcome_media_url = config.get('welcome_media_url')
                 welcome_media_type = config.get('welcome_media_type', 'video')
                 welcome_audio_enabled = config.get('welcome_audio_enabled', False)
@@ -3762,6 +3774,32 @@ class BotManager:
             except Exception:
                 raw = []
         return raw if isinstance(raw, list) else []
+
+    def _ai_should_autostart(self, config) -> bool:
+        """
+        ✅ ADITIVO / RESTRITO AO BLOCO 'ai': retorna True apenas quando o fluxo
+        está ATIVO e o step inicial é um bloco 'ai'. Usado para reiniciar o fluxo
+        quando o lead envia texto sem ter um step ativo (ex: 'oi' sem /start),
+        evitando o no-op silencioso. Nenhum fluxo sem IA é afetado.
+        """
+        try:
+            if not checkActiveFlow(config):
+                return False
+            steps = self._ai_flow_steps(config)
+            if not steps:
+                return False
+            start_id = config.get('flow_start_step_id')
+            start_step = self._find_step_by_id(steps, start_id) if start_id else None
+            if not start_step:
+                ordered = sorted(
+                    [s for s in steps if isinstance(s, dict)],
+                    key=lambda s: s.get('order', 0)
+                )
+                start_step = ordered[0] if ordered else None
+            return self._is_ai_step(start_step)
+        except Exception as e:
+            logger.warning(f"⚠️ _ai_should_autostart falhou: {e}")
+            return False
 
     def _ai_state_key(self, bot_id: int, telegram_user_id: str) -> str:
         return f"gb:{self.user_id}:flow_ai_state:{bot_id}:{telegram_user_id}"
