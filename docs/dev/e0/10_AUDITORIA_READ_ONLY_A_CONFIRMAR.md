@@ -2,8 +2,13 @@
 
 **Escopo**: somente leitura. Nenhum arquivo funcional foi alterado, nenhuma feature foi
 ativada. Este documento formaliza as regras permanentes de colaboração entre os dois
-repos e audita o estado atual da integração do bloco Atendimento IA, marcando como
-**[A CONFIRMAR]** tudo que não pôde ser verificado no código neste momento.
+repos e audita o estado atual da integração do bloco Atendimento IA.
+
+**Atualização (2026-10-18)**: acesso ao repo do motor obtido (`grimbots-ai`, commit
+`8db1de7`); os itens antes marcados **[A CONFIRMAR]** foram re-validados contra o código
+real do motor (seção 4). Resultado: **9 CONFIRMAM**, **2 MUDAM** (C3 e C8 — o motor
+evoluiu e hoje aceita o contrato v1.1) e **1 MUDA parcialmente** (C10 — dois caminhos de
+prompt). Divergências a apresentar na seção 4.1.
 
 ---
 
@@ -38,26 +43,22 @@ Válidas para **todo o projeto**, a partir de Out/2026:
 
 ---
 
-## 2. Divergência de acesso ao repositório do motor — BLOQUEIO
+## 2. Acesso ao repositório do motor — RESOLVIDO (regra 2 cumprida)
 
-Conforme regra 2, o Git remoto do `grimbots-ai` deveria ser consultado antes desta
-auditoria. **Não foi possível acessá-lo:**
+O dono do projeto forneceu o remoto: `git@github.com:gustavoRm1/grimbots-ai.git`.
 
 | Tentativa | Resultado |
 |---|---|
-| Clone local (`~/Documents`, home, `find` amplo) | **Não encontrado** — nenhum diretório `grimbots-ai` existe nesta máquina |
-| `https://github.com/gustavoRm1/grimbots-ai` | **404** (inexistente ou privado) |
-| `gh` CLI | **Não autenticado** nesta máquina — não é possível listar/buscar repos privados |
+| SSH `git@github.com:gustavoRm1/grimbots-ai.git` | chave SSH local **não registrada** no GitHub (publickey denied) |
+| Clone HTTPS `https://github.com/gustavoRm1/grimbots-ai.git` | **OK** (credencial HTTPS já salva no helper local) |
+| Clone local efetuado | diretório temporário, commit `8db1de7` (2026-10-18) |
 
-**Consequência**: toda afirmação sobre o comportamento **do motor** (schemas, validação,
-códigos de erro, aceitação de campos novos) é **[A CONFIRMAR]** nesta auditoria, mesmo
-quando registrada em documentos anteriores como "fato confirmado" — essa confirmação
-foi feita em Out/2026 via investigação direta no projeto do motor, e **não pôde ser
-re-verificada agora contra o Git do motor** (regra 3).
+> **Nota de ambiente**: o repo é privado (por isso o 404 via HTTPS sem credencial na
+> auditoria anterior). A credencial HTTPS desta máquina tem acesso de leitura.
 
-**Dado necessário do dono do projeto**: URL/acesso correto do repo `grimbots-ai`
-(ex.: `github.com/<owner>/grimbots-ai`, ou instruções de acesso). Sem isso, as regras
-2–5 ficam bloqueadas para tarefas futuras de IA.
+**Resultado desta consulta** foi a re-avaliação de C1–C12 (seção 4) contra o código
+real do motor — vários itens **mudaram** em relação à suposição anterior. Nenhuma
+alteração funcional foi feita na Grimbots (regras 4 e 7).
 
 ---
 
@@ -124,53 +125,90 @@ re-verificada agora contra o Git do motor** (regra 3).
 
 ---
 
-## 4. Itens [A CONFIRMAR] — dependem do motor (repo `grimbots-ai` inacessível)
+## 4. Re-validação de C1–C12 contra o motor (commit `8db1de7`, 2026-10-18)
 
-Nenhum destes itens pôde ser re-verificado contra o Git do motor nesta auditoria.
-Marcados como "fato confirmado" apenas em documentos da Grimbots (investigação anterior
-de Out/2026, `docs/dev/FASE_6A_CONTRATO.md:§13-14`); **re-consultar o repo do motor
-(regras 2–3) antes de qualquer decisão**:
+Legenda: **CONFIRMA** (fato anterior correto) · **MUDA** (fato anterior estava
+desatualizado) · **MOTOR** = local no repo `grimbots-ai`.
 
-| # | Fato a confirmar | Origem da afirmação atual | Por que importa |
+| # | Resultado | Evidência no motor | Impacto na Grimbots |
 |---|---|---|---|
-| C1 | Schema `AgentRespondRequest` em `api/schemas.py:84` (nomes/campos exatos) | `FASE_6A_CONTRATO.md:§14` | Payload Grimbots precisa casar campo a campo |
-| C2 | `extra=forbid` na raiz do request → campo desconhecido = **422 VALIDATION_ERROR** genérico | `FASE_6A_CONTRATO.md:§13-14`; comentário `bot_manager.py:3905-3907` | Motivo do bloqueio de ativação v1.1 |
-| C3 | Motor **não possui** `contract_version` (identificação de v1.0 = ausência de campos) | `FASE_6A_CONTRATO.md:§13-14` | Sem isso, versionamento proposto não tem contraparte |
-| C4 | Motor **não possui** códigos de erro dedicados de incompatibilidade de contrato, nem negociação de versão | `FASE_6A_CONTRATO.md:§13` | Downgrade anti-422 fica inviável (whitelist §13) |
-| C5 | Motor emite/aceita **`no_reply`** como action? | Ausente no lado Grimbots; sem acesso ao motor | Se emitir, vira `continue` (clamp `ai_service.py:117`) — mascaramento |
-| C6 | Motor **rebaixa `send_checkout` → `handoff_human` quando não há oferta ativa** | Comentário `bot_manager.py:4071-4073` (afirmação sobre o motor) | Define se filtrar ofertas inativas localmente quebra venda |
-| C7 | Motor é **stateless** (sem memória entre requests; tudo vem no payload) | `ai_service.py:9` (docstring); `FASE_6A_CONTRATO.md` | Define dono da memória por lead (decisão ADR: Grimbots-owned) |
-| C8 | Motor aceita hoje os campos v1.1 (`agent_profile`/`flow_resources`/`context_policy`/`contract_version`)? **Status mudou desde Out/2026?** | Scaffolding Grimbots assume que **não** (flag off) | Pré-condição para ativar v1.1 (regra 4) |
-| C9 | Motor emite campos novos (`reason`, `offer_id`, `state_update`)? | Proposta v1.2 (não implementada no Grimbots, não aprovada) | Nomes/formato precisam de contrato conjunto |
-| C10 | Prompt builder do motor (`api/prompt_builder.py:107`, caminho único determinístico) — mudou? | `FASE_6A_CONTRATO.md:§14` | Golden tests de prompt dependem disso |
-| C11 | URL atual do motor (ngrok em `.env.example:23` ainda é válida?) | `.env.example` | Endpoint do amb. de teste |
-| C12 | Códigos `RATE_LIMITED`/`AI_BUSY`/`AI_TIMEOUT`/`AI_INVALID_RESPONSE` são os códigos **reais** emitidos pelo motor? | Definição client-side `ai_service.py:77-80` | Retry só dispara de verdade se o motor emitir esses códigos |
+| C1 | **CONFIRMA** | `api/schemas.py:84-148` (`AgentRespondRequest`) | Payload v1.0 casa campo a campo |
+| C2 | **CONFIRMA** | `api/schemas.py:85` (`extra="forbid"` só na raiz; submodelos `extra="ignore"` L38/50/59/67/74); handler `api/app.py:80-85` → 422 `VALIDATION_ERROR` genérico | Campo desconhecido **na raiz** → 422 |
+| C3 | **MUDA** | `api/schemas.py:126` — `contract_version` **existe** (opcional, só metadado; sozinho não altera o prompt — `api/prompt_builder.py:111-117`) | Versionamento agora tem contraparte no motor (Fase 5, v1.4.0) |
+| C4 | **CONFIRMA** | Nenhum código dedicado a incompatibilidade; tabela de erros `docs/API.md:462-474`; sem negociação de versão | Downgrade anti-422 segue inviável |
+| C5 | **CONFIRMA** | `no_reply` **fora** do enum `Action` (`api/schemas.py:22-25`); `validator.py:85-86` trata ação fora do enum como **fatal** → 502 `AI_INVALID_RESPONSE` | Motor nunca devolve `no_reply` num 200; o clamp da Grimbots é defesa redundante (bom) |
+| C6 | **CONFIRMA** | `api/validator.py:125-134` rebaixa `send_checkout` → `handoff_human` (e força `handoff_human=true`; risk sobe low→medium) quando **não há oferta ativa**; `prompt_builder.py:91` só mostra ofertas `active` | Comentário `bot_manager.py:4071-4073` estava correto |
+| C7 | **CONFIRMA** | `docs/HANDOFF-GRIMBOTS.md:41`; `docs/CONTRATO-MOTOR-COMERCIAL-ALINHAMENTO.md:100-102` (ADR 0003); `api/app.py` sem DB/sessão | Grimbots é dona da memória (ADR alinhado) |
+| C8 | **MUDA** | `api/schemas.py:120-129` — motor **JÁ ACEITA** `contract_version`/`agent_profile`/`flow_resources`/`context_policy` (opcionais; Fase 5, v1.4.0). Prompt estendido `api/prompt_builder.py:111-130,186-191`. Garantia byte-a-byte quando ausentes | O bloqueio "`extra=forbid` → 422" **não se aplica mais** a esses 4 campos. Ordem de ativação ainda exige coordenação (ver seção 4.1) |
+| C9 | **CONFIRMA** | `AgentResponse` (`api/schemas.py:163-175`) **não** tem `reason`/`offer_id`/`state_update` — proposta v1.2 (E0 docs do motor, não implementada) | Formato proposto em `CONTRATO-MOTOR-COMERCIAL-ALINHAMENTO.md:§3` |
+| C10 | **MUDA** | Caminho único virou **dois**: legado (byte-a-byte) + estendido `[CONTEXTO ADICIONAL]` (`prompt_builder.py:133-191`); golden byte-a-byte `tests/unit/test_prompt_builder.py:115` + `tests/golden/prompts/` | Legado segue determinístico; mudança é aditiva e testada |
+| C11 | **CONFIRMA** | `docs/HANDOFF-GRIMBOTS.md:11` — mesma URL ngrok de `.env.example:23`; header `ngrok-skip-browser-warning: true` (Grimbots já envia) | Endpoint continua válido |
+| C12 | **CONFIRMA** | `RATE_LIMITED` 429+Retry-After (`app.py:147-153`), `AI_BUSY` 503 (`app.py:179-184`), `AI_TIMEOUT` 504 (`ollama_client.py:64`→`app.py:185-192`), `AI_INVALID_RESPONSE` 502 (`app.py:226-231`) | Os 4 códigos de retry do cliente são reais |
+
+### 4.1 Divergências a apresentar (regra 3) — nada implementado
+
+1. **Motor aceita v1.1 (C8)** — a premissa do scaffold (`extra=forbid` bloquearia os 4
+   campos) está **desatualizada**. O motor os aceita desde a Fase 5. **Ainda assim**,
+   a ordem de ativação do próprio motor (`ALINHAMENTO:§1.3`) só permite **enviar** os
+   campos após aprovação conjunta e atualização do golden do cliente — não ativamos nada.
+3. **Motor tem 6 campos de memória** (`last_assistant_message`, `collected_information`,
+   `questions_already_asked`, `offers_already_presented`, `turn_count`, `last_action`) —
+   `api/schemas.py:103-118`, **consumidos no prompt** (`prompt_builder.py:159-164`). A
+   Grimbots **não os envia** hoje (o próprio motor registra isso como gap —
+   `ALINHAMENTO:§2`). Isso é a fase **E-P1** do motor, que depende da plataforma.
+4. **O motor publicou o próprio E0 hoje** (`eb328c7`, `8db1de7`): proposta v1.2
+   (`docs/CONTRATO-MOTOR-COMERCIAL.md`) + alinhamento (`CONTRATO-MOTOR-COMERCIAL-ALINHAMENTO.md`),
+   incluindo ADRs 0008-0011 e **7 decisões abertas** (§9) para revisão conjunta.
+5. **O motor já analisou nosso `origin/main`** = `d41b527` e concluiu corretamente que
+   o cliente não envia memória nem campos v1.1 (o scaffold v1.1 é **local, não commitado**).
+6. **Validator do motor enforça `allowed_actions`** (`validator.py:104-108`: ação fora
+   da lista = fatal → 502). Isso **mitiga** o gap G1 da Grimbots (a ação inválida não
+   chega a ser executada; vira erro → fallback), mas às custas de retry×3 antes do fallback.
+7. **Novos códigos do motor** que o cliente trata como não-retryáveis → fallback:
+   `AI_DISABLED_FOR_BOT` 409 (`ai_enabled=false`), `HUMAN_TAKEOVER_ACTIVE` 409
+   (`human_takeover=true`), `HISTORY_TOO_LONG` 422 (>20 msgs), `PAYLOAD_TOO_LARGE` 413,
+   `VALIDATION_ERROR` 422, `AI_GLOBALLY_DISABLED` 503, `API_KEY_NOT_CONFIGURED` 503.
+   Observação: a Grimbots sempre envia `ai_enabled=true`, mas envia `human_takeover`
+   do estado (`bot_manager.py:4231`) — se `true` (sticky), o próximo turno receberia
+   409. **[A CONFIRMAR em runtime]** se o fluxo volta ao bloco AI nesse estado.
+
+### 4.2 Itens ainda [A CONFIRMAR] (deployment, não código)
+
+| Fato | Por que a confirmar |
+|---|---|
+| Versão **implantada** no ngrok é a v1.4.0 (com Fase 5)? | O repo tem o código; o ambiente ngrok pode estar em versão anterior. Confirmar via `GET /health` (`version`) |
+| A chave `X-API-Key` ativa em `.env` | Não está no repo (`logs/api_key.txt` no lado do motor) |
+| Códigos de incompatibilidade futuros (§13) | Dependem de proposta v1.2 aprovada conjuntamente |
 
 ---
 
 ## 5. Gaps conhecidos do lado Grimbots (resumo; detalhes em `docs/dev/AI_BLOCK_AUDIT_READONLY.md`)
 
-Verificados por leitura direta; **não dependem do motor** para existir, mas o
-comportamento observado em produção depende de C5/C6/C8:
+Verificados por leitura direta; **não dependem do motor** para existir. A coluna
+"Pós-revalidação do motor" incorpora o resultado da seção 4:
 
-| Gap | Efeito | Local |
-|---|---|---|
-| G1 — `allowed_actions` só é enforced no Mock | Ação do motor fora da lista não é bloqueada no caminho real | `ai_service.py:562-563` vs `bot_manager.py:4280-4403` |
-| G2 — alias `no_reply` inexistente | `no_reply` do motor → `continue` (clamp) | `ai_service.py:25-33,117` |
-| G3 — ofertas inativas não filtradas | `active=false` vai no payload (comportamento depende de C6) | `bot_manager.py:4076-4089` |
-| G4 — `intro_message` incondicional | Enviada mesmo se o bloco/logo depois cair em erro; enviada na entrada sem checar `enabled` (o `enabled` só é checado no turno, em `_handle_ai_turn`) | `bot_manager.py:4787-4800` vs `4193` |
-| G5 — modo `shadow`/`suggestion` sem ramificação | `mode` vai no payload (`bot_manager.py:4243`), mas execução local não muda por modo | `bot_manager.py:4280-4403` |
+| Gap | Efeito | Local | Pós-revalidação do motor |
+|---|---|---|---|
+| G1 — `allowed_actions` só é enforced no Mock | Ação do motor fora da lista não é bloqueada **localmente** no caminho real | `ai_service.py:562-563` vs `bot_manager.py:4280-4403` | **Mitigado pelo motor**: `validator.py:104-108` rejeita (fatal→502) → fallback. Ainda assim, gastaria retry×3 |
+| G2 — alias `no_reply` inexistente | `no_reply` do motor → `continue` (clamp) | `ai_service.py:25-33,117` | **Inexistente na prática**: motor nunca emite `no_reply` (C5, enum `schemas.py:22-25` + fatal L85-86) |
+| G3 — ofertas inativas não filtradas | `active=false` vai no payload | `bot_manager.py:4076-4089` | **Inócuo**: motor filtra na origem (`prompt_builder.py:91`); validator usa só ofertas ativas |
+| G4 — `intro_message` incondicional | Enviada mesmo se o bloco/logo depois cair em erro; enviada na entrada sem checar `enabled` (o `enabled` só é checado no turno, em `_handle_ai_turn`) | `bot_manager.py:4787-4800` vs `4193` | Inalterado — gap puramente local |
+| G5 — modo `shadow`/`suggestion` sem ramificação | `mode` vai no payload (`bot_manager.py:4243`), mas execução local não muda por modo | `bot_manager.py:4280-4403` | Inalterado; **decisão conjunta**: motor trata `mode` no prompt, não no cliente |
 
 ---
 
-## 6. Próximos passos (bloqueados até desbloqueio)
+## 6. Próximos passos
 
-1. **Dono do projeto fornece URL/acesso do repo `grimbots-ai`** (seção 2).
-2. Consultar o Git do motor (regras 2–3) e **re-validar C1–C12**; atualizar este
-   documento com o resultado real.
-3. Apresentar divergências (se houver) antes de qualquer implementação (regra 3).
-4. Só então planejar Fase 1 (enforcement de `allowed_actions`, `intro_message`,
-   memória por lead, UI) com testes e aprovação explícita.
+1. ~~Dono do projeto fornece acesso do repo `grimbots-ai`~~ — **feito** (seção 2).
+2. ~~Consultar o Git do motor e re-validar C1–C12~~ — **feito** (seção 4).
+3. **Divergências a apresentar/aprovar** (regra 3, seção 4.1): (a) motor já aceita v1.1;
+   (b) campos de memória não enviados (E-P1); (4) E0 do motor publicado com 7 decisões
+   abertas; (5) canário de `human_takeover` 409.
+4. Aguardar aprovação conjunta; **só então** planejar Fase 1 (enforcement local de
+   `allowed_actions`, `intro_message`, memória por lead, UI) com testes.
+
+**Nada disto foi implementado. Nenhuma flag foi ativada. O default permanece v1.0
+byte-a-byte.**
 
 **Nada disto foi implementado. Nenhuma flag foi ativada. O default permanece v1.0
 byte-a-byte.**
