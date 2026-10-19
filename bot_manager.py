@@ -4431,6 +4431,11 @@ class BotManager:
             logger.warning(f"⚠️ [IA] turno já processado (msg {inbound_message_id}) — sem efeito duplicado")
             return
 
+        # D11 — falha retryável SEM efeito (ex.: 409 REQUEST_IN_PROGRESS): LIBERA a
+        # reserva para permitir a reentrega legítima (o cliente já respeita o
+        # Retry-After). Qualquer outro desfecho conclui o marcador durável.
+        turn_release = False
+
         try:
             # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
             contract_v11 = self._ai_contract_v11_enabled(step_config)
@@ -4494,6 +4499,9 @@ class BotManager:
                 ):
                     if err.code == 'HUMAN_TAKEOVER_ACTIVE' and contract_v11:
                         self._ai_state_set(bot_id, telegram_user_id, {'human_takeover': True})
+                    if err.code == 'REQUEST_IN_PROGRESS':
+                        # Retryável e sem efeito produzido -> libera p/ reentrega
+                        turn_release = True
                     logger.info(f"ℹ️ [IA] {err.code}: IA nao responde neste turno")
                     self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
                     return
@@ -4626,8 +4634,12 @@ class BotManager:
             )
 
         finally:
-            # D11 fase 2 — turno concluído: marcador durável (at-most-once)
-            self._ai_turn_complete(bot_id, telegram_user_id, inbound_message_id)
+            # D11 fase 2 — turno concluído: marcador durável (at-most-once).
+            # Exceção: falha retryável sem efeito -> libera (retry legítimo).
+            if turn_release:
+                self._ai_turn_release(bot_id, telegram_user_id, inbound_message_id)
+            else:
+                self._ai_turn_complete(bot_id, telegram_user_id, inbound_message_id)
 
     def _execute_flow_recursive(self, bot_id: int, token: str, config: Dict[str, Any],
                                 chat_id: int, telegram_user_id: str, step_id: str,

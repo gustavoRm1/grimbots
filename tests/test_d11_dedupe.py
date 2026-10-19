@@ -228,20 +228,21 @@ def test_handle_ai_turn_completes_on_gateway_failure():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 6c) Contrato futuro do motor: 409 REQUEST_IN_PROGRESS (D11 no motor)
-#     -> retryável e SEM fallback (entrega concorrente do mesmo request_id).
+# 6c) 409 REQUEST_IN_PROGRESS: retryável, LIBERA a reserva, sem efeito
+#     (entrega concorrente do mesmo request_id; cliente respeita Retry-After)
 # ══════════════════════════════════════════════════════════════════════════
-def test_request_in_progress_is_retryable_and_has_no_fallback():
+def test_request_in_progress_releases_and_has_no_effects():
     import internal_logic.services.ai_service as svc
 
     assert "REQUEST_IN_PROGRESS" in svc._RETRYABLE_CODES
 
-    captured = {"completed": 0, "sent": 0}
+    captured = {"sent": 0, "route": 0, "state": 0, "completed": 0, "released": 0}
 
     class _Svc:
         def respond(self, payload):
-            raise svc.AIGatewayError("REQUEST_IN_PROGRESS", "in progress",
-                                     status=409, retryable=True)
+            raise svc.AIGatewayError(
+                "REQUEST_IN_PROGRESS", "in progress", status=409, retryable=True
+            )
 
     orig_get = svc.get_ai_service
     svc.get_ai_service = lambda *a, **k: _Svc()
@@ -254,15 +255,111 @@ def test_request_in_progress_is_retryable_and_has_no_fallback():
     mgr._personalize_text = lambda *a, **k: "fallback"
     mgr._ai_log_generation = lambda *a, **k: None
     mgr.send_telegram_message = lambda **k: captured.__setitem__("sent", captured["sent"] + 1)
+    mgr._ai_route = lambda *a, **k: captured.__setitem__("route", captured["route"] + 1) or True
+    mgr._ai_state_atomic = lambda *a, **k: captured.__setitem__("state", captured["state"] + 1)
     mgr._ai_turn_claim = lambda *a, **k: True
     mgr._ai_turn_complete = lambda *a, **k: captured.__setitem__("completed", captured["completed"] + 1)
+    mgr._ai_turn_release = lambda *a, **k: captured.__setitem__("released", captured["released"] + 1)
     try:
         mgr._handle_ai_turn(1, "tok", {}, 99, "999",
                             {"id": "s1", "config": {}}, "oi", inbound_message_id=99)
-        assert captured["sent"] == 0, "409 in-progress nao deve enviar fallback"
-        assert captured["completed"] == 1
     finally:
         svc.get_ai_service = orig_get
+
+    assert captured["sent"] == 0, "409 in-progress NAO deve enviar mensagem/fallback"
+    assert captured["route"] == 0, "409 in-progress NAO deve avancar fluxo/checkout/handoff"
+    assert captured["state"] == 0, "409 in-progress NAO deve persistir estado"
+    assert captured["released"] == 1 and captured["completed"] == 0, \
+        "retryavel sem efeito -> LIBERA a reserva (permite reentrega)"
+
+
+def test_request_in_progress_then_redelivery_succeeds():
+    """1o=409 (libera) -> reentrega do MESMO message_id processa e responde."""
+    import internal_logic.services.ai_service as svc
+
+    fake = FakeRedis()
+    orig_redis = _with_redis(fake)
+    calls = {"n": 0}
+    counts = {"sent": 0}
+
+    class _Svc:
+        def respond(self, payload):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise svc.AIGatewayError(
+                    "REQUEST_IN_PROGRESS", "in progress", status=409, retryable=True
+                )
+            return svc.AIResult(
+                request_id=payload.get("request_id", ""), message="ok",
+                intent="interesse", lead_temperature="warm",
+                funnel_stage="qualification", action="continue",
+                next_question=None, handoff_human=False, risk="low",
+            )
+
+    orig_get = svc.get_ai_service
+    svc.get_ai_service = lambda *a, **k: _Svc()
+
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: {}
+    mgr._ai_contract_v11_enabled = lambda *a, **k: False
+    mgr._personalize_text = lambda text, *a, **k: text
+    mgr._ai_log_generation = lambda *a, **k: None
+    mgr._ai_bot_config = lambda *a, **k: {"name": "Maya"}
+    mgr._ai_build_offers = lambda *a, **k: []
+    mgr._is_redundant_question = lambda *a, **k: False
+    mgr.send_telegram_message = lambda **k: counts.__setitem__("sent", counts["sent"] + 1)
+    mgr._ai_route = lambda *a, **k: True
+    mgr._ai_state_atomic = lambda *a, **k: None
+    try:
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999",
+                            {"id": "s1", "config": {}}, "oi", inbound_message_id=771)
+        assert counts["sent"] == 0 and calls["n"] == 1     # 409: sem efeito
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999",
+                            {"id": "s1", "config": {}}, "oi", inbound_message_id=771)
+        assert counts["sent"] == 1, "reentrega deve processar (reserva liberada)"
+        assert calls["n"] == 2
+        assert mgr._ai_turn_claim(1, "999", 771) is False  # agora concluido (durável)
+    finally:
+        svc.get_ai_service = orig_get
+        bm.get_redis_connection = orig_redis
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6a) Cliente honra o header `Retry-After` (respeita o 429/503/409 do motor)
+# ══════════════════════════════════════════════════════════════════════════
+def test_client_honors_retry_after_header():
+    import internal_logic.services.ai_service as svc
+
+    slept = []
+
+    class _Resp:
+        def __init__(self, status, body, headers=None):
+            self.status_code = status
+            self._body = body
+            self.headers = headers or {}
+            self.text = ""
+
+        def json(self):
+            return self._body
+
+    seq = [
+        _Resp(409, {"error": {"code": "REQUEST_IN_PROGRESS", "message": "busy"}},
+              {"Retry-After": "2"}),
+        _Resp(200, {"message": "oi", "action": "continue", "intent": "saudacao"}),
+    ]
+    orig_post, orig_sleep = svc.requests.post, svc.time.sleep
+    svc.requests.post = lambda *a, **k: seq.pop(0)
+    svc.time.sleep = lambda s: slept.append(s)
+    try:
+        service = svc.GrimbotsAIService(api_url="http://motor.test", api_key="k", timeout=5)
+        result = service.respond({"request_id": "r1"})
+    finally:
+        svc.requests.post, svc.time.sleep = orig_post, orig_sleep
+
+    assert result.action == "continue"
+    assert slept == [2.0], f"deve respeitar Retry-After (2s), dormiu {slept}"
 
 
 # ══════════════════════════════════════════════════════════════════════════
