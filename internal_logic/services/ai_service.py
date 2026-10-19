@@ -59,6 +59,30 @@ MAX_LEAD_OBJECTION_CHARS = 120
 MAX_OFFER_ID_CHARS = 64
 MAX_OFFER_CHECKOUT_URL_CHARS = 400
 
+# ── E-P1b (D6) — limites de memória = schema do motor (autoritativos) ───────
+MAX_LAST_ASSISTANT_MESSAGE_CHARS = 2000
+MAX_MEMORY_LIST_ITEMS = 20
+MAX_QUESTION_ITEM_CHARS = 300
+MAX_OFFER_ITEM_CHARS = 120
+MAX_COLLECTED_KEYS = 30
+MAX_COLLECTED_KEY_CHARS = 60
+MAX_COLLECTED_VALUE_CHARS = 300
+MAX_TURN_COUNT = 100
+
+# Campos de memória operacional (contrato v1.1, request). Todos opcionais.
+MEMORY_FIELDS = (
+    "last_assistant_message", "collected_information", "questions_already_asked",
+    "offers_already_presented", "turn_count", "last_action",
+)
+
+# ── E-P2 (D12) — mapa explícito de intent (valor original -> oficial) ───────
+# O motor só devolve os 8 valores oficiais (qualquer outro é fatal lá). Este
+# mapa é uma defesa do cliente caso um alias apareça, sempre auditável.
+INTENT_ALIASES = {
+    "oferta": "interesse",
+    "informacao": "duvida",
+}
+
 # ── Fase 6A (contrato v1.1) — limites próprios, todos OFFLINE por padrão ────
 MAX_PROFILE_LISTS = 8
 MAX_PROFILE_ITEM_CHARS = 120
@@ -108,19 +132,22 @@ class AIResult:
     """Resposta 200 do /v1/agent/respond, ja normalizada."""
 
     __slots__ = (
-        "request_id", "model", "message", "intent", "lead_temperature",
-        "funnel_stage", "action", "next_question", "handoff_human", "risk",
-        "validation", "usage",
+        "request_id", "model", "message", "intent", "intent_original", "intent_kind",
+        "lead_temperature", "funnel_stage", "action", "next_question",
+        "handoff_human", "risk", "validation", "usage", "reason", "offer_id",
+        "state_update",
     )
 
     def __init__(self, request_id="", model="", message="", intent="",
                  lead_temperature="warm", funnel_stage="qualification",
                  action="continue", next_question=None, handoff_human=False,
-                 risk="low", validation=None, usage=None):
+                 risk="low", validation=None, usage=None, reason=None,
+                 offer_id=None, state_update=None):
         self.request_id = request_id
         self.model = model
         self.message = message or ""
-        self.intent = intent
+        # D12 — normaliza o intent (aliases) e mantém o valor original auditável
+        self.intent, self.intent_original, self.intent_kind = normalize_intent(intent)
         self.lead_temperature = lead_temperature
         self.funnel_stage = funnel_stage
         self.action = action if action in ACTIONS else "continue"
@@ -129,6 +156,9 @@ class AIResult:
         self.risk = risk if risk in RISKS else "low"
         self.validation = validation if isinstance(validation, dict) else {"valid": True, "errors": []}
         self.usage = usage if isinstance(usage, dict) else {}
+        self.reason = reason if isinstance(reason, str) else None
+        self.offer_id = offer_id if offer_id else None
+        self.state_update = state_update if isinstance(state_update, dict) else None
 
     @property
     def valid(self):
@@ -156,6 +186,9 @@ class AIResult:
                 risk=str(data.get("risk") or "low"),
                 validation=data.get("validation") or {"valid": True, "errors": []},
                 usage=data.get("usage") or {},
+                reason=data.get("reason"),
+                offer_id=data.get("offer_id"),
+                state_update=data.get("state_update"),
             )
         except (TypeError, ValueError) as exc:
             raise AIGatewayError("AI_INVALID_RESPONSE", f"campos invalidos: {exc}")
@@ -194,12 +227,22 @@ def build_payload(
     agent_profile=None,
     flow_resources=None,
     context_policy=None,
+    last_assistant_message=None,
+    collected_information=None,
+    questions_already_asked=None,
+    offers_already_presented=None,
+    turn_count=None,
+    last_action=None,
 ):
     """Monta o body exato do /v1/agent/respond (cada campo ja normalizado).
 
-    Fase 6A (aditivo/opt-in): `contract_version`/`agent_profile`/`flow_resources`/
-    `context_policy` só entram no payload quando explicitamente fornecidos (não-None).
-    No default (todos None) o body é idêntico ao v1.0 byte-a-byte.
+    E-P1b (aditivo/opt-in): os campos de memória (`last_assistant_message`,
+    `collected_information`, `questions_already_asked`, `offers_already_presented`,
+    `turn_count`, `last_action`) entram no payload SOMENTE quando não-None.
+    Com todos None (default) o body é idêntico ao v1.0 byte-a-byte.
+
+    Contexto v1.1 (aditivo/opt-in): `contract_version`/`agent_profile`/
+    `flow_resources`/`context_policy` também só entram quando fornecidos.
     """
     if mode not in MODES:
         mode = "shadow"
@@ -250,6 +293,26 @@ def build_payload(
     policy = _clamp_context_policy(context_policy)
     if policy:
         payload["context_policy"] = policy
+
+    # ── E-P1b — memória operacional (só presente quando fornecida) ──────────
+    if last_assistant_message is not None:
+        payload["last_assistant_message"] = _clamp_str(
+            last_assistant_message, MAX_LAST_ASSISTANT_MESSAGE_CHARS
+        )
+    if collected_information is not None:
+        payload["collected_information"] = _clamp_collected_information(collected_information)
+    if questions_already_asked is not None:
+        payload["questions_already_asked"] = _clamp_memory_list(
+            questions_already_asked, MAX_QUESTION_ITEM_CHARS
+        )
+    if offers_already_presented is not None:
+        payload["offers_already_presented"] = _clamp_memory_list(
+            offers_already_presented, MAX_OFFER_ITEM_CHARS
+        )
+    if turn_count is not None:
+        payload["turn_count"] = _clamp_int(turn_count, 0, MAX_TURN_COUNT, 0)
+    if last_action is not None:
+        payload["last_action"] = last_action if last_action in ACTIONS else None
     return payload
 
 
@@ -422,6 +485,125 @@ def _clamp_context_policy(policy):
         "include_global": bool(policy.get("include_global", False)),
         "max_resources": _clamp_int(policy.get("max_resources"), 1, MAX_RESOURCES, MAX_RESOURCES),
     }
+
+
+def _clamp_collected_information(info):
+    """Dict de escalares (≤30 chaves / key ≤60 / value ≤300). Descartar aninhado.
+
+    Valores aninhados são descartados no cliente para nunca gerar 422 no motor.
+    """
+    if not isinstance(info, dict):
+        return {}
+    clean = {}
+    for key, value in info.items():
+        k = _clamp_str(key, MAX_COLLECTED_KEY_CHARS)
+        if not k:
+            continue
+        if isinstance(value, str):
+            v = value[:MAX_COLLECTED_VALUE_CHARS]
+        elif value is None or isinstance(value, (bool, int, float)):
+            v = value
+        else:
+            continue  # aninhado/lista -> descartado
+        clean[k] = v
+        if len(clean) >= MAX_COLLECTED_KEYS:
+            break
+    return clean
+
+
+def _clamp_memory_list(items, item_limit):
+    """Lista de strings com limite de itens e de caracteres por item."""
+    out = []
+    for item in (items or [])[:MAX_MEMORY_LIST_ITEMS]:
+        if isinstance(item, str):
+            text = item[:item_limit]
+            if text:
+                out.append(text)
+    return out
+
+
+def normalize_intent(raw):
+    """D12 — (normalizado, original, kind). kind: None | 'alias' | 'invalid'."""
+    value = str(raw or "").strip().lower()
+    if value in INTENTS:
+        return value, None, None
+    if value in INTENT_ALIASES:
+        return INTENT_ALIASES[value], value, "alias"
+    return "outro", value, "invalid"
+
+
+# D5 — whitelist APLICÁVEL pela plataforma em `state_update`.
+# `last_action` foi RETIRADO (é interno da plataforma) e `conversation_summary`
+# fica FORA (D10: resumo é responsabilidade da plataforma).
+STATE_UPDATE_WHITELIST = (
+    "collected_information",
+    "questions_already_asked",
+    "offers_already_presented",
+    "funnel_stage",
+    "lead_temperature",
+    "objection",
+    "interest",
+)
+
+
+def apply_state_update(state, state_update, errors=None):
+    """Aplica o delta sugerido pelo motor (D5/D10/D12). Nunca é fatal.
+
+    Retorna a lista de chaves aplicadas. Chaves fora da whitelist ou com valor
+    inválido são IGNORADAS e registradas em `errors`. Nunca altera
+    `conversation_summary` nem `last_action`.
+    """
+    applied = []
+    if state_update is None:
+        return applied
+    if not isinstance(state_update, dict):
+        if errors is not None:
+            errors.append("state_update ignorado: tipo invalido.")
+        return applied
+
+    for key, value in state_update.items():
+        if key not in STATE_UPDATE_WHITELIST:
+            if errors is not None:
+                errors.append(f"state_update.{key} ignorado: chave fora da whitelist.")
+            continue
+
+        if key == "collected_information":
+            if not isinstance(value, dict):
+                if errors is not None:
+                    errors.append("state_update.collected_information ignorado: tipo invalido.")
+                continue
+            merged = dict(state.get("collected_information") or {})
+            merged.update(_clamp_collected_information(value))
+            state["collected_information"] = _clamp_collected_information(merged)
+            applied.append(key)
+        elif key in ("questions_already_asked", "offers_already_presented"):
+            if not isinstance(value, list):
+                if errors is not None:
+                    errors.append(f"state_update.{key} ignorado: tipo invalido.")
+                continue
+            limit = MAX_QUESTION_ITEM_CHARS if key == "questions_already_asked" else MAX_OFFER_ITEM_CHARS
+            merged = list(state.get(key) or []) + [str(v) for v in value if isinstance(v, str)]
+            state[key] = _clamp_memory_list(merged, limit)
+            applied.append(key)
+        elif key == "funnel_stage":
+            if value in FUNNEL_STAGES:
+                state["funnel_stage"] = value
+                applied.append(key)
+            elif errors is not None:
+                errors.append("state_update.funnel_stage ignorado: valor invalido.")
+        elif key == "lead_temperature":
+            if value in LEAD_TEMPERATURES:
+                state["lead_temperature"] = value
+                applied.append(key)
+            elif errors is not None:
+                errors.append("state_update.lead_temperature ignorado: valor invalido.")
+        elif key in ("objection", "interest"):
+            if isinstance(value, str):
+                state[key] = value[:MAX_LEAD_OBJECTION_CHARS]
+                applied.append(key)
+            elif errors is not None:
+                errors.append(f"state_update.{key} ignorado: tipo invalido.")
+    return applied
 
 
 def payload_size(payload):

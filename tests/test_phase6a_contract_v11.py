@@ -35,6 +35,9 @@ from internal_logic.services.ai_service import (  # noqa: E402
     _build_flow_resources,
     _clamp_context_policy,
     _clamp_profile,
+    normalize_intent,
+    apply_state_update,
+    AIResult,
 )
 from bot_manager import BotManager  # noqa: E402
 
@@ -406,30 +409,276 @@ def test_memory_never_enters_payload():
         assert key not in payload
 
 
-def test_state_set_merges_and_preserves_other_keys(monkeypatch=None):
+# ── Fake Redis com semântica WATCH/MULTI (para testar concorrência) ─────────
+import threading  # noqa: E402
+
+from bot_manager import _RedisWatchError as _WATCH_ERROR  # noqa: E402
+
+
+class FakeRedis:
+    def __init__(self):
+        self._data = {}
+        self._ver = {}
+        self._lock = threading.RLock()
+
+    def get(self, key):
+        with self._lock:
+            return self._data.get(key)
+
+    def setex(self, key, ttl, value):
+        with self._lock:
+            self._data[key] = value
+            self._ver[key] = self._ver.get(key, 0) + 1
+
+    def pipeline(self):
+        return FakePipeline(self)
+
+
+class FakePipeline:
+    def __init__(self, r):
+        self.r = r
+        self._watched = {}
+        self._pending = []
+        self._multi = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.reset()
+
+    def watch(self, key):
+        with self.r._lock:
+            self._watched[key] = self.r._ver.get(key, 0)
+
+    def get(self, key):
+        with self.r._lock:
+            return self.r._data.get(key)
+
+    def multi(self):
+        self._multi = True
+
+    def setex(self, key, ttl, value):
+        self._pending.append((key, value))
+
+    def execute(self):
+        with self.r._lock:
+            for k, v in self._watched.items():
+                if self.r._ver.get(k, 0) != v:
+                    raise _WATCH_ERROR()
+            for key, value in self._pending:
+                self.r._data[key] = value
+                self.r._ver[key] = self.r._ver.get(key, 0) + 1
+            self._pending = []
+
+    def reset(self):
+        self._watched = {}
+        self._pending = []
+        self._multi = False
+
+
+def test_state_set_merges_and_preserves_other_keys():
     import bot_manager as bm
-
-    store = {}
-
-    class _FakeRedis:
-        def get(self, key):
-            return store.get(key)
-
-        def setex(self, key, ttl, value):
-            store[key] = value.encode("utf-8")
-
+    fake = FakeRedis()
     original = bm.get_redis_connection
-    bm.get_redis_connection = lambda: _FakeRedis()
+    bm.get_redis_connection = lambda: fake
     try:
         mgr = BotManager.__new__(BotManager)
         mgr.user_id = 7
         mgr._ai_state_set(1, "999", {"intent": "duvida"})
         mgr._ai_state_set(1, "999", {"turn_count": 2})
-        saved = json.loads(list(store.values())[0].decode("utf-8"))
+        saved = json.loads(list(fake._data.values())[0])
         assert saved["intent"] == "duvida"   # merge não apaga
         assert saved["turn_count"] == 2
     finally:
         bm.get_redis_connection = original
+
+
+def test_state_atomic_no_lost_update_under_concurrency():
+    import bot_manager as bm
+    fake = FakeRedis()
+    original = bm.get_redis_connection
+    bm.get_redis_connection = lambda: fake
+    try:
+        mgr = BotManager.__new__(BotManager)
+        mgr.user_id = 7
+        key = mgr._ai_state_key(1, "999")
+
+        def worker():
+            for _ in range(25):
+                mgr._ai_state_atomic(1, "999", lambda s: s.__setitem__(
+                    "turn_count", int(s.get("turn_count") or 0) + 1))
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        saved = json.loads(fake._data[key])
+        assert saved["turn_count"] == min(100, 4 * 25), saved.get("turn_count")
+    finally:
+        bm.get_redis_connection = original
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7) E-P1b — memória no REQUEST (só quando fornecida) + clamps
+# ══════════════════════════════════════════════════════════════════════════
+def _mem_payload(**mem):
+    kw = dict(BASE_KWARGS)
+    kw.update(mem)
+    return build_payload(**kw)
+
+
+def test_memory_absent_when_not_provided():
+    payload = build_payload(**BASE_KWARGS)
+    for field in ("last_assistant_message", "collected_information",
+                  "questions_already_asked", "offers_already_presented",
+                  "turn_count", "last_action"):
+        assert field not in payload
+
+
+def test_memory_sent_when_provided_and_clamped():
+    payload = _mem_payload(
+        last_assistant_message="a" * 5000,
+        collected_information={"cidade": "SP"},
+        questions_already_asked=["q" * 500],
+        offers_already_presented=["o" * 500],
+        turn_count=999,
+        last_action="ask_question",
+    )
+    assert len(payload["last_assistant_message"]) == 2000
+    assert payload["collected_information"] == {"cidade": "SP"}
+    assert len(payload["questions_already_asked"][0]) == 300
+    assert len(payload["offers_already_presented"][0]) == 120
+    assert payload["turn_count"] == 100
+    assert payload["last_action"] == "ask_question"
+
+
+def test_memory_nested_collected_information_dropped():
+    payload = _mem_payload(collected_information={
+        "ok": "v", "nested": {"a": 1}, "list": [1, 2], "num": 3, "bool": True,
+    })
+    assert payload["collected_information"] == {"ok": "v", "num": 3, "bool": True}
+
+
+def test_memory_invalid_last_action_is_none():
+    payload = _mem_payload(last_action="bogus")
+    assert payload["last_action"] is None
+
+
+def test_memory_turn_count_zero_is_sent():
+    payload = _mem_payload(turn_count=0)
+    assert payload["turn_count"] == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8) E-P2 — reason/offer_id/state_update + mapa de intent (D5/D10/D12)
+# ══════════════════════════════════════════════════════════════════════════
+def test_normalize_intent():
+    assert normalize_intent("duvida") == ("duvida", None, None)
+    assert normalize_intent("oferta") == ("interesse", "oferta", "alias")
+    assert normalize_intent("informacao") == ("duvida", "informacao", "alias")
+    assert normalize_intent("xyz") == ("outro", "xyz", "invalid")
+    assert normalize_intent(None) == ("outro", "", "invalid")
+
+
+def test_airesult_parses_new_fields_and_aliases():
+    r = AIResult.from_dict({
+        "request_id": "x", "message": "oi", "intent": "oferta",
+        "lead_temperature": "warm", "funnel_stage": "offer", "action": "present_offer",
+        "next_question": None, "handoff_human": False, "risk": "low",
+        "validation": {"valid": True, "errors": []}, "usage": {},
+        "reason": "lead pediu preco", "offer_id": "of1",
+        "state_update": {"funnel_stage": "offer"},
+    })
+    assert r.intent == "interesse" and r.intent_original == "oferta" and r.intent_kind == "alias"
+    assert r.reason == "lead pediu preco"
+    assert r.offer_id == "of1"
+    assert r.state_update == {"funnel_stage": "offer"}
+
+
+def test_airesult_absent_new_fields_are_inert():
+    r = AIResult.from_dict({
+        "request_id": "x", "message": "oi", "intent": "duvida",
+        "lead_temperature": "warm", "funnel_stage": "new", "action": "continue",
+        "next_question": None, "handoff_human": False, "risk": "low",
+        "validation": {"valid": True, "errors": []}, "usage": {},
+    })
+    assert r.reason is None and r.offer_id is None and r.state_update is None
+
+
+def test_apply_state_update_whitelist_and_unknown_logged():
+    state = {}
+    errors = []
+    applied = apply_state_update(state, {
+        "collected_information": {"cidade": "SP"},
+        "lead_temperature": "hot",
+        "last_action": "continue",            # D5: fora da whitelist
+        "conversation_summary": "resumo",     # D10: fora da whitelist
+        "unknown_key": 1,
+    }, errors=errors)
+    assert "collected_information" in applied
+    assert state["lead_temperature"] == "hot"
+    assert "conversation_summary" not in state
+    assert "last_action" not in state
+    assert any("last_action" in e for e in errors)
+    assert any("conversation_summary" in e for e in errors)
+    assert any("unknown" in e for e in errors)
+
+
+def test_apply_state_update_rejects_invalid_values():
+    state = {"funnel_stage": "new"}
+    errors = []
+    apply_state_update(state, {"funnel_stage": "invalido", "lead_temperature": 123,
+                               "collected_information": "nao-e-dict"}, errors=errors)
+    assert state["funnel_stage"] == "new"
+    assert len(errors) == 3
+
+
+def test_apply_state_update_objection_interest_capped():
+    state = {}
+    apply_state_update(state, {"objection": "x" * 500, "interest": "y" * 500})
+    assert len(state["objection"]) == 120 and len(state["interest"]) == 120
+
+
+def test_apply_state_update_none_is_inert():
+    state = {"a": 1}
+    assert apply_state_update(state, None) == []
+    assert state == {"a": 1}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9) E-P1b (payload de memória) + D9 (guard humano)
+# ══════════════════════════════════════════════════════════════════════════
+def test_ai_memory_payload_shape():
+    payload = BotManager._ai_memory_payload({
+        "last_assistant_message": "ola", "collected_information": {"a": "b"},
+        "questions_already_asked": ["q"], "offers_already_presented": ["o"],
+        "turn_count": 4, "last_action": "ask_question",
+    })
+    assert payload == {
+        "last_assistant_message": "ola", "collected_information": {"a": "b"},
+        "questions_already_asked": ["q"], "offers_already_presented": ["o"],
+        "turn_count": 4, "last_action": "ask_question",
+    }
+    assert BotManager._ai_memory_payload({})["turn_count"] == 0
+
+
+def test_d9_precheck_skips_ai_when_human_takeover():
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: {"human_takeover": True}
+    mgr._personalize_text = lambda *a, **k: "fallback"
+
+    def _boom(*a, **k):
+        raise AssertionError("D9 deveria pular a IA (atendimento humano)")
+
+    mgr._ai_contract_v11_enabled = _boom
+    # não deve levantar: retorna cedo antes de tocar no gateway
+    mgr._handle_ai_turn(1, "tok", {}, 99, "999", {"id": "s1", "config": {}}, "oi")
 
 
 # ══════════════════════════════════════════════════════════════════════════

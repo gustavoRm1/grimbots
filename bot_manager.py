@@ -19,6 +19,13 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import pytz
 from internal_logic.core.redis_manager import get_redis_connection
+
+try:  # redis-py (produção); fallback local para testes sem redis instalado
+    from redis.exceptions import WatchError as _RedisWatchError
+except Exception:  # pragma: no cover
+    class _RedisWatchError(Exception):
+        pass
+
 import hashlib
 import hmac
 from internal_logic.services.flow_engine_router_v8 import get_message_router
@@ -3855,26 +3862,60 @@ class BotManager:
         except Exception:
             return {}
 
-    def _ai_state_set(self, bot_id: int, telegram_user_id: str, state: Dict[str, Any]):
-        """Persiste intencao/temperatura do lead (7 dias). Nunca derruba o turno.
+    _AI_STATE_TTL = 60 * 60 * 24 * 7  # 7 dias
 
-        Fase 6A §11: faz MERGE (read-modify-write) para nunca apagar chaves já
-        existentes (ex.: human_takeover sticky). Sem chaves novas, o resultado é
-        idêntico ao comportamento anterior (v1.0).
+    def _ai_state_set(self, bot_id: int, telegram_user_id: str, updates: Dict[str, Any]):
+        """Persiste estado do lead com MERGE ATÔMICO (WATCH/MULTI, retry).
+
+        Fase 6A §11 + correção de concorrência: nunca apaga chaves existentes e
+        nunca perde atualizações concorrentes. Fail-open: qualquer erro é logado
+        em debug e nunca derruba o turno.
+        """
+        bid, tuid = bot_id, telegram_user_id
+
+        def _mutate(state):
+            state.update(updates or {})
+
+        self._ai_state_atomic(bid, tuid, _mutate)
+
+    def _ai_state_atomic(self, bot_id: int, telegram_user_id: str, mutator) -> bool:
+        """Read-modify-write atômico do JSON de estado (WATCH/MULTI + retry).
+
+        `mutator(state_dict)` altera o dict em memória. Se outro processo alterar
+        a chave entre o WATCH e o EXECUTE, o redis levanta WatchError e a operação
+        é refeita sobre o estado mais recente (até `_AI_STATE_MAX_RETRIES`).
         """
         try:
             redis_conn = get_redis_connection()
             if not redis_conn:
-                return
-            merged = self._ai_state_get(bot_id, telegram_user_id) or {}
-            merged.update(state or {})
-            redis_conn.setex(
-                self._ai_state_key(bot_id, telegram_user_id),
-                60 * 60 * 24 * 7,
-                json.dumps(merged, ensure_ascii=False)
-            )
+                return False
+            key = self._ai_state_key(bot_id, telegram_user_id)
+            for _ in range(self._AI_STATE_MAX_RETRIES):
+                try:
+                    with redis_conn.pipeline() as pipe:
+                        pipe.watch(key)
+                        raw = pipe.get(key)
+                        if isinstance(raw, bytes):
+                            raw = raw.decode('utf-8', 'ignore')
+                        try:
+                            state = json.loads(raw) if raw else {}
+                        except (ValueError, TypeError):
+                            state = {}
+                        if not isinstance(state, dict):
+                            state = {}
+                        mutator(state)
+                        pipe.multi()
+                        pipe.setex(key, self._AI_STATE_TTL,
+                                   json.dumps(state, ensure_ascii=False))
+                        pipe.execute()
+                        return True
+                except _RedisWatchError:
+                    continue  # concorrência: refaz com o estado mais recente
+            logger.debug("⚠️ [IA] estado: WATCH esgotou tentativas")
+            return False
         except Exception as e:
             logger.debug(f"⚠️ [IA] falha ao salvar estado: {e}")
+            return False
 
     # ── Fase 6A / E-P1a — memória persistida (merge RMW, NÃO é enviada) ──────
     # Limites = schema do motor (D6, autoritativos). Persistir aqui não altera o
@@ -3888,6 +3929,7 @@ class BotManager:
     _AI_MAX_COLLECTED_KEY_CHARS = 60
     _AI_MAX_COLLECTED_VALUE_CHARS = 300
     _AI_MAX_TURN_COUNT = 100
+    _AI_STATE_MAX_RETRIES = 6
     _AI_MEMORY_ACTIONS = (
         'continue', 'ask_question', 'present_offer',
         'send_checkout', 'handoff_human', 'pause', 'do_not_respond',
@@ -3967,6 +4009,19 @@ class BotManager:
             4000,
         )
         return memory
+
+    @classmethod
+    def _ai_memory_payload(cls, state) -> dict:
+        """E-P1b — campos de memória para o REQUEST (build_payload aplica os clamps)."""
+        state = state or {}
+        return {
+            'last_assistant_message': state.get('last_assistant_message') or '',
+            'collected_information': dict(state.get('collected_information') or {}),
+            'questions_already_asked': list(state.get('questions_already_asked') or []),
+            'offers_already_presented': list(state.get('offers_already_presented') or []),
+            'turn_count': state.get('turn_count') or 0,
+            'last_action': state.get('last_action'),
+        }
 
     def _ai_build_history(self, bot_id: int, telegram_user_id: str, limit: int = 20) -> list:
         """Ultimas mensagens do dialogo no formato [{role, content}] (max 20)."""
@@ -4273,7 +4328,8 @@ class BotManager:
         """
         import uuid as _uuid
         from internal_logic.services.ai_service import (
-            get_ai_service, build_payload, AIGatewayError, payload_size, MAX_PAYLOAD_BYTES
+            get_ai_service, build_payload, AIGatewayError, payload_size,
+            MAX_PAYLOAD_BYTES, apply_state_update
         )
 
         step_config = step.get('config') or {}
@@ -4303,9 +4359,20 @@ class BotManager:
 
         state = self._ai_state_get(bot_id, telegram_user_id)
 
+        # D9 — guard: se já há atendimento humano, a IA NÃO responde (evita 409
+        # HUMAN_TAKEOVER_ACTIVE e não atropela o humano). Só existe quando o
+        # estado sticky foi marcado (contrato v1.1); em v1.0 é inócuo.
+        if state.get('human_takeover'):
+            logger.info(f"🤝 [IA] bloco {step.get('id')}: atendimento humano ativo - IA silenciosa")
+            return
+
         # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
         contract_v11 = self._ai_contract_v11_enabled(step_config)
-        v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config) if contract_v11 else {}
+        v11_kwargs = {}
+        if contract_v11:
+            v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config)
+            # E-P1b — envia a memória operacional (o motor já aceita; D6 respeitado)
+            v11_kwargs.update(self._ai_memory_payload(state))
         request_id = f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}"
 
         def _build_payload(extra_kwargs):
@@ -4355,6 +4422,13 @@ class BotManager:
             service = get_ai_service()
             result = service.respond(payload)
         except AIGatewayError as err:
+            # D9 — 409 do motor: não responde automaticamente nem spamma fallback.
+            if err.code in ('HUMAN_TAKEOVER_ACTIVE', 'AI_DISABLED_FOR_BOT'):
+                if err.code == 'HUMAN_TAKEOVER_ACTIVE' and contract_v11:
+                    self._ai_state_set(bot_id, telegram_user_id, {'human_takeover': True})
+                logger.info(f"ℹ️ [IA] {err.code}: IA nao responde neste turno")
+                self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
+                return
             logger.warning(f"⚠️ [IA] Grimbots AI API falhou ({err.code}): {err.message}")
             self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
             self.send_telegram_message(
@@ -4375,28 +4449,39 @@ class BotManager:
         if not result.valid:
             logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
 
-        # Persiste temperatura/intencao para o proximo turno (merge — §11)
-        state_updates = {
-            'lead_temperature': result.lead_temperature,
-            'funnel_stage': result.funnel_stage,
-            'intent': result.intent,
-            'objection': (payload.get('lead') or {}).get('objection') or '',
-            # interno (nunca vai no payload) — distinto de 'interest'
-            'last_intent': result.intent,
-        }
-        if contract_v11:
-            # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
-            state_updates['human_takeover'] = (
-                bool(state.get('human_takeover'))
-                or bool(getattr(result, 'handoff_human', False))
-                or result.action == 'handoff_human'
-            )
-        # E-P1a — memória completa persistida (merge RMW; NÃO entra no payload).
+        # D12 — observabilidade do mapa de intent (registra; nunca mascara)
+        if result.intent_kind == 'alias':
+            logger.info(f"ℹ️ [IA] intent normalizado '{result.intent_original}' -> '{result.intent}'")
+        elif result.intent_kind == 'invalid':
+            logger.warning(f"⚠️ [IA] intent desconhecido '{result.intent_original}' -> 'outro'")
+
         _turn_question = (result.next_question or '') if result.action == 'ask_question' else ''
-        state_updates.update(self._ai_memory_updates(
-            state, result, result.action, result.message or '', _turn_question
-        ))
-        self._ai_state_set(bot_id, telegram_user_id, state_updates)
+        _payload_objection = (payload.get('lead') or {}).get('objection') or ''
+        _state_update = getattr(result, 'state_update', None) if contract_v11 else None
+
+        def _persist(state_live):
+            # D5/D10 — aplica o delta sugerido pelo motor (whitelist; nunca resumo)
+            if _state_update:
+                apply_state_update(state_live, _state_update)
+            state_live['lead_temperature'] = result.lead_temperature
+            state_live['funnel_stage'] = result.funnel_stage
+            state_live['intent'] = result.intent
+            state_live['last_intent'] = result.intent
+            if _payload_objection:
+                state_live['objection'] = _payload_objection
+            if contract_v11:
+                # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
+                state_live['human_takeover'] = (
+                    bool(state_live.get('human_takeover'))
+                    or bool(getattr(result, 'handoff_human', False))
+                    or result.action == 'handoff_human'
+                )
+            # E-P1a — memória completa persistida (merge ATÔMICO; NÃO entra no payload)
+            state_live.update(self._ai_memory_updates(
+                state_live, result, result.action, result.message or '', _turn_question
+            ))
+
+        self._ai_state_atomic(bot_id, telegram_user_id, _persist)
 
         action = result.action
         message_text = self._personalize_text((result.message or '').strip(), bot_id, chat_id)

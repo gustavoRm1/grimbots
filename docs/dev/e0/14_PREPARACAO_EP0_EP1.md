@@ -1,12 +1,29 @@
 # 14 — Preparação E-P0 (clamps defensivos) e E-P1 (memória/contexto)
 
-> **Status:** **E-P0 e E-P1a implementados** (inertes; nada é enviado). **E-P1b**
-> permanece bloqueado por D1/D6. As decisões só são definitivas após confirmação
-> formal dos dois lados (`15_E0_1_PROPOSTA_RATIFICACAO.md`). Sem merge, deploy,
-> ativação ou alteração do contrato compartilhado.
+> **Status (atualizado):** **E-P0, E-P1a e E-P1b implementados** (E-P1b atrás de
+> flag, **desligada por padrão**). **E-P2** (reader defensivo de
+> `reason`/`offer_id`/`state_update`), **D9** (guard de atendimento humano) e
+> **D12** (mapa de `intent`) implementados no lado Grimbots. **D11** mitigação
+> plena depende do motor (dedupe por `request_id`) — evidência reproduzida.
+> A **ativação** (`GRIMBOTS_AI_CONTRACT=v1.1`) segue **bloqueada** por D1/D5/D6/
+> D10/D12 (confirmação formal dos dois lados — `15_E0_1_PROPOSTA_RATIFICACAO.md`).
+> Sem merge, deploy ou ativação.
 >
 > **Invariante:** com as flags **off**, o payload e o comportamento permanecem
 > **v1.0 byte-a-byte** (golden do cliente intacto).
+
+## Evidências (executadas)
+
+| Suíte | Comando | Resultado |
+|---|---|---|
+| Unit contrato v1.1 | `python3 tests/test_phase6a_contract_v11.py` | **47/47 offline OK** |
+| Golden cliente v1.0 | `python3 tests/test_agent_respond_contract.py` | **10/10** (byte-a-byte) |
+| Dedup next_question | `python3 tests/test_ai_next_question_dedup.py` | **11/11** |
+| Integração motor real | `python3 tests/integration/test_motor_live.py` | **5/5** (v1.0, v1.1, 409, 422 extra=forbid, D11) |
+
+Concorrência do estado: `test_state_atomic_no_lost_update_under_concurrency`
+(4 threads × 25 incrementos → `turn_count` = 100, sem lost update).
+
 
 ---
 
@@ -63,14 +80,32 @@ Já conformes (sem mudança): `bot_config.tone` 40≤60, `commercial_goal` 60≤
 
 | Fase | Depende de | Pode começar? |
 |---|---|---|
-| **E-P0** | nada (defensivo) | **sim** — decisão-independente |
-| **E-P1a** | nada (persiste, não envia) | **sim** — decisão-independente |
-| **E-P1b** (enviar) | **D1** (rótulo) + **D6** (limites) | **não** — aguarda acordo |
-| **E-P2** (ler resposta) | **D5** (whitelist) + **D10** (resumo) + motor **E2** | **não** |
-| **D12** (mapa `intent`) | acordo do mapa | **não** |
+| **E-P0** | nada (defensivo) | **feito** |
+| **E-P1a** | nada (persiste, não envia) | **feito** |
+| **E-P1b** (enviar) | flag por bloco/global; **ativação** aguarda D1/D6 | **código feito**; ativação não |
+| **E-P2** (ler resposta) | D5/D10; motor **E2** | **reader feito**; aplicação plena aguarda motor |
+| **D9** (guard humano) | nada | **feito** (pré-check + 409 sticky) |
+| **D12** (mapa `intent`) | mapa acordado | **feito** (registra original/normalizado) |
+
+### Notas de implementação (lado Grimbots)
+
+- `_ai_state_atomic` (bot_manager): WATCH/MULTI + retry (`WatchError`), merge RMW;
+  `turn_count` sem lost update sob concorrência.
+- E-P1b: `_ai_memory_payload(state)` → `build_payload(..., **memória)` só quando a
+  flag liga; default `None` mantém v1.0 byte-a-byte.
+- E-P2/D5/D10: `apply_state_update(state, delta, errors)` com **whitelist**
+  (ignora `conversation_summary`, `last_action` e chaves desconhecidas, registrando
+  em `errors`; nunca fatal).
+- D12: `normalize_intent` → (`oferta`→`interesse`, `informacao`→`duvida`) com
+  `intent_original`/`intent_kind`; valores fora do mapa → `outro` (invalid) e log.
+- D9: pré-check `state['human_takeover']` (IA silenciosa) + `HUMAN_TAKEOVER_ACTIVE`
+  409 do motor → marca sticky e **não** envia fallback.
 
 > Observação: o motor **já aceita** memória e contexto — E-P1b **não** exige mudança
-> no motor; exige só o acordo de rótulo/limites.
+> no motor; exige só o acordo de rótulo/limites. O motor **ainda não emite**
+> `reason`/`offer_id`/`state_update` (E2 pendente) — o reader Grimbots já os tolera.
+> **D11:** o motor **não deduplica** por `request_id` (reproduzido na integração);
+> mitigação plena depende do motor.
 
 ---
 
