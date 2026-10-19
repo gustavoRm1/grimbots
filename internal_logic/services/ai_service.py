@@ -12,6 +12,7 @@ Contrato: POST /v1/agent/respond  (Grimbots AI API v1.0.0)
 
 import json
 import logging
+import re
 import time
 import uuid
 
@@ -48,6 +49,37 @@ MAX_NEXT_QUESTION_CHARS = 300
 MAX_CONVERSATION_SUMMARY_CHARS = 4000
 MAX_OFFERS = 20
 MAX_REQUEST_ID_LEN = 80
+
+# ── E-P0 (D4/D14) — limites alinhados ao schema do motor --------------------
+# Clamps defensivos: nunca enviamos valor acima do que o motor aceita (evita
+# 422). Só APERTAM limites; para entradas válidas o payload v1.0 não muda.
+MAX_LEAD_NAME_CHARS = 60
+MAX_LEAD_INTEREST_CHARS = 120
+MAX_LEAD_OBJECTION_CHARS = 120
+MAX_OFFER_ID_CHARS = 64
+MAX_OFFER_CHECKOUT_URL_CHARS = 400
+
+# ── Fase 6A (contrato v1.1) — limites próprios, todos OFFLINE por padrão ────
+MAX_PROFILE_LISTS = 8
+MAX_PROFILE_ITEM_CHARS = 120
+MAX_PROFILE_DESCRIPTION_CHARS = 600
+MAX_RESOURCES = 20
+MAX_TAGS = 8
+MAX_TAG_CHARS = 24
+
+# Marcadores de tentativa de alterar regras do sistema via persona (Fase 6A §3).
+# O perfil é contexto de persona, NÃO um canal para mudar o comportamento do agente.
+_PROFILE_INJECTION_MARKERS = (
+    "ignore todas as regras", "ignorar todas as regras", "ignore as regras",
+    "desconsidere as regras", "esqueca as regras", "ignore suas regras",
+    "ignore previous", "ignore all previous", "system prompt", "prompt do sistema",
+    "confirme pagamentos", "confirme o pagamento", "confirma pagamento",
+    "invente midias", "invente midia", "crie midias", "crie arquivos",
+    "voce agora e", "a partir de agora voce",
+)
+_PROFILE_INJECTION_RE = re.compile(
+    "|".join(re.escape(m) for m in _PROFILE_INJECTION_MARKERS), re.IGNORECASE
+)
 
 # Codes 5xx que vale a pena repetir
 _RETRYABLE_CODES = {
@@ -158,8 +190,17 @@ def build_payload(
     available_offers=None,
     allowed_actions=None,
     mode="shadow",
+    contract_version=None,
+    agent_profile=None,
+    flow_resources=None,
+    context_policy=None,
 ):
-    """Monta o body exato do /v1/agent/respond (cada campo ja normalizado)."""
+    """Monta o body exato do /v1/agent/respond (cada campo ja normalizado).
+
+    Fase 6A (aditivo/opt-in): `contract_version`/`agent_profile`/`flow_resources`/
+    `context_policy` só entram no payload quando explicitamente fornecidos (não-None).
+    No default (todos None) o body é idêntico ao v1.0 byte-a-byte.
+    """
     if mode not in MODES:
         mode = "shadow"
 
@@ -188,15 +229,27 @@ def build_payload(
             "ai_enabled": bool((conversation_state or {}).get("ai_enabled", True)),
         },
         "lead": {
-            "name": _clamp_str((lead or {}).get("name"), 80),
-            "interest": _clamp_str((lead or {}).get("interest"), 200),
-            "objection": _clamp_str((lead or {}).get("objection"), 200),
+            "name": _clamp_str((lead or {}).get("name"), MAX_LEAD_NAME_CHARS),
+            "interest": _clamp_str((lead or {}).get("interest"), MAX_LEAD_INTEREST_CHARS),
+            "objection": _clamp_str((lead or {}).get("objection"), MAX_LEAD_OBJECTION_CHARS),
         },
         "recent_messages": _build_history(recent_messages),
         "conversation_summary": _clamp_str(conversation_summary, MAX_CONVERSATION_SUMMARY_CHARS),
         "available_offers": _build_offers(available_offers),
         "allowed_actions": _build_allowed_actions(allowed_actions),
     }
+
+    # ── Fase 6A (v1.1) — chaves SÓ presentes quando fornecidas (default = v1.0) ──
+    if contract_version:
+        payload["contract_version"] = _clamp_str(contract_version, 10, "1.0")
+    profile = _clamp_profile(agent_profile)
+    if profile:
+        payload["agent_profile"] = profile
+    if flow_resources is not None:
+        payload["flow_resources"] = _build_flow_resources(flow_resources)
+    policy = _clamp_context_policy(context_policy)
+    if policy:
+        payload["context_policy"] = policy
     return payload
 
 
@@ -246,7 +299,7 @@ def _build_offers(available_offers):
     for item in (available_offers or [])[:MAX_OFFERS]:
         if not isinstance(item, dict):
             continue
-        offer_id = _clamp_str(item.get("id"), 80)
+        offer_id = _clamp_str(item.get("id"), MAX_OFFER_ID_CHARS)
         name = _clamp_str(item.get("name"), 120)
         price = _clamp_str(item.get("price"), 40)
         if not offer_id or not name or not price:
@@ -255,7 +308,7 @@ def _build_offers(available_offers):
             "id": offer_id,
             "name": name,
             "price": price,
-            "checkout_url": _clamp_str(item.get("checkout_url"), 500),
+            "checkout_url": _clamp_str(item.get("checkout_url"), MAX_OFFER_CHECKOUT_URL_CHARS),
             "active": bool(item.get("active", True)),
         })
     return offers
@@ -266,6 +319,109 @@ def _build_allowed_actions(allowed_actions):
         return list(ACTIONS)
     picked = [a for a in allowed_actions if a in ACTIONS]
     return picked or list(ACTIONS)
+
+
+# ── Fase 6A (v1.1) — helpers de normalizacao (offline; nao afetam v1.0) ─────
+def _sanitize_profile_text(value, limit):
+    """Texto de persona: trunca, remove tentativas de alterar regras, colapsa espacos."""
+    text = _clamp_str(value, limit)
+    if not text:
+        return ""
+    text = _PROFILE_INJECTION_RE.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _clamp_str_list(value, max_items, item_chars):
+    """Normaliza lista de strings (aceita lista/tuple ou string separada por virgula)."""
+    if isinstance(value, str):
+        value = value.split(",")
+    if not isinstance(value, (list, tuple)):
+        return []
+    out = []
+    for item in value:
+        text = _sanitize_profile_text(item, item_chars)
+        if text:
+            out.append(text)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _clamp_profile(profile):
+    """Valida agent_profile (§3). Retorna None (omite o perfil inteiro) se invalido.
+
+    Regras: age obrigatorio 18..99; adult_only deve ser True. Sem isso, o perfil
+    NAO e enviado — nunca em versao parcial/ambigua.
+    """
+    if not isinstance(profile, dict):
+        return None
+    try:
+        age = int(profile.get("age"))
+    except (TypeError, ValueError):
+        return None
+    if not (18 <= age <= 99):
+        return None
+    if profile.get("adult_only", True) is not True:
+        return None
+    return {
+        "age": age,
+        "adult_only": True,
+        "origin": _sanitize_profile_text(profile.get("origin"), 60),
+        "current_location": _sanitize_profile_text(profile.get("current_location"), 60),
+        "niche": _sanitize_profile_text(profile.get("niche"), 40),
+        "subniche": _sanitize_profile_text(profile.get("subniche"), 40),
+        "speaking_style": _sanitize_profile_text(profile.get("speaking_style"), 120),
+        "persona_description": _sanitize_profile_text(
+            profile.get("persona_description"), MAX_PROFILE_DESCRIPTION_CHARS
+        ),
+        "likes": _clamp_str_list(profile.get("likes"), MAX_PROFILE_LISTS, 40),
+        "dislikes": _clamp_str_list(profile.get("dislikes"), MAX_PROFILE_LISTS, 40),
+        "boundaries": _clamp_str_list(
+            profile.get("boundaries"), MAX_PROFILE_LISTS, MAX_PROFILE_ITEM_CHARS
+        ),
+    }
+
+
+def _build_flow_resources(resources):
+    """Projecao read-only dos recursos do fluxo (§4/§8). NUNCA inclui urls/file_ids."""
+    out = []
+    for item in (resources or [])[:MAX_RESOURCES]:
+        if not isinstance(item, dict):
+            continue
+        resource_id = _clamp_str(item.get("resource_id"), 80)
+        resource_type = _clamp_str(item.get("resource_type"), 30)
+        if not resource_id or not resource_type:
+            continue
+        price = item.get("price_cents")
+        try:
+            price = int(price) if price is not None else None
+        except (TypeError, ValueError):
+            price = None
+        out.append({
+            "resource_id": resource_id,
+            "resource_type": resource_type,
+            "media_type": _clamp_str(item.get("media_type"), 20) or None,
+            "label": _clamp_str(item.get("label"), 120),
+            "description": _clamp_str(item.get("description"), 200),
+            "tags": _clamp_str_list(item.get("tags"), MAX_TAGS, MAX_TAG_CHARS),
+            "active": bool(item.get("active", True)),
+            "has_media": bool(item.get("has_media", False)),
+            "available": bool(item.get("available", False)),
+            "requires_payment": bool(item.get("requires_payment", False)),
+            "price_cents": price,
+        })
+    return out
+
+
+def _clamp_context_policy(policy):
+    if not isinstance(policy, dict):
+        return None
+    return {
+        "include_current_node": bool(policy.get("include_current_node", True)),
+        "include_reachable": bool(policy.get("include_reachable", True)),
+        "include_global": bool(policy.get("include_global", False)),
+        "max_resources": _clamp_int(policy.get("max_resources"), 1, MAX_RESOURCES, MAX_RESOURCES),
+    }
 
 
 def payload_size(payload):

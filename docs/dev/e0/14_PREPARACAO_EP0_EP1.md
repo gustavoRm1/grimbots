@@ -1,8 +1,9 @@
 # 14 — Preparação E-P0 (clamps defensivos) e E-P1 (memória/contexto)
 
-> **Status:** **plano** — NENHUM código foi alterado. Depende do acordo D1/D5/D6
-> (`13_RESPOSTA_DECISOES_PENDENTES.md`). Enquanto não houver consenso: sem merge,
-> deploy, ativação ou alteração do contrato compartilhado.
+> **Status:** **E-P0 e E-P1a implementados** (inertes; nada é enviado). **E-P1b**
+> permanece bloqueado por D1/D6. As decisões só são definitivas após confirmação
+> formal dos dois lados (`15_E0_1_PROPOSTA_RATIFICACAO.md`). Sem merge, deploy,
+> ativação ou alteração do contrato compartilhado.
 >
 > **Invariante:** com as flags **off**, o payload e o comportamento permanecem
 > **v1.0 byte-a-byte** (golden do cliente intacto).

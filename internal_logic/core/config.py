@@ -72,6 +72,10 @@ class Config:
     GRIMBOTS_AI_API_KEY = os.environ.get('GRIMBOTS_AI_API_KEY', '')
     GRIMBOTS_AI_TIMEOUT = float(os.environ.get('GRIMBOTS_AI_TIMEOUT', '90') or '90')
     GRIMBOTS_AI_MOCK = os.environ.get('GRIMBOTS_AI_MOCK', 'false').lower() in {'1', 'true', 'yes'}
+    # Fase 6A — feature flag de contrato. 'v1.0' (default) = comportamento atual byte-a-byte.
+    # 'v1.1' apenas HABILITA o suporte técnico; o envio real ainda exige o flag por bloco
+    # (step_config['contract_v11']). NAO ativar antes do AI Gateway aceitar os campos novos.
+    GRIMBOTS_AI_CONTRACT = (os.environ.get('GRIMBOTS_AI_CONTRACT', 'v1.0') or 'v1.0').strip().lower()
     
     @classmethod
     def init_app(cls, app, rq_pool=False):
@@ -130,3 +134,4 @@ class Config:
         app.config['GRIMBOTS_AI_API_KEY'] = cls.GRIMBOTS_AI_API_KEY
         app.config['GRIMBOTS_AI_TIMEOUT'] = cls.GRIMBOTS_AI_TIMEOUT
         app.config['GRIMBOTS_AI_MOCK'] = cls.GRIMBOTS_AI_MOCK
+        app.config['GRIMBOTS_AI_CONTRACT'] = cls.GRIMBOTS_AI_CONTRACT

@@ -3856,18 +3856,117 @@ class BotManager:
             return {}
 
     def _ai_state_set(self, bot_id: int, telegram_user_id: str, state: Dict[str, Any]):
-        """Persiste intencao/temperatura do lead (7 dias). Nunca derruba o turno."""
+        """Persiste intencao/temperatura do lead (7 dias). Nunca derruba o turno.
+
+        Fase 6A §11: faz MERGE (read-modify-write) para nunca apagar chaves já
+        existentes (ex.: human_takeover sticky). Sem chaves novas, o resultado é
+        idêntico ao comportamento anterior (v1.0).
+        """
         try:
             redis_conn = get_redis_connection()
             if not redis_conn:
                 return
+            merged = self._ai_state_get(bot_id, telegram_user_id) or {}
+            merged.update(state or {})
             redis_conn.setex(
                 self._ai_state_key(bot_id, telegram_user_id),
                 60 * 60 * 24 * 7,
-                json.dumps(state, ensure_ascii=False)
+                json.dumps(merged, ensure_ascii=False)
             )
         except Exception as e:
             logger.debug(f"⚠️ [IA] falha ao salvar estado: {e}")
+
+    # ── Fase 6A / E-P1a — memória persistida (merge RMW, NÃO é enviada) ──────
+    # Limites = schema do motor (D6, autoritativos). Persistir aqui não altera o
+    # payload v1.0: o envio só acontece em E-P1b (flag off por padrão).
+    _AI_MAX_LAST_ASSISTANT_MESSAGE = 2000
+    _AI_MAX_QUESTIONS = 20
+    _AI_MAX_QUESTION_CHARS = 300
+    _AI_MAX_OFFERS_PRESENTED = 20
+    _AI_MAX_OFFER_ID_CHARS = 120
+    _AI_MAX_COLLECTED_KEYS = 30
+    _AI_MAX_COLLECTED_KEY_CHARS = 60
+    _AI_MAX_COLLECTED_VALUE_CHARS = 300
+    _AI_MAX_TURN_COUNT = 100
+    _AI_MEMORY_ACTIONS = (
+        'continue', 'ask_question', 'present_offer',
+        'send_checkout', 'handoff_human', 'pause', 'do_not_respond',
+    )
+
+    @staticmethod
+    def _ai_clamp_text(value, limit: int) -> str:
+        return str(value or '').strip()[:limit]
+
+    @classmethod
+    def _ai_clamp_collected_information(cls, info) -> dict:
+        """Aplica os limites do schema do motor (≤30 chaves/key≤60/value≤300)."""
+        if not isinstance(info, dict):
+            return {}
+        clean = {}
+        for key, value in info.items():
+            k = cls._ai_clamp_text(key, cls._AI_MAX_COLLECTED_KEY_CHARS)
+            if not k:
+                continue
+            if isinstance(value, str):
+                value = value[:cls._AI_MAX_COLLECTED_VALUE_CHARS]
+            elif isinstance(value, (int, float, bool)) or value is None:
+                pass
+            else:
+                continue
+            clean[k] = value
+            if len(clean) >= cls._AI_MAX_COLLECTED_KEYS:
+                break
+        return clean
+
+    @classmethod
+    def _ai_memory_updates(cls, state, result, action, message_text, question) -> dict:
+        """Delta de memória do turno (E-P1a). Só PERSISTE — nunca entra no payload.
+
+        `collected_information`/`offers_already_presented`/`conversation_summary`
+        são inicializados/mergeados aqui; seus valores passam a ser populados pelo
+        `state_update` do motor em E-P2 (quando o motor passar a devolver esse campo).
+        """
+        state = state or {}
+        memory = {}
+
+        try:
+            prev_turns = int(state.get('turn_count') or 0)
+        except (TypeError, ValueError):
+            prev_turns = 0
+        memory['turn_count'] = min(prev_turns + 1, cls._AI_MAX_TURN_COUNT)
+
+        memory['last_action'] = action if action in cls._AI_MEMORY_ACTIONS else None
+
+        assistant_text = message_text or getattr(result, 'message', '') or ''
+        memory['last_assistant_message'] = cls._ai_clamp_text(
+            assistant_text, cls._AI_MAX_LAST_ASSISTANT_MESSAGE
+        )
+
+        asked = [cls._ai_clamp_text(q, cls._AI_MAX_QUESTION_CHARS)
+                 for q in (state.get('questions_already_asked') or [])
+                 if cls._ai_clamp_text(q, cls._AI_MAX_QUESTION_CHARS)]
+        new_question = cls._ai_clamp_text(
+            question or getattr(result, 'next_question', ''), cls._AI_MAX_QUESTION_CHARS
+        )
+        if new_question:
+            asked = [q for q in asked if q != new_question]
+            asked.append(new_question)
+        memory['questions_already_asked'] = asked[-cls._AI_MAX_QUESTIONS:]
+
+        presented = [cls._ai_clamp_text(o, cls._AI_MAX_OFFER_ID_CHARS)
+                     for o in (state.get('offers_already_presented') or [])]
+        memory['offers_already_presented'] = presented[-cls._AI_MAX_OFFERS_PRESENTED:]
+
+        collected = cls._ai_clamp_collected_information(
+            dict(state.get('collected_information') or {})
+        )
+        memory['collected_information'] = collected
+
+        memory['conversation_summary'] = cls._ai_clamp_text(
+            state.get('conversation_summary') or state.get('summary') or '',
+            4000,
+        )
+        return memory
 
     def _ai_build_history(self, bot_id: int, telegram_user_id: str, limit: int = 20) -> list:
         """Ultimas mensagens do dialogo no formato [{role, content}] (max 20)."""
@@ -3892,6 +3991,156 @@ class BotManager:
                 'content': text
             })
         return history
+
+    # ── Fase 6A — contrato v1.1 (ADITIVO, protegido por flag; default v1.0) ──
+    # Nada aqui é enviado ao Gateway enquanto o flag estiver desligado. O flag
+    # global GRIMBOTS_AI_CONTRACT='v1.1' apenas HABILITA o suporte; o envio real
+    # ainda exige step_config['contract_v11']=true. NAO ativar antes do AI Gateway
+    # aceitar agent_profile/flow_resources/context_policy (extra=forbid -> 422).
+    @staticmethod
+    def _ai_contract_v11_enabled(step_config) -> bool:
+        """True somente com flag global v1.1 E flag do bloco ligada."""
+        try:
+            from flask import current_app
+            if str(current_app.config.get('GRIMBOTS_AI_CONTRACT', 'v1.0')).strip().lower() != 'v1.1':
+                return False
+        except Exception:
+            return False
+        return bool((step_config or {}).get('contract_v11', False))
+
+    @staticmethod
+    def _ai_agent_profile(step_config):
+        """Perfil bruto do bloco (a validação/omissão acontece em _clamp_profile)."""
+        profile = (step_config or {}).get('agent_profile')
+        if isinstance(profile, dict) and profile:
+            return profile
+        return None
+
+    _AI_RESOURCE_TYPES = ('content', 'audio', 'payment', 'buttons', 'redirect', 'access')
+    _AI_TAG_STOPWORDS = {
+        'video', 'foto', 'audio', 'imagem', 'mensagem', 'conteudo', 'arquivo',
+        'para', 'com', 'uma', 'dos', 'das', 'que', 'seu', 'sua', 'por', 'the',
+    }
+
+    @staticmethod
+    def _ai_derive_tags(*texts):
+        """Derivação CONSERVADORA de tags (Fase 6A §9) — não é busca confiável."""
+        import re as _re
+        tags, seen = [], set()
+        for text in texts:
+            if not text:
+                continue
+            for token in _re.findall(r'[0-9a-zA-ZÀ-ÿ]+', str(text).lower()):
+                if len(token) < 3 or token in BotManager._AI_TAG_STOPWORDS or token in seen:
+                    continue
+                seen.add(token)
+                tags.append(token)
+                if len(tags) >= 8:
+                    return tags
+        return tags
+
+    @staticmethod
+    def _ai_resource_from_step(step):
+        """Projeção read-only de um nó (§4/§8). Nunca inclui url/file_id."""
+        stype = str((step or {}).get('type') or '').strip()
+        sid = (step or {}).get('id')
+        if sid in (None, '') or stype not in BotManager._AI_RESOURCE_TYPES:
+            return None
+        cfg = (step or {}).get('config') or {}
+        res = {
+            'resource_id': f"step_{sid}",
+            'resource_type': stype,
+            'media_type': None,
+            'label': '',
+            'description': str(cfg.get('description') or '').strip(),
+            'tags': [],
+            'active': bool(step.get('active', True)),
+            'has_media': False,
+            'available': False,
+            'requires_payment': False,
+            'price_cents': None,
+        }
+        if stype == 'content':
+            media_url = cfg.get('media_url') or ''
+            res['media_type'] = str(cfg.get('media_type') or 'video')
+            res['has_media'] = bool(media_url)
+            res['label'] = str(cfg.get('message') or '').strip() or f"{res['media_type']} {sid}"
+            res['available'] = res['has_media']
+        elif stype == 'audio':
+            audio_url = cfg.get('audio_url') or ''
+            res['media_type'] = 'audio'
+            res['has_media'] = bool(audio_url)
+            res['label'] = str(cfg.get('message') or '').strip() or f"audio {sid}"
+            res['available'] = res['has_media']
+        elif stype == 'payment':
+            price = cfg.get('price')
+            if price is None:
+                price = cfg.get('amount')
+            try:
+                price_cents = int(round(float(price) * 100)) if price not in (None, '') else None
+            except (TypeError, ValueError):
+                price_cents = None
+            res['label'] = str(cfg.get('product_name') or cfg.get('button_text') or 'Produto')
+            res['requires_payment'] = True
+            res['price_cents'] = price_cents
+            res['available'] = bool(price_cents and price_cents > 0)
+        elif stype == 'buttons':
+            res['label'] = str(cfg.get('message') or 'Opções')
+            res['available'] = bool(cfg.get('custom_buttons') or cfg.get('selected_buttons'))
+        elif stype == 'redirect':
+            res['label'] = str(cfg.get('button_text') or cfg.get('message') or 'Link')
+            res['available'] = bool(cfg.get('redirect_url'))
+        elif stype == 'access':
+            res['label'] = str(cfg.get('message') or 'Acesso')
+            res['available'] = bool(cfg.get('access_link') or cfg.get('link'))
+        res['tags'] = BotManager._ai_derive_tags(res['label'], cfg.get('product_name'), res['media_type'])
+        return res
+
+    def _ai_build_flow_resources(self, config, step, step_config, policy=None) -> list:
+        """Recursos autorizados do turno (§7): nó atual + vizinhos DIRETOS
+        (next/checkout/handoff). NÃO inclui descendentes nem catálogo global."""
+        steps = self._ai_flow_steps(config)
+        if not steps:
+            return []
+        try:
+            max_res = int((policy or {}).get('max_resources') or 20)
+        except (TypeError, ValueError):
+            max_res = 20
+        conns = (step.get('connections') or {}) if isinstance(step, dict) else {}
+        ordered, seen = [], set()
+        for key in ('next', 'checkout', 'handoff'):
+            target = conns.get(key)
+            if target and str(target) not in seen:
+                seen.add(str(target))
+                ordered.append(str(target))
+        resources = []
+        for sid in ordered:
+            node = self._find_step_by_id(steps, sid)
+            if not node:
+                continue
+            res = self._ai_resource_from_step(node)
+            if res:
+                resources.append(res)
+            if len(resources) >= max_res:
+                break
+        return resources
+
+    def _ai_v11_payload_kwargs(self, config, step, step_config) -> Dict[str, Any]:
+        """Blocos v1.1 (só usados com o flag ligado)."""
+        policy = step_config.get('context_policy')
+        policy = dict(policy) if isinstance(policy, dict) else {}
+        policy = {
+            'include_current_node': bool(policy.get('include_current_node', True)),
+            'include_reachable': bool(policy.get('include_reachable', True)),
+            'include_global': bool(policy.get('include_global', False)),
+            'max_resources': policy.get('max_resources') or 20,
+        }
+        return {
+            'contract_version': '1.1',
+            'agent_profile': self._ai_agent_profile(step_config),
+            'flow_resources': self._ai_build_flow_resources(config, step, step_config, policy),
+            'context_policy': policy,
+        }
 
     @staticmethod
     def _ai_bot_config(step_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -4023,7 +4272,9 @@ class BotManager:
         Qualquer falha -> fallback_message (mantem o step ativo).
         """
         import uuid as _uuid
-        from internal_logic.services.ai_service import get_ai_service, build_payload, AIGatewayError
+        from internal_logic.services.ai_service import (
+            get_ai_service, build_payload, AIGatewayError, payload_size, MAX_PAYLOAD_BYTES
+        )
 
         step_config = step.get('config') or {}
         fallback_message = self._personalize_text(
@@ -4052,9 +4303,14 @@ class BotManager:
 
         state = self._ai_state_get(bot_id, telegram_user_id)
 
-        try:
-            payload = build_payload(
-                request_id=f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}",
+        # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
+        contract_v11 = self._ai_contract_v11_enabled(step_config)
+        v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config) if contract_v11 else {}
+        request_id = f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}"
+
+        def _build_payload(extra_kwargs):
+            return build_payload(
+                request_id=request_id,
                 seller_id=str(self.user_id or 'seller'),
                 bot_id=str(bot_id),
                 conversation_id=f"c{bot_id}-{telegram_user_id}",
@@ -4076,8 +4332,16 @@ class BotManager:
                 conversation_summary=str(state.get('summary') or ''),
                 available_offers=self._ai_build_offers(config, step, step_config),
                 allowed_actions=step_config.get('allowed_actions') or None,
-                mode=step_config.get('mode') or 'auto'
+                mode=step_config.get('mode') or 'auto',
+                **extra_kwargs
             )
+
+        try:
+            payload = _build_payload(v11_kwargs)
+            # Fase 6A §10: estourou o orçamento -> reduz recursos (nunca trunca o perfil).
+            if (contract_v11 and payload.get('flow_resources')
+                    and payload_size(payload) > MAX_PAYLOAD_BYTES):
+                payload = _build_payload({**v11_kwargs, 'flow_resources': []})
         except AIGatewayError as build_err:
             logger.warning(f"⚠️ [IA] payload invalido: {build_err}")
             self.send_telegram_message(
@@ -4111,13 +4375,28 @@ class BotManager:
         if not result.valid:
             logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
 
-        # Persiste temperatura/intencao para o proximo turno
-        self._ai_state_set(bot_id, telegram_user_id, {
+        # Persiste temperatura/intencao para o proximo turno (merge — §11)
+        state_updates = {
             'lead_temperature': result.lead_temperature,
             'funnel_stage': result.funnel_stage,
             'intent': result.intent,
-            'objection': (payload.get('lead') or {}).get('objection') or ''
-        })
+            'objection': (payload.get('lead') or {}).get('objection') or '',
+            # interno (nunca vai no payload) — distinto de 'interest'
+            'last_intent': result.intent,
+        }
+        if contract_v11:
+            # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
+            state_updates['human_takeover'] = (
+                bool(state.get('human_takeover'))
+                or bool(getattr(result, 'handoff_human', False))
+                or result.action == 'handoff_human'
+            )
+        # E-P1a — memória completa persistida (merge RMW; NÃO entra no payload).
+        _turn_question = (result.next_question or '') if result.action == 'ask_question' else ''
+        state_updates.update(self._ai_memory_updates(
+            state, result, result.action, result.message or '', _turn_question
+        ))
+        self._ai_state_set(bot_id, telegram_user_id, state_updates)
 
         action = result.action
         message_text = self._personalize_text((result.message or '').strip(), bot_id, chat_id)
