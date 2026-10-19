@@ -1,25 +1,25 @@
 # D11 — matriz esperado × observado
 
-> Gerado em **2026-10-19T15:23:27Z** pelo harness `handoff/d11/d11_acceptance.py`.
+> Gerado em **2026-10-19T15:53:29Z** pelo harness `handoff/d11/d11_acceptance.py`.
 > Reproduzível: ver §2. **Não** substitui os testes internos do motor.
 
 ## 1. Identificação (commits exatos)
 
 | Item | Valor |
 |---|---|
-| Motor — commit | `48983253a3b42db22dd43866cfb16ae53cbe3a66` (`4898325`) |
-| Motor — assunto | D11 crosscheck: re-run acceptance 6/6; document 12.4 limits; add matrix/evidence |
-| Motor — versão reportada (`/health`) | `1.0.0` |
+| Motor — commit | `b81dcadd586b3c9b96d6db27c5982881ef5dc6ec` (`b81dcad`) |
+| Motor — assunto | docs(alinhamento): add 12.5 persistent store decision + limits |
+| Motor — versão reportada (`/health`) | `1.6.0` |
 | Motor — modelo | `grimbots-sales:latest` |
-| Motor — describe | `4898325` |
-| Grimbots — commit | `c17df8a5bd993ce95a03e7fcb18adea527e5a19a` (`c17df8a`) |
+| Motor — describe | `b81dcad` |
+| Grimbots — commit | `cbe7f9ebc8a3d122e076dad173876d38578d04f6` (`cbe7f9e`) |
 | `REQUEST_TIMEOUT` (execução) | 5 |
 
 ## 2. Comandos de reprodução
 
 ```bash
 # 1) checkout do motor no commit acima (NÃO alterar o repo do motor)
-git -C <motor> checkout 4898325 && cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app
+git -C <motor> checkout b81dcad && cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app
 # 2) aceite D11 (independente)
 MOTOR_DIR=<motor> MOTOR_VENV_PY=<venv>/bin/python python3 handoff/d11/d11_acceptance.py
 # 3) testes Grimbots (409 sem efeitos, D6, E4)
@@ -62,5 +62,7 @@ python3 tests/test_d11_dedupe.py  # e tests/test_phase6a_contract_v11.py
 
 ## 7. Pendência do motor (próximo passo)
 
-Quando o motor entregar **(a)** persistência do store de dedupe e **(b)** correção da versão do `/health`: **re-executar** §2 contra a nova versão e **atualizar esta matriz** (o harness registra o novo commit).
+**(b) versão do `/health`** — resolvida (`daba546`: `version=1.6.0`).
+
+**(a) persistência do store de dedupe** — **pendente**. Quando entregue: **re-executar** §2 contra a nova versão e **atualizar esta matriz** (o harness registra o novo commit), validando **concorrência/replay/restart/multi-instância** (S6/S8).
 
