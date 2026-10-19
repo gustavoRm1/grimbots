@@ -1,25 +1,25 @@
 # D11 — matriz esperado × observado
 
-> Gerado em **2026-10-19T16:41:38Z** pelo harness `handoff/d11/d11_acceptance.py`.
+> Gerado em **2026-10-19T17:30:53Z** pelo harness `handoff/d11/d11_acceptance.py`.
 > Reproduzível: ver §2. **Não** substitui os testes internos do motor.
 
 ## 1. Identificação (commits exatos)
 
 | Item | Valor |
 |---|---|
-| Motor — commit | `c8d8e67327b8c96389b3de2c38a841694978952e` (`c8d8e67`) |
-| Motor — assunto | E3: integrate commercial decision into /v1/agent/respond (action+message), enforce E2 allowed_actions precedence, add integration/precedence tests + evidence |
+| Motor — commit | `a3ccecf62a9b4404480d29d5194b26a3d3c9a1f1` (`a3ccecf`) |
+| Motor — assunto | docs: E3 multi-turn memory, E4 baseline, D11 durable store |
 | Motor — versão reportada (`/health`) | `1.6.0` |
 | Motor — modelo | `grimbots-sales:latest` |
-| Motor — describe | `c8d8e67` |
-| Grimbots — commit | `72e83cdfec4964810a5c568ce4a48a95a3ba61b5` (`72e83cd`) |
+| Motor — describe | `a3ccecf` |
+| Grimbots — commit | `f3b7c0f3d80faca2b7a2ecbe5009979aac2f26a9` (`f3b7c0f`) |
 | `REQUEST_TIMEOUT` (execução) | 5 |
 
 ## 2. Comandos de reprodução
 
 ```bash
 # 1) checkout do motor no commit acima (NÃO alterar o repo do motor)
-git -C <motor> checkout c8d8e67 && cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app
+git -C <motor> checkout a3ccecf && cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app
 # 2) aceite D11 (independente)
 MOTOR_DIR=<motor> MOTOR_VENV_PY=<venv>/bin/python python3 handoff/d11/d11_acceptance.py
 # 3) testes Grimbots (409 sem efeitos, D6, E4)

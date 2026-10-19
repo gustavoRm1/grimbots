@@ -8,12 +8,13 @@
 
 | Item | Valor |
 |---|---|
-| Commit validado (consumido) | `c8d8e67` (`E3: integrate commercial decision into /v1/agent/respond ...`) |
-| Commit anterior validado | `b81dcad` (store persistente docs) |
+| Commit validado (consumido) | `a3ccecf` (`docs: E3 multi-turn memory, E4 baseline, D11 durable store`) |
+| Commit anterior validado | `c8d8e67` (E3 ligado ao endpoint) |
 | Versão do serviço (`/health`) | `1.6.0` (corrigida em `daba546`) |
 | Contrato | `contract_version` 1.0/1.1/1.2 (rastreabilidade; ativação por presença de campos) |
-| Verificação Grimbots | `handoff/d11/d11_acceptance.py` → **CONTRATO 9/9 PASS** (b81dcad e c8d8e67) |
-| Integração HTTP | `tests/integration/test_motor_live.py` → **10/10 OK** (c8d8e67); 8/10 em b81dcad (G/H exigem E3) |
+| Verificação Grimbots | `handoff/d11/d11_acceptance.py` → **CONTRATO 9/9 PASS** (a3ccecf) |
+| Integração HTTP | `tests/integration/test_motor_live.py` → **10/10 OK** (a3ccecf) |
+| Integração E3 multi-turno | `tests/integration/test_e3_multiturn_live.py` → **9/9 OK** (a3ccecf) |
 
 ## Histórico de entregas analisadas
 
@@ -29,6 +30,21 @@
 | `b81dcad` | docs §12.5 (store persistente) | nenhum (doc) | — |
 | `cbdfa97` | **E3** (módulo, não exposto) | nenhum na interface HTTP — `commercial_decision.py` sem ligação | aguardar exposição |
 | `c8d8e67` | **E3 ligado** ao `/v1/agent/respond` + precedência E2 | **refina `action`/`message`/`reason`/`next_question`/`state_update`** (mesmo schema; sem campo novo) | **validado** — ver §E3 |
+| `a461cb0` | **E3 memória multi-turno** (objeção persistida, não repetir pergunta, funil por evidência) | refina `state_update`/`action` (mesmo schema) | **validado** — ver §E3/E4/D11 |
+| `a4ea380` | **E4** baseline offline (3 cenários + `e4_observed.json`) | nenhum na interface HTTP (só testes/evidência) | revisado (não confundir 3/3 com validação ampla) |
+| `dbe5a93` | **D11 store durável opt-in** (`D11_STORE=sqlite`, WAL) | comportamento default inalterado (memory) | revisado; **ativação bloqueada** |
+| `a3ccecf` | docs (E3/E4/D11) | nenhum (doc) | — |
+
+## E3/E4/D11 (`a461cb0`/`a4ea380`/`dbe5a93`) — análise de impacto
+
+- **E3 (`a461cb0`) — memória multi-turno:**
+  - Lê a objeção de preço **persistida** em `collected_information` (chaves `objection`/`objecao*`), não só o turno atual; objeção antiga **não é bloqueio permanente** (`objection_resolved`/funil avançado liberam); nunca fecha `send_checkout` com objeção ativa.
+  - Não repete a última pergunta do assistente (literal/contida).
+  - Propõe avanço de `funnel_stage` via `state_update` **só com evidência**, **monotônico** e dentro da whitelist D5.
+  - **Validação E2E** (`tests/integration/test_e3_multiturn_live.py`, 9/9): objeção ativa persiste → `present_offer` (não fecha); objeção resolvida → `send_checkout`; pergunta já feita não se repete no turno 2; `funnel_stage` persistido e reenviado; `context_policy.allowed_actions` restringe (interseção E2); `ai_enabled=false`/`human_takeover=true` → 409; funil não dispara efeito externo.
+- **E4 (`a4ea380`):** harness offline com 3 cenários (objeção, pergunta repetida literal+semântica, progressão de funil); `tests/acceptance/e4_observed.json` = 3/3 (com 1 falso-positivo semântico registrado). **Não** constitui validação ampla.
+- **D11 (`dbe5a93`):** `SqliteDedupe` opt-in (`D11_STORE=sqlite` + `D11_SQLITE_PATH`), WAL/BEGIN IMMEDIATE, sobrevive a restart de **processo**. Default permanece `memory`. **Single-host**, **sem exactly-once** (janela geração→`complete()`). **Ativação não autorizada.**
+- **Correções Grimbots (E-P0/F1) decorrentes desta revisão:** clamps de `collected_information` alinhados a **20 chaves / 200 chars** (doc 18) e precedência monotônica do `funnel_stage` (a proposta do motor via `state_update` não é mais sobrescrita pelo modelo). Ver doc `20_AUDITORIA_E3_E4_D11.md`.
 
 ## E3 (`c8d8e67`) — análise de impacto e validação
 
@@ -65,9 +81,11 @@
 
 ```bash
 # motor em worktree detached (NÃO alterar o repo do motor)
-git -C <motor> worktree add --detach /tmp/motor-b81dcad b81dcad
-MOTOR_DIR=/tmp/motor-b81dcad MOTOR_VENV_PY=<venv>/bin/python \
+git -C <motor> worktree add --detach /tmp/motor-a3ccecf a3ccecf
+MOTOR_DIR=/tmp/motor-a3ccecf MOTOR_VENV_PY=<venv>/bin/python \
   python3 handoff/d11/d11_acceptance.py            # CONTRATO 9/9
-GRIMBOTS_AI_MOTOR_DIR=/tmp/motor-b81dcad GRIMBOTS_AI_VENV_PY=<venv>/bin/python \
-  python3 tests/integration/test_motor_live.py     # 6/6
+GRIMBOTS_AI_MOTOR_DIR=/tmp/motor-a3ccecf GRIMBOTS_AI_VENV_PY=<venv>/bin/python \
+  python3 tests/integration/test_motor_live.py     # 10/10
+GRIMBOTS_AI_MOTOR_DIR=/tmp/motor-a3ccecf GRIMBOTS_AI_VENV_PY=<venv>/bin/python \
+  python3 tests/integration/test_e3_multiturn_live.py   # 9/9
 ```
