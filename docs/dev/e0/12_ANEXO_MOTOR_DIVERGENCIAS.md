@@ -60,35 +60,76 @@
 
 ## 4. Testes reproduzíveis pedidos
 
-### T15 — divergência de enum `intent` (reprodutível)
+### T15 — divergência de enum `intent` (reprodutível) — **corrigido e validado**
 
 **Objetivo:** tornar determinístico o `known_failure: invalid_intent_oferta`.
 
+**Correção (válida no repo do motor):**
+- o mock correto é a função **`ollama_client.generate`** (async), pois `app.py:19`
+  faz `import ollama_client` e chama `await ollama_client.generate(prompt)`
+  (`app.py:176`). **Não** existe `ollama_client.query`, e o alvo **não** é
+  `api.ollama_client.*` (a suíte roda com `pythonpath = ["api"]`, `pyproject.toml`).
+- `generate` devolve `{"response": "<texto JSON do modelo>", ...}` — o mock deve
+  devolver a **string JSON**, não um dict já parseado (`app.py:196`).
+- auth: override da dependência `require_api_key` (o `.env` de teste pode não ter chave).
+
 ```python
 # tests/unit/test_intent_enum.py  (motor)
-from api.schemas import Intent  # Literal[...]
+import json
 import typing
+
+from fastapi.testclient import TestClient
+
+import app as app_module
+import ollama_client
+from auth import require_api_key
+from schemas import Intent
+
+app_module.app.dependency_overrides[require_api_key] = lambda: "test"
+client = TestClient(app_module.app)
+
+PAYLOAD_V1_0 = {
+    "request_id": "req-t15-0001", "seller_id": "s1", "bot_id": "b1",
+    "conversation_id": "c1", "bot_user_id": "u1",
+    "bot_config": {"name": "Maya"}, "conversation_state": {},
+    "recent_messages": [{"role": "user", "content": "oi"}],
+}
 
 def test_intent_enum_has_no_oferta_nem_informacao():
     vals = typing.get_args(Intent)
     assert "oferta" not in vals
     assert "informacao" not in vals
 
-def test_intent_fora_do_enum_e_fatal_502(client, monkeypatch):
-    # força a decisão do LLM a sair do enum
-    monkeypatch.setattr("ollama_client.query", lambda *a, **k: {
+async def _fake_generate(prompt: str) -> dict:
+    return {"response": json.dumps({
         "message": "ok", "intent": "oferta", "lead_temperature": "warm",
         "funnel_stage": "offer", "action": "continue", "next_question": None,
         "handoff_human": False, "risk": "low",
-    })
-    r = client.post("/v1/agent/respond", json=PAYLOAD_V1_0)
-    assert r.status_code == 502
+    })}
+
+def test_intent_fora_do_enum_e_fatal_502(monkeypatch):
+    monkeypatch.setattr(ollama_client, "generate", _fake_generate)
+    r = client.post("/v1/agent/respond", json=PAYLOAD_V1_0,
+                    headers={"X-API-Key": "test"})
+    assert r.status_code == 502, r.text
     assert r.json()["error"]["code"] == "AI_INVALID_RESPONSE"
 ```
 
+**Validação executada (2026-10-18)** em clone do motor (`8db1de7`) com venv
+isolado (Python 3.11 + `fastapi==0.115.6`/`pydantic==2.10.4`), sem alterar o repo:
+
+```
+STATUS 502 BODY {"error":{"code":"AI_INVALID_RESPONSE",
+                         "message":"Resposta invalida do modelo: intent invalido."}}
+```
+
+⇒ reprodução **confirmada**; a causa é `validator.py:78` ("intent invalido") →
+fatal → `app.py:226-231` (`502 AI_INVALID_RESPONSE`).
+
 **Lado Grimbots (alinhamento):** teste que garante que o cliente **não** envia nem
 espera valores fora do enum, e que um `intent` inválido na resposta **não** é
-mascarado (degrada para fallback, não executa ação).
+mascarado (degrada para fallback, não executa ação). O mapa explícito proposto em
+`13_RESPOSTA_DECISOES_PENDENTES.md` (D12) só vira teste **após** acordo.
 
 ### T16 — retry sem efeito duplicado (D11)
 
