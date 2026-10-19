@@ -8,7 +8,8 @@
 
 | Item | Valor |
 |---|---|
-| Commit | `b81dcad` (`docs(alinhamento): add 12.5 persistent store decision + limits`) |
+| Commit validado (consumido) | `b81dcad` (`docs(alinhamento): add 12.5 persistent store decision + limits`) |
+| Commit monitorado mais recente | `cbdfa97` (E3) — analisado, **não exposto** no HTTP (sem impacto) |
 | Commit anterior analisado | `4898325` (crosscheck D11) |
 | Versão do serviço (`/health`) | `1.6.0` (corrigida em `daba546`) |
 | Contrato | `contract_version` 1.0/1.1/1.2 (rastreabilidade; ativação por presença de campos) |
@@ -27,6 +28,16 @@
 | `4898325` | crosscheck + matriz | nenhum (doc/teste) | re-execução 3/6 → 9/9 |
 | `daba546` | **fix `service_version` → 1.6.0** + testes | `/health` (informacional) | cenário F em `test_motor_live.py` |
 | `b81dcad` | docs §12.5 (store persistente) | nenhum (doc) | — |
+| `cbdfa97` | **E3**: camada de decisão comercial contextual | **nenhum na interface HTTP** — `api/commercial_decision.py` **não está ligado** ao path de resposta (único importador é o próprio teste unitário) | aguardar exposição; ver §E3 |
+
+## E3 (`cbdfa97`) — análise de impacto
+
+- **Arquivos:** `api/commercial_decision.py` (+ `tests/unit/test_commercial_decision.py`). **Sem** mudança de schema, rota ou resposta.
+- **Não exposto:** `decide()` não é chamado por `app.py`/rotas (`git grep commercial_decision` → só o teste). Logo, **não há entrega funcional exercitável via HTTP** nesta versão.
+- **Superfície que E3 já lê do request** (estável, sem novo campo): `conversation_state.human_takeover/ai_enabled/funnel_stage/lead_temperature`, `lead.objection/interest`, `collected_information`, `questions_already_asked`, `offers_already_presented`.
+- **Devolve** `CommercialDecision(action, reason, next_question, state_update, message_override)`.
+- **Ponto de atenção (pré-integração):** E3 usa um conjunto **local fixo** `allowed = (continue, ask_question, present_offer, send_checkout, handoff_human, pause, do_not_respond)` em vez de derivar de `req.allowed_actions` (precedência E2). A resolver **quando E3 for ligado** ao path, para não divergir do contrato.
+- **Validação E2E:** **bloqueada até E3 ser exposto** no endpoint. Rodar `test_motor_live.py` agora não prova E3 (passa idêntico).
 
 ## Interface consumida (contrato HTTP)
 
