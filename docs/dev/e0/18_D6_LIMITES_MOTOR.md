@@ -24,7 +24,7 @@
 | `last_assistant_message` | 2000 | 2000 | — |
 | `questions_already_asked` (itens / item) | 20 / 300 | 20 / 300 | — |
 | `offers_already_presented` (itens / item) | 20 / 120 | 20 / 120 | — |
-| `collected_information` (chaves / key / value) | 30 / 60 / 300 | 30 / 60 / 300 | — |
+| `collected_information` (chaves / key / value) | 20 / 60 / 200 | 20 / 60 / 200 | 30 / 300 → 20 / 200 |
 | `turn_count` | 0..100 | 0..100 | — |
 | `contract_version` | 10 | 10 | — |
 

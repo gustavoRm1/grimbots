@@ -40,9 +40,11 @@ from internal_logic.services.ai_service import (  # noqa: E402
     _clamp_profile,
     normalize_intent,
     apply_state_update,
+    resolve_funnel_stage,
     AIResult,
 )
 from bot_manager import BotManager  # noqa: E402
+import internal_logic.services.ai_service as _svc  # noqa: E402
 
 PAYLOADS = Path(__file__).resolve().parent / "payloads"
 
@@ -206,6 +208,26 @@ def test_context_policy_defaults():
     assert policy["include_reachable"] is True
     assert policy["max_resources"] == MAX_RESOURCES
     assert _clamp_context_policy(None) is None
+
+
+def test_context_policy_allowed_actions_omitted_by_default():
+    # Default inalterado: sem `allowed_actions` no contexto, a chave não entra.
+    policy = _clamp_context_policy({"max_resources": 3})
+    assert "allowed_actions" not in policy
+    payload = build_payload(contract_version="1.1", context_policy={"max_resources": 3},
+                            **BASE_KWARGS)
+    assert "allowed_actions" not in payload["context_policy"]
+
+
+def test_context_policy_allowed_actions_passthrough_clamped():
+    # E2 — restrição do contexto repassada ao motor (intersecção), só valores válidos.
+    policy = _clamp_context_policy({"allowed_actions": ["continue", "invalido",
+                                                        "send_checkout"]})
+    assert policy["allowed_actions"] == ["continue", "send_checkout"]
+    payload = build_payload(contract_version="1.1",
+                            context_policy={"allowed_actions": ["continue"]},
+                            **BASE_KWARGS)
+    assert payload["context_policy"]["allowed_actions"] == ["continue"]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -460,9 +482,41 @@ def test_memory_collected_information_limits():
     m = BotManager._ai_memory_updates({"collected_information": info},
                                       _result(), "continue", "oi", "")
     ci = m["collected_information"]
-    assert len(ci) <= 30
+    assert len(ci) <= 20
     assert all(len(k) <= 60 for k in ci)
-    assert all(not isinstance(v, str) or len(v) <= 300 for v in ci.values())
+    assert all(not isinstance(v, str) or len(v) <= 200 for v in ci.values())
+
+
+def test_memory_collected_information_at_limit_is_preserved():
+    # Exatamente 20 chaves, valor com exatamente 200 chars: nada e perdido.
+    info = {f"k{i}": ("v" * 200) for i in range(20)}
+    m = BotManager._ai_memory_updates({"collected_information": info},
+                                      _result(), "continue", "oi", "")
+    assert m["collected_information"] == info
+
+
+def test_memory_collected_information_over_limit_is_clamped():
+    # 21 chaves / 201 chars: clampado ao contrato, sem erro.
+    info = {f"k{i}": ("v" * 201) for i in range(21)}
+    m = BotManager._ai_memory_updates({"collected_information": info},
+                                      _result(), "continue", "oi", "")
+    ci = m["collected_information"]
+    assert len(ci) == 20
+    assert all(len(v) == 200 for v in ci.values())
+
+
+def test_payload_collected_information_within_motor_limits():
+    # Mesmo com entrada acima do contrato, o payload final respeita o motor.
+    info = {f"k{i}": ("v" * 400) for i in range(40)}
+    payload = build_payload(**{**BASE_KWARGS, "collected_information": info,
+                               "contract_version": "1.1"})
+    ci = payload["collected_information"]
+    assert len(ci) <= MOTOR_REQUEST_LIMITS["collected_information_keys"]
+    assert all(len(k) <= MOTOR_REQUEST_LIMITS["collected_information_key"]
+               for k in ci)
+    assert all(not isinstance(v, str)
+               or len(v) <= MOTOR_REQUEST_LIMITS["collected_information_value"]
+               for v in ci.values())
 
 
 def test_memory_never_enters_payload():
@@ -720,6 +774,113 @@ def test_apply_state_update_none_is_inert():
     state = {"a": 1}
     assert apply_state_update(state, None) == []
     assert state == {"a": 1}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8b) F1 — precedência/monotonicidade do funnel_stage em `_handle_ai_turn`
+# ══════════════════════════════════════════════════════════════════════════
+def _drive_v11_turn(result, state=None, step=None):
+    """Roda um turno v1.1 com serviço fake; devolve estado persistido + efeitos."""
+    captured = {"sent": 0, "route": 0, "state": None}
+
+    class _Svc:
+        def respond(self, payload):
+            return result
+
+    orig_get = _svc.get_ai_service
+    _svc.get_ai_service = lambda *a, **k: _Svc()
+
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    _state = dict(state or {})
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: dict(_state)
+    mgr._ai_contract_v11_enabled = lambda *a, **k: True
+    mgr._ai_v11_payload_kwargs = lambda *a, **k: {}
+    mgr._ai_memory_payload = lambda *a, **k: {}
+    mgr._personalize_text = lambda text, *a, **k: text
+    mgr._ai_log_generation = lambda *a, **k: None
+    mgr._ai_bot_config = lambda *a, **k: {"name": "Maya"}
+    mgr._ai_build_offers = lambda *a, **k: []
+    mgr._is_redundant_question = lambda *a, **k: False
+    mgr.send_telegram_message = lambda **k: captured.__setitem__("sent", captured["sent"] + 1)
+    mgr._ai_route = lambda *a, **k: captured.__setitem__("route", captured["route"] + 1) or True
+    mgr._ai_turn_claim = lambda *a, **k: True
+    mgr._ai_turn_complete = lambda *a, **k: None
+    mgr._ai_turn_release = lambda *a, **k: None
+
+    def _atomic(_bot_id, _uid, persist):
+        persist(_state)
+        captured["state"] = dict(_state)
+    mgr._ai_state_atomic = _atomic
+
+    step = step or {"id": "s1", "config": {}}
+    try:
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999", step, "oi", inbound_message_id=42)
+    finally:
+        _svc.get_ai_service = orig_get
+    return captured
+
+
+def _turn_result(action="continue", message="", funnel_stage="qualification",
+                 state_update=None):
+    return AIResult.from_dict({
+        "request_id": "x", "message": message, "intent": "interesse",
+        "lead_temperature": "warm", "funnel_stage": funnel_stage, "action": action,
+        "validation": {"valid": True, "errors": []}, "state_update": state_update,
+    })
+
+
+def test_resolve_funnel_stage_is_monotonic():
+    assert resolve_funnel_stage("qualification", "offer") == "offer"
+    assert resolve_funnel_stage("offer", "qualification") == "offer"
+    assert resolve_funnel_stage(None, "new") == "new"
+    assert resolve_funnel_stage("invalido", "connection") == "connection"
+    assert resolve_funnel_stage("invalido", None) is None
+    assert resolve_funnel_stage() is None
+
+
+def test_f1_state_update_advance_is_not_overwritten_by_model():
+    # Reproduz F1: antes da correcao o modelo (qualification) apagava o avanco.
+    res = _turn_result(funnel_stage="qualification",
+                       state_update={"funnel_stage": "offer"})
+    c = _drive_v11_turn(res, state={"funnel_stage": "qualification"})
+    assert c["state"]["funnel_stage"] == "offer"
+
+
+def test_f1_model_stage_cannot_regress_persisted_stage():
+    res = _turn_result(funnel_stage="qualification")
+    c = _drive_v11_turn(res, state={"funnel_stage": "offer"})
+    assert c["state"]["funnel_stage"] == "offer"
+
+
+def test_f1_state_update_regression_is_ignored():
+    res = _turn_result(funnel_stage="qualification",
+                       state_update={"funnel_stage": "qualification"})
+    c = _drive_v11_turn(res, state={"funnel_stage": "offer"})
+    assert c["state"]["funnel_stage"] == "offer"
+
+
+def test_f1_absence_of_advance_keeps_stage():
+    res = _turn_result(funnel_stage="connection")
+    c = _drive_v11_turn(res, state={"funnel_stage": "connection"})
+    assert c["state"]["funnel_stage"] == "connection"
+
+
+def test_f1_invalid_state_update_stage_is_ignored():
+    res = _turn_result(funnel_stage="qualification",
+                       state_update={"funnel_stage": "invalido"})
+    c = _drive_v11_turn(res, state={"funnel_stage": "qualification"})
+    assert c["state"]["funnel_stage"] == "qualification"
+
+
+def test_f1_stage_change_alone_has_no_effects():
+    # Avancar ate 'checkout' via state_update NAO dispara checkout/mensagem/handoff.
+    res = _turn_result(action="continue", message="",
+                       state_update={"funnel_stage": "checkout"})
+    c = _drive_v11_turn(res, state={"funnel_stage": "qualification"})
+    assert c["state"]["funnel_stage"] == "checkout"
+    assert c["sent"] == 0 and c["route"] == 0
 
 
 # ══════════════════════════════════════════════════════════════════════════

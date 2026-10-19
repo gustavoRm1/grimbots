@@ -3984,9 +3984,9 @@ class BotManager:
     _AI_MAX_QUESTION_CHARS = 300
     _AI_MAX_OFFERS_PRESENTED = 20
     _AI_MAX_OFFER_ID_CHARS = 120
-    _AI_MAX_COLLECTED_KEYS = 30
+    _AI_MAX_COLLECTED_KEYS = 20
     _AI_MAX_COLLECTED_KEY_CHARS = 60
-    _AI_MAX_COLLECTED_VALUE_CHARS = 300
+    _AI_MAX_COLLECTED_VALUE_CHARS = 200
     _AI_MAX_TURN_COUNT = 100
     _AI_STATE_MAX_RETRIES = 6
     _AI_MEMORY_ACTIONS = (
@@ -4000,7 +4000,7 @@ class BotManager:
 
     @classmethod
     def _ai_clamp_collected_information(cls, info) -> dict:
-        """Aplica os limites do schema do motor (≤30 chaves/key≤60/value≤300)."""
+        """Aplica os limites do schema do motor (≤20 chaves/key≤60/value≤200)."""
         if not isinstance(info, dict):
             return {}
         clean = {}
@@ -4241,14 +4241,18 @@ class BotManager:
 
     def _ai_v11_payload_kwargs(self, config, step, step_config) -> Dict[str, Any]:
         """Blocos v1.1 (só usados com o flag ligado)."""
-        policy = step_config.get('context_policy')
-        policy = dict(policy) if isinstance(policy, dict) else {}
+        raw_policy = step_config.get('context_policy')
+        raw_policy = raw_policy if isinstance(raw_policy, dict) else {}
         policy = {
-            'include_current_node': bool(policy.get('include_current_node', True)),
-            'include_reachable': bool(policy.get('include_reachable', True)),
-            'include_global': bool(policy.get('include_global', False)),
-            'max_resources': policy.get('max_resources') or 20,
+            'include_current_node': bool(raw_policy.get('include_current_node', True)),
+            'include_reachable': bool(raw_policy.get('include_reachable', True)),
+            'include_global': bool(raw_policy.get('include_global', False)),
+            'max_resources': raw_policy.get('max_resources') or 20,
         }
+        # E2 — repassa a restrição de ações do contexto (intersecção no motor).
+        # Só entra quando o bloco configura explicitamente (default inalterado).
+        if raw_policy.get('allowed_actions'):
+            policy['allowed_actions'] = raw_policy['allowed_actions']
         return {
             'contract_version': '1.1',
             'agent_profile': self._ai_agent_profile(step_config),
@@ -4388,7 +4392,7 @@ class BotManager:
         import uuid as _uuid
         from internal_logic.services.ai_service import (
             get_ai_service, build_payload, AIGatewayError, payload_size,
-            MAX_PAYLOAD_BYTES, apply_state_update
+            MAX_PAYLOAD_BYTES, apply_state_update, resolve_funnel_stage
         )
 
         step_config = step.get('config') or {}
@@ -4536,11 +4540,24 @@ class BotManager:
             _state_update = getattr(result, 'state_update', None) if contract_v11 else None
 
             def _persist(state_live):
+                # F1 — captura o estágio ANTES do delta: a proposta do motor
+                # (state_update) e o estágio corrente compõem a resolução monotônica.
+                _prev_stage = state_live.get('funnel_stage')
+                _su_stage = (
+                    _state_update.get('funnel_stage')
+                    if isinstance(_state_update, dict) else None
+                )
                 # D5/D10 — aplica o delta sugerido pelo motor (whitelist; nunca resumo)
                 if _state_update:
                     apply_state_update(state_live, _state_update)
                 state_live['lead_temperature'] = result.lead_temperature
-                state_live['funnel_stage'] = result.funnel_stage
+                # F1 — o `funnel_stage` do modelo NÃO sobrescreve a proposta do
+                # motor: resolve pelo estágio mais avançado (sem regressão, sem
+                # criar estágios). Não dispara efeito algum por si só.
+                state_live['funnel_stage'] = (
+                    resolve_funnel_stage(_prev_stage, result.funnel_stage, _su_stage)
+                    or result.funnel_stage
+                )
                 state_live['intent'] = result.intent
                 state_live['last_intent'] = result.intent
                 if _payload_objection:

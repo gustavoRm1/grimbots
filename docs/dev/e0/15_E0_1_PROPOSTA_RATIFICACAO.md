@@ -35,10 +35,15 @@
 
 > Limites autoritativos referenciados (schema do motor): `lead.name ≤ 60`,
 > `lead.interest/objection ≤ 120`, `Offer.id ≤ 64`, `checkout_url ≤ 400`;
-> `last_assistant_message ≤ 2000`, `collected_information` (≤30 chaves / key ≤60 /
-> value ≤300), `questions_already_asked` (≤20 / item ≤300),
+> `last_assistant_message ≤ 2000`, `collected_information` (≤20 chaves / key ≤60 /
+> value ≤200), `questions_already_asked` (≤20 / item ≤300),
 > `offers_already_presented` (≤20 / item ≤120), `turn_count 0..100`,
 > `last_action ∈ Action`.
+>
+> **Correção pós-E0 (E-P0):** o valor originalmente anotado para
+> `collected_information` era ≤30 chaves / value ≤300, divergente do schema
+> autoritativo do motor (`api/schemas.py`, `≤20` / `≤200`). Alinhado em E-P0 —
+> ver `18_D6_LIMITES_MOTOR.md` (fonte canônica) e o registro de auditoria E3/E4/D11.
 
 ---
 

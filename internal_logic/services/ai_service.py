@@ -72,8 +72,8 @@ MOTOR_REQUEST_LIMITS = {
     "last_assistant_message": 2000,
     "questions_already_asked_items": 20, "questions_already_asked_item": 300,
     "offers_already_presented_items": 20, "offers_already_presented_item": 120,
-    "collected_information_keys": 30,
-    "collected_information_key": 60, "collected_information_value": 300,
+    "collected_information_keys": 20,
+    "collected_information_key": 60, "collected_information_value": 200,
     "turn_count": (0, 100),
     "contract_version": 10,
 }
@@ -97,9 +97,9 @@ MAX_LAST_ASSISTANT_MESSAGE_CHARS = 2000
 MAX_MEMORY_LIST_ITEMS = 20
 MAX_QUESTION_ITEM_CHARS = 300
 MAX_OFFER_ITEM_CHARS = 120
-MAX_COLLECTED_KEYS = 30
+MAX_COLLECTED_KEYS = 20
 MAX_COLLECTED_KEY_CHARS = 60
-MAX_COLLECTED_VALUE_CHARS = 300
+MAX_COLLECTED_VALUE_CHARS = 200
 MAX_TURN_COUNT = 100
 
 # Campos de memória operacional (contrato v1.1, request). Todos opcionais.
@@ -514,16 +514,25 @@ def _build_flow_resources(resources):
 def _clamp_context_policy(policy):
     if not isinstance(policy, dict):
         return None
-    return {
+    clamped = {
         "include_current_node": bool(policy.get("include_current_node", True)),
         "include_reachable": bool(policy.get("include_reachable", True)),
         "include_global": bool(policy.get("include_global", False)),
         "max_resources": _clamp_int(policy.get("max_resources"), 1, MAX_RESOURCES, MAX_RESOURCES),
     }
+    # E2 — `context_policy.allowed_actions` é INTERSECCIONADO pelo motor com a
+    # raiz. Só é enviado quando explicitamente configurado; omitido => default
+    # inalterado (apenas a raiz vale). Valores fora de `ACTIONS` são descartados.
+    actions = policy.get("allowed_actions")
+    if actions:
+        valid = [a for a in actions if a in ACTIONS]
+        if valid:
+            clamped["allowed_actions"] = valid
+    return clamped
 
 
 def _clamp_collected_information(info):
-    """Dict de escalares (≤30 chaves / key ≤60 / value ≤300). Descartar aninhado.
+    """Dict de escalares (≤20 chaves / key ≤60 / value ≤200). Descartar aninhado.
 
     Valores aninhados são descartados no cliente para nunca gerar 422 no motor.
     """
@@ -639,6 +648,30 @@ def apply_state_update(state, state_update, errors=None):
             elif errors is not None:
                 errors.append(f"state_update.{key} ignorado: tipo invalido.")
     return applied
+
+
+def funnel_stage_rank(stage):
+    """Índice do estágio em `FUNNEL_STAGES`; -1 se desconhecido/inválido."""
+    try:
+        return FUNNEL_STAGES.index(stage)
+    except (ValueError, TypeError):
+        return -1
+
+
+def resolve_funnel_stage(*candidates):
+    """Estágio mais avançado entre candidatos válidos (monotônico, nunca regride).
+
+    F1 — a proposta do motor (`state_update.funnel_stage`, com evidência) não pode
+    ser sobrescrita pelo `funnel_stage` do modelo. Só escolhe valores existentes em
+    `FUNNEL_STAGES` (nunca cria estágios) e ignora candidatos inválidos/None.
+    Retorna None se nenhum candidato for válido.
+    """
+    best, best_rank = None, -1
+    for stage in candidates:
+        rank = funnel_stage_rank(stage)
+        if rank > best_rank:
+            best, best_rank = stage, rank
+    return best
 
 
 def payload_size(payload):
