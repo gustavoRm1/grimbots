@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-19T15:04:57Z",
+  "generated_at": "2026-10-19T15:23:26Z",
   "motor": {
-    "base_url": "http://127.0.0.1:50266",
+    "base_url": "http://127.0.0.1:50808",
     "request_timeout_env": 5,
     "health": {
       "status": "ok",
@@ -15,7 +15,12 @@
     "git_commit": "48983253a3b42db22dd43866cfb16ae53cbe3a66",
     "git_commit_short": "4898325",
     "git_subject": "D11 crosscheck: re-run acceptance 6/6; document 12.4 limits; add matrix/evidence",
-    "git_describe": "4898325"
+    "git_describe": "4898325",
+    "grimbots_commit": "c17df8a5bd993ce95a03e7fcb18adea527e5a19a",
+    "grimbots_commit_short": "c17df8a",
+    "repro_motor": "git -C <motor> checkout 4898325 && cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app",
+    "repro_acceptance": "MOTOR_DIR=<motor> MOTOR_VENV_PY=<venv>/bin/python python3 handoff/d11/d11_acceptance.py",
+    "repro_grimbots_tests": "python3 tests/test_d11_dedupe.py  # e tests/test_phase6a_contract_v11.py"
   },
   "contract_passed": 9,
   "contract_total": 9,
