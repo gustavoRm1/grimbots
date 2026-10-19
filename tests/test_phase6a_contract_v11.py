@@ -30,6 +30,9 @@ from internal_logic.services.ai_service import (  # noqa: E402
     MAX_LEAD_OBJECTION_CHARS,
     MAX_OFFER_ID_CHARS,
     MAX_OFFER_CHECKOUT_URL_CHARS,
+    MAX_MESSAGE_CHARS,
+    MAX_PERSONALITY_ITEMS,
+    MOTOR_REQUEST_LIMITS,
     build_payload,
     payload_size,
     _build_flow_resources,
@@ -339,6 +342,68 @@ def test_offer_clamps_match_motor_limits():
     offer = build_payload(**kw)["available_offers"][0]
     assert len(offer["id"]) == MAX_OFFER_ID_CHARS == 64
     assert len(offer["checkout_url"]) == MAX_OFFER_CHECKOUT_URL_CHARS == 400
+
+
+def test_bot_config_clamps_match_motor_limits():
+    kw = dict(BASE_KWARGS)
+    kw["bot_config"] = {
+        "name": "n" * 200,
+        "personality": [f"p{i}" for i in range(50)],
+        "tone": "t" * 200,
+        "boldness": 9,
+        "message_length": "m" * 200,
+        "emoji_level": "e" * 200,
+        "commercial_goal": "g" * 200,
+    }
+    cfg = build_payload(**kw)["bot_config"]
+    assert len(cfg["name"]) == 60
+    assert len(cfg["personality"]) == MAX_PERSONALITY_ITEMS == 12
+    assert len(cfg["tone"]) == 60
+    assert cfg["boldness"] == 5
+    assert len(cfg["message_length"]) == 20
+    assert len(cfg["emoji_level"]) == 20
+    assert len(cfg["commercial_goal"]) == 80
+
+
+def test_bot_config_at_limit_is_untouched():
+    name, tone, goal = "n" * 60, "t" * 60, "g" * 80
+    ml, el = "m" * 20, "e" * 20
+    kw = dict(BASE_KWARGS)
+    kw["bot_config"] = {
+        "name": name, "personality": [f"p{i}" for i in range(12)],
+        "tone": tone, "boldness": 1, "message_length": ml,
+        "emoji_level": el, "commercial_goal": goal,
+    }
+    cfg = build_payload(**kw)["bot_config"]
+    assert cfg == {
+        "name": name, "personality": [f"p{i}" for i in range(12)],
+        "tone": tone, "boldness": 1, "message_length": ml,
+        "emoji_level": el, "commercial_goal": goal,
+    }
+
+
+def test_message_content_clamps_match_motor_limit():
+    kw = dict(BASE_KWARGS)
+    kw["recent_messages"] = [{"role": "user", "content": "x" * 9000}]
+    assert len(build_payload(**kw)["recent_messages"][0]["content"]) == MAX_MESSAGE_CHARS == 4000
+    exact = "y" * 4000
+    kw["recent_messages"] = [{"role": "user", "content": exact}]
+    assert build_payload(**kw)["recent_messages"][0]["content"] == exact
+
+
+def test_d6_effective_clamps_match_motor_table():
+    # Garante que cada clamp do cliente bate EXATAMENTE com a tabela do motor.
+    assert MOTOR_REQUEST_LIMITS["request_id"] == 80
+    assert MOTOR_REQUEST_LIMITS["bot_config.name"] == 60
+    assert MOTOR_REQUEST_LIMITS["bot_config.tone"] == 60
+    assert MOTOR_REQUEST_LIMITS["bot_config.commercial_goal"] == 80
+    assert MOTOR_REQUEST_LIMITS["bot_config.personality_items"] == MAX_PERSONALITY_ITEMS
+    assert MOTOR_REQUEST_LIMITS["message.content"] == MAX_MESSAGE_CHARS
+    assert MOTOR_REQUEST_LIMITS["lead.name"] == MAX_LEAD_NAME_CHARS
+    assert MOTOR_REQUEST_LIMITS["lead.interest"] == MAX_LEAD_INTEREST_CHARS
+    assert MOTOR_REQUEST_LIMITS["lead.objection"] == MAX_LEAD_OBJECTION_CHARS
+    assert MOTOR_REQUEST_LIMITS["offer.id"] == MAX_OFFER_ID_CHARS
+    assert MOTOR_REQUEST_LIMITS["offer.checkout_url"] == MAX_OFFER_CHECKOUT_URL_CHARS
 
 
 def test_ep0_boundaries_never_raise_and_stay_within_limits():

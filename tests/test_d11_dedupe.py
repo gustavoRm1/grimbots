@@ -228,6 +228,130 @@ def test_handle_ai_turn_completes_on_gateway_failure():
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 6c) Contrato futuro do motor: 409 REQUEST_IN_PROGRESS (D11 no motor)
+#     -> retryável e SEM fallback (entrega concorrente do mesmo request_id).
+# ══════════════════════════════════════════════════════════════════════════
+def test_request_in_progress_is_retryable_and_has_no_fallback():
+    import internal_logic.services.ai_service as svc
+
+    assert "REQUEST_IN_PROGRESS" in svc._RETRYABLE_CODES
+
+    captured = {"completed": 0, "sent": 0}
+
+    class _Svc:
+        def respond(self, payload):
+            raise svc.AIGatewayError("REQUEST_IN_PROGRESS", "in progress",
+                                     status=409, retryable=True)
+
+    orig_get = svc.get_ai_service
+    svc.get_ai_service = lambda *a, **k: _Svc()
+
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: {}
+    mgr._ai_contract_v11_enabled = lambda *a, **k: False
+    mgr._personalize_text = lambda *a, **k: "fallback"
+    mgr._ai_log_generation = lambda *a, **k: None
+    mgr.send_telegram_message = lambda **k: captured.__setitem__("sent", captured["sent"] + 1)
+    mgr._ai_turn_claim = lambda *a, **k: True
+    mgr._ai_turn_complete = lambda *a, **k: captured.__setitem__("completed", captured["completed"] + 1)
+    try:
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999",
+                            {"id": "s1", "config": {}}, "oi", inbound_message_id=99)
+        assert captured["sent"] == 0, "409 in-progress nao deve enviar fallback"
+        assert captured["completed"] == 1
+    finally:
+        svc.get_ai_service = orig_get
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6b) EFEITO COMERCIAL não duplica em replay (msg, fluxo, checkout, handoff)
+# ══════════════════════════════════════════════════════════════════════════
+def _run_turn_twice(action, step=None, message_id=500):
+    """Roda `_handle_ai_turn` 2x com o MESMO message_id e conta efeitos."""
+    import internal_logic.services.ai_service as svc
+
+    fake = FakeRedis()
+    orig_redis = _with_redis(fake)
+    counts = {"sent": 0, "route": 0, "state": 0, "unknown": 0}
+
+    class _Svc:
+        def respond(self, payload):
+            return svc.AIResult(
+                request_id=payload.get("request_id", ""),
+                message="mensagem", intent="interesse",
+                lead_temperature="warm", funnel_stage="qualification",
+                action=action, next_question=None,
+                handoff_human=(action == "handoff_human"), risk="low",
+            )
+
+    orig_get = svc.get_ai_service
+    svc.get_ai_service = lambda *a, **k: _Svc()
+
+    step = step or {"id": "s1", "config": {}, "connections": {"checkout": "pay1"}}
+
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: {}
+    mgr._ai_contract_v11_enabled = lambda *a, **k: False
+    mgr._personalize_text = lambda text, *a, **k: text
+    mgr._ai_log_generation = lambda *a, **k: None
+    mgr._ai_bot_config = lambda *a, **k: {"name": "Maya"}
+    mgr._ai_build_offers = lambda *a, **k: []
+    mgr._is_redundant_question = lambda *a, **k: False
+
+    def _send(**k):
+        counts["sent"] += 1
+    mgr.send_telegram_message = _send
+
+    def _route(*a, **k):
+        counts["route"] += 1
+        return True
+    mgr._ai_route = _route
+
+    def _atomic(bot_id, uid, persist):
+        counts["state"] += 1
+        persist({})
+    mgr._ai_state_atomic = _atomic
+
+    try:
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999", step, "oi", inbound_message_id=message_id)
+        first = dict(counts)
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999", step, "oi", inbound_message_id=message_id)
+        second = dict(counts)
+        blocked = mgr._ai_turn_claim(1, "999", message_id) is False
+    finally:
+        svc.get_ai_service = orig_get
+        bm.get_redis_connection = orig_redis
+    return first, second, blocked
+
+
+def test_replay_no_duplicate_message_send():
+    first, second, blocked = _run_turn_twice("continue", message_id=601)
+    assert first["sent"] == 1 and first["state"] == 1
+    assert second == first, "replay nao pode reenviar mensagem nem repersistir"
+    assert blocked is True
+
+
+def test_replay_no_duplicate_checkout_routing():
+    first, second, blocked = _run_turn_twice("send_checkout", message_id=602)
+    assert first["route"] == 1, "checkout roteado 1x"
+    assert second["route"] == 1, "replay NAO pode rotear checkout 2x"
+    assert second["sent"] == first["sent"] and second["state"] == first["state"]
+    assert blocked is True
+
+
+def test_replay_no_duplicate_handoff_routing():
+    first, second, blocked = _run_turn_twice("handoff_human", message_id=603)
+    assert first["route"] == 1, "handoff roteado 1x"
+    assert second["route"] == 1, "replay NAO pode disparar handoff 2x"
+    assert second["sent"] == first["sent"] and second["state"] == first["state"]
+    assert blocked is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # Runner
 # ══════════════════════════════════════════════════════════════════════════
 def _run():

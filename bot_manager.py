@@ -4489,7 +4489,9 @@ class BotManager:
                 result = service.respond(payload)
             except AIGatewayError as err:
                 # D9 — 409 do motor: não responde automaticamente nem spamma fallback.
-                if err.code in ('HUMAN_TAKEOVER_ACTIVE', 'AI_DISABLED_FOR_BOT'):
+                if err.code in (
+                    'HUMAN_TAKEOVER_ACTIVE', 'AI_DISABLED_FOR_BOT', 'REQUEST_IN_PROGRESS'
+                ):
                     if err.code == 'HUMAN_TAKEOVER_ACTIVE' and contract_v11:
                         self._ai_state_set(bot_id, telegram_user_id, {'human_takeover': True})
                     logger.info(f"ℹ️ [IA] {err.code}: IA nao responde neste turno")

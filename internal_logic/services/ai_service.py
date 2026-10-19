@@ -44,11 +44,44 @@ ROLES = ("user", "assistant", "system")
 # Limites do servidor (doc v1.0.0)
 MAX_PAYLOAD_BYTES = 65536
 MAX_HISTORY_MESSAGES = 20
-MAX_MESSAGE_CHARS = 1200
+MAX_MESSAGE_CHARS = 4000  # D6: schema do motor (Message.content max_length=4000)
 MAX_NEXT_QUESTION_CHARS = 300
 MAX_CONVERSATION_SUMMARY_CHARS = 4000
 MAX_OFFERS = 20
 MAX_REQUEST_ID_LEN = 80
+
+# ── D6 — limites do REQUEST = schema vigente do motor (autoritativos) ───────
+# Fonte: api/schemas.py do Grimbots AI Gateway. Grimbots clampa EXATAMENTE no
+# limite do motor (nunca acima); valores no limite passam inalterados. Itens
+# marcados "<=" são propositalmente mais restritos (defensivos) e documentados.
+MOTOR_REQUEST_LIMITS = {
+    "request_id": 80, "seller_id": 80, "bot_id": 80,
+    "conversation_id": 80, "bot_user_id": 80,
+    "bot_config.name": 60,
+    "bot_config.personality_items": 12,
+    "bot_config.tone": 60,
+    "bot_config.boldness": (1, 5),
+    "bot_config.message_length": 20,
+    "bot_config.emoji_level": 20,
+    "bot_config.commercial_goal": 80,
+    "lead.name": 60, "lead.interest": 120, "lead.objection": 120,
+    "message.content": 4000,
+    "conversation_summary": 4000,
+    "available_offers": 20,
+    "offer.id": 64, "offer.name": 120, "offer.price": 40, "offer.checkout_url": 400,
+    "last_assistant_message": 2000,
+    "questions_already_asked_items": 20, "questions_already_asked_item": 300,
+    "offers_already_presented_items": 20, "offers_already_presented_item": 120,
+    "collected_information_keys": 30,
+    "collected_information_key": 60, "collected_information_value": 300,
+    "turn_count": (0, 100),
+    "contract_version": 10,
+}
+
+# Bot config — limites próprios (personality por item é "<=" o motor, que não
+# impõe max_length por item; 40 é defesa de payload, não requisito do schema).
+MAX_PERSONALITY_ITEMS = 12          # == motor max_length
+MAX_PERSONALITY_ITEM_CHARS = 40     # <= motor (sem limite por item)
 
 # ── E-P0 (D4/D14) — limites alinhados ao schema do motor --------------------
 # Clamps defensivos: nunca enviamos valor acima do que o motor aceita (evita
@@ -111,6 +144,7 @@ _RETRYABLE_CODES = {
     "AI_BUSY",            # 503
     "AI_TIMEOUT",         # 504
     "AI_INVALID_RESPONSE",  # 502
+    "REQUEST_IN_PROGRESS",  # 409 (D11: entrega concorrente do mesmo request_id)
 }
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = (2, 4, 8)
@@ -259,11 +293,11 @@ def build_payload(
         "bot_config": {
             "name": name,
             "personality": _clamp_personality(cfg.get("personality")),
-            "tone": _clamp_str(cfg.get("tone"), 40, "direto"),
+            "tone": _clamp_str(cfg.get("tone"), 60, "direto"),
             "boldness": _clamp_int(cfg.get("boldness"), 1, 5, 3),
             "message_length": _clamp_str(cfg.get("message_length"), 20, "short"),
             "emoji_level": _clamp_str(cfg.get("emoji_level"), 20, "moderate"),
-            "commercial_goal": _clamp_str(cfg.get("commercial_goal"), 60, "qualificar"),
+            "commercial_goal": _clamp_str(cfg.get("commercial_goal"), 80, "qualificar"),
         },
         "conversation_state": {
             "funnel_stage": _clamp_enum(conversation_state, "funnel_stage", FUNNEL_STAGES, "new"),
@@ -333,12 +367,13 @@ def _clamp_enum(source, key, options, default):
 
 def _clamp_personality(value):
     if isinstance(value, (list, tuple)):
-        items = [str(v).strip()[:40] for v in value if str(v).strip()]
-        return items[:6]
+        items = [str(v).strip()[:MAX_PERSONALITY_ITEM_CHARS] for v in value if str(v).strip()]
+        return items[:MAX_PERSONALITY_ITEMS]
     if isinstance(value, str) and value.strip():
-        return [p.strip()[:40] for p in value.split(",") if p.strip()][:6]
+        return [p.strip()[:MAX_PERSONALITY_ITEM_CHARS]
+                for p in value.split(",") if p.strip()][:MAX_PERSONALITY_ITEMS]
     if value:
-        return [_clamp_str(value, 40)]
+        return [_clamp_str(value, MAX_PERSONALITY_ITEM_CHARS)]
     return []
 
 

@@ -56,3 +56,14 @@ normalmente** (nunca descarta turno por indisponibilidade do dedupe).
 
 - **D11 no motor:** deduplicar por `request_id` (janela de idempotência) para
   fechar o limite (1) acima. Aceite descrito no doc 15 §6 (E1/E2 + D11).
+- **Pacote de hand-off executável:** `handoff/d11/` (6 cenários, esperado ×
+  observado, contra-assinatura) — ver **doc 19**. Resultado atual: **3/6 PASS**
+  (S1/S4/S6 = efeito duplo a eliminar).
+- **Contrato do código 409 `REQUEST_IN_PROGRESS`** (entrega concorrente do mesmo
+  `request_id`): já tratado na Grimbots como **retryável** e **sem fallback**.
+
+## Evidência de efeito comercial não duplicado (plataforma)
+
+`tests/test_d11_dedupe.py` prova que um replay **não** repete: envio de mensagem,
+avanço/persistência de fluxo, **checkout** e **handoff** (`_run_turn_twice` conta
+`send_telegram_message`, `_ai_route`, `_ai_state_atomic`).

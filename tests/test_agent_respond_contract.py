@@ -27,6 +27,7 @@ from internal_logic.services.ai_service import (  # noqa: E402
     AIGatewayError,
     GrimbotsAIService,
     MAX_HISTORY_MESSAGES,
+    MAX_MESSAGE_CHARS,
     MAX_OFFERS,
     MAX_PAYLOAD_BYTES,
     MockAIService,
@@ -148,7 +149,9 @@ def test_history_and_offers_limits():
                                                    if k != "recent_messages"})
     assert len(payload["recent_messages"]) <= MAX_HISTORY_MESSAGES
     for m in payload["recent_messages"]:
-        assert len(m["content"]) <= 1200, "conteudo de mensagem deve ser truncado em 1200"
+        assert len(m["content"]) <= MAX_MESSAGE_CHARS, (
+            f"conteudo de mensagem deve ser truncado em {MAX_MESSAGE_CHARS} (schema do motor)"
+        )
 
     offers = [{"id": str(i), "name": f"Oferta {i}", "price": "9.90", "active": True}
               for i in range(40)]
