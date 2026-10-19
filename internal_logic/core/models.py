@@ -1390,6 +1390,88 @@ class AIGeneration(db.Model):
         }
 
 
+class AIShadowDecision(db.Model):
+    """E5 — decisão comercial SHADOW (v1.1) vs ação real executada (v1.0).
+
+    Tabela NOVA e ADITIVA: não altera nenhuma tabela existente. Só recebe linhas
+    quando o flag global GRIMBOTS_AI_SHADOW E o flag `shadow` do bloco estão
+    ligados (desligado por padrão => nenhuma linha). Nunca contém texto cru do
+    lead por padrão; `lead_ref` é HMAC e `context_json` é redigido.
+    """
+
+    __tablename__ = "ai_shadow_decisions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bot_id = db.Column(db.Integer, db.ForeignKey("bots.id"), nullable=False, index=True)
+    lead_ref = db.Column(db.String(64), index=True)          # HMAC do telegram_user_id
+
+    request_id = db.Column(db.String(96), unique=True, index=True)
+    observed_source = db.Column(db.String(40))               # ex.: v1.0_production
+    mode = db.Column(db.String(20))
+    contract_version = db.Column(db.String(10))
+    motor_version = db.Column(db.String(40))                 # /health ou env (opcional)
+    motor_commit = db.Column(db.String(64))                  # commit do motor (opcional)
+    motor_model = db.Column(db.String(80))                   # model devolvido pelo motor
+
+    context_digest = db.Column(db.String(64))
+    context_json = db.Column(db.Text)                        # redigido (sem PII crua)
+
+    proposed_action = db.Column(db.String(30))
+    proposed_intent = db.Column(db.String(30))
+    proposed_funnel_stage = db.Column(db.String(30))
+    proposed_lead_temperature = db.Column(db.String(20))
+    proposed_risk = db.Column(db.String(20))
+    proposed_offer_id = db.Column(db.String(120))
+    proposed_valid = db.Column(db.Boolean)
+
+    observed_action = db.Column(db.String(30))
+    observed_intent = db.Column(db.String(30))
+    observed_funnel_stage = db.Column(db.String(30))
+    observed_lead_temperature = db.Column(db.String(20))
+
+    action_match = db.Column(db.Boolean, index=True)
+    funnel_delta = db.Column(db.Integer)
+    latency_ms = db.Column(db.Integer, default=0)
+
+    error_code = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+
+    __table_args__ = (
+        db.Index("idx_ai_shadow_bot_created", "bot_id", "created_at"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "bot_id": self.bot_id,
+            "lead_ref": self.lead_ref,
+            "request_id": self.request_id,
+            "observed_source": self.observed_source,
+            "mode": self.mode,
+            "contract_version": self.contract_version,
+            "motor_version": self.motor_version,
+            "motor_commit": self.motor_commit,
+            "motor_model": self.motor_model,
+            "context_digest": self.context_digest,
+            "proposed_action": self.proposed_action,
+            "proposed_intent": self.proposed_intent,
+            "proposed_funnel_stage": self.proposed_funnel_stage,
+            "proposed_lead_temperature": self.proposed_lead_temperature,
+            "proposed_risk": self.proposed_risk,
+            "proposed_offer_id": self.proposed_offer_id,
+            "proposed_valid": self.proposed_valid,
+            "observed_action": self.observed_action,
+            "observed_intent": self.observed_intent,
+            "observed_funnel_stage": self.observed_funnel_stage,
+            "observed_lead_temperature": self.observed_lead_temperature,
+            "action_match": self.action_match,
+            "funnel_delta": self.funnel_delta,
+            "latency_ms": self.latency_ms,
+            "error_code": self.error_code,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class WebhookEvent(db.Model):
     """Registro bruto de webhooks recebidos para auditoria e replay."""
     __tablename__ = 'webhook_events'

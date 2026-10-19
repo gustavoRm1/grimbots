@@ -76,6 +76,23 @@ class Config:
     # 'v1.1' apenas HABILITA o suporte técnico; o envio real ainda exige o flag por bloco
     # (step_config['contract_v11']). NAO ativar antes do AI Gateway aceitar os campos novos.
     GRIMBOTS_AI_CONTRACT = (os.environ.get('GRIMBOTS_AI_CONTRACT', 'v1.0') or 'v1.0').strip().lower()
+    # E5 — execução shadow (NÃO ATIVAR em produção). Desligado por padrão; ainda
+    # exige o flag `shadow` por bloco. Só registra decisão v1.1 x ação real, sem
+    # efeito. ASYNC=false roda inline (apenas p/ testes locais).
+    GRIMBOTS_AI_SHADOW = (os.environ.get('GRIMBOTS_AI_SHADOW', 'off') or 'off').strip().lower()
+    GRIMBOTS_AI_SHADOW_SAMPLE = float(os.environ.get('GRIMBOTS_AI_SHADOW_SAMPLE', '1.0') or '1.0')
+    GRIMBOTS_AI_SHADOW_INCLUDE_TEXT = os.environ.get(
+        'GRIMBOTS_AI_SHADOW_INCLUDE_TEXT', 'false').lower() in {'1', 'true', 'yes'}
+    GRIMBOTS_AI_SHADOW_MAX_TEXT_CHARS = int(
+        os.environ.get('GRIMBOTS_AI_SHADOW_MAX_TEXT_CHARS', '0') or '0')
+    GRIMBOTS_AI_SHADOW_ASYNC = os.environ.get(
+        'GRIMBOTS_AI_SHADOW_ASYNC', 'true').lower() in {'1', 'true', 'yes'}
+    GRIMBOTS_AI_SHADOW_WORKERS = int(os.environ.get('GRIMBOTS_AI_SHADOW_WORKERS', '2') or '2')
+    # Segredo do HMAC do lead (fallback: SECRET_KEY). Nunca logar.
+    GRIMBOTS_AI_SHADOW_SECRET = os.environ.get('GRIMBOTS_AI_SHADOW_SECRET', '')
+    # Metadados opcionais do motor (complementam o /health no relatório E5).
+    GRIMBOTS_AI_MOTOR_VERSION = os.environ.get('GRIMBOTS_AI_MOTOR_VERSION', '')
+    GRIMBOTS_AI_MOTOR_COMMIT = os.environ.get('GRIMBOTS_AI_MOTOR_COMMIT', '')
     
     @classmethod
     def init_app(cls, app, rq_pool=False):
@@ -135,3 +152,12 @@ class Config:
         app.config['GRIMBOTS_AI_TIMEOUT'] = cls.GRIMBOTS_AI_TIMEOUT
         app.config['GRIMBOTS_AI_MOCK'] = cls.GRIMBOTS_AI_MOCK
         app.config['GRIMBOTS_AI_CONTRACT'] = cls.GRIMBOTS_AI_CONTRACT
+        # E5 — shadow (opt-in, desligado por padrão)
+        app.config['GRIMBOTS_AI_SHADOW'] = cls.GRIMBOTS_AI_SHADOW
+        app.config['GRIMBOTS_AI_SHADOW_SAMPLE'] = cls.GRIMBOTS_AI_SHADOW_SAMPLE
+        app.config['GRIMBOTS_AI_SHADOW_INCLUDE_TEXT'] = cls.GRIMBOTS_AI_SHADOW_INCLUDE_TEXT
+        app.config['GRIMBOTS_AI_SHADOW_MAX_TEXT_CHARS'] = cls.GRIMBOTS_AI_SHADOW_MAX_TEXT_CHARS
+        app.config['GRIMBOTS_AI_SHADOW_WORKERS'] = cls.GRIMBOTS_AI_SHADOW_WORKERS
+        app.config['GRIMBOTS_AI_SHADOW_SECRET'] = cls.GRIMBOTS_AI_SHADOW_SECRET
+        app.config['GRIMBOTS_AI_MOTOR_VERSION'] = cls.GRIMBOTS_AI_MOTOR_VERSION
+        app.config['GRIMBOTS_AI_MOTOR_COMMIT'] = cls.GRIMBOTS_AI_MOTOR_COMMIT

@@ -4122,6 +4122,20 @@ class BotManager:
             return False
         return bool((step_config or {}).get('contract_v11', False))
 
+    # ── E5 — execução SHADOW (ADITIVA, desligada por padrão) ────────────────
+    # Dupla flag: global GRIMBOTS_AI_SHADOW + step_config['shadow']. Desligada =>
+    # nenhuma chamada extra, nenhuma linha, comportamento idêntico ao atual.
+    @staticmethod
+    def _ai_shadow_enabled(step_config) -> bool:
+        try:
+            from flask import current_app
+            from internal_logic.services.ai_shadow import shadow_gate
+            return shadow_gate(
+                current_app.config.get('GRIMBOTS_AI_SHADOW', 'off'), step_config
+            )
+        except Exception:
+            return False
+
     @staticmethod
     def _ai_agent_profile(step_config):
         """Perfil bruto do bloco (a validação/omissão acontece em _clamp_profile)."""
@@ -4376,6 +4390,64 @@ class BotManager:
             except Exception:
                 pass
 
+    def _ai_dispatch_shadow(self, *, bot_id, telegram_user_id, config, step, step_config,
+                            history, state, request_id, observed, build_payload_fn,
+                            secret, sample_rate, include_text, max_text_chars,
+                            motor_version, motor_commit):
+        """E5 — decide em v1.1 e REGISTRA; zero efeito. Fire-and-forget (fail-open).
+
+        Reusa o MESMO contexto do turno (`build_payload_fn`), muda o contrato para
+        v1.1 (memória/contexto) e roda o motor fora do caminho crítico. Nunca
+        chama send/route/state; nunca propaga erro.
+        """
+        from flask import current_app
+        from internal_logic.services.ai_shadow import (
+            lead_reference, make_shadow_request_id, run_shadow, sample_hit,
+            get_dispatcher,
+        )
+        lead_ref = lead_reference(telegram_user_id, secret)
+        if not sample_hit(bot_id, lead_ref, sample_rate):
+            return
+        shadow_request_id = make_shadow_request_id(request_id)
+        v11 = self._ai_v11_payload_kwargs(config, step, step_config)
+        v11.update(self._ai_memory_payload(state))
+        shadow_payload = dict(build_payload_fn(v11))
+        shadow_payload['mode'] = 'shadow'
+        shadow_payload['request_id'] = shadow_request_id
+
+        app = current_app._get_current_object()
+        meta = {
+            'mode': 'shadow',
+            'contract_version': '1.1',
+            'motor_version': motor_version,
+            'motor_commit': motor_commit,
+        }
+
+        def _work():
+            with app.app_context():
+                try:
+                    from internal_logic.services.ai_service import get_ai_service
+                    run_shadow(
+                        respond=get_ai_service().respond,
+                        payload=shadow_payload, observed=observed,
+                        bot_id=bot_id, lead_ref=lead_ref, request_id=shadow_request_id,
+                        meta=meta, secret=secret, include_text=include_text,
+                        max_text_chars=max_text_chars,
+                    )
+                except Exception as exc:  # noqa: BLE001 — fail-open
+                    logger.debug(f"⚠️ [IA/shadow] worker falhou (fail-open): {exc}")
+                finally:
+                    try:
+                        from internal_logic.core.extensions import db
+                        db.session.remove()
+                    except Exception:
+                        pass
+
+        try:
+            get_dispatcher().submit(_work)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"⚠️ [IA/shadow] dispatch falhou (fail-open): {exc}")
+
     def _handle_ai_turn(self, bot_id: int, token: str, config: Dict[str, Any], chat_id: int,
                         telegram_user_id: str, step: Dict[str, Any], user_text: str,
                         bot_user=None, inbound_message_id=None):
@@ -4528,6 +4600,34 @@ class BotManager:
             self._ai_log_generation(bot_id, telegram_user_id, payload, result, None)
             if not result.valid:
                 logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
+
+            # E5 — shadow (desligado por padrão): decide em v1.1 FORA do caminho
+            # crítico e só REGISTRA, comparando com a ação real (v1.0) deste turno.
+            # Não envia, não roteia, não persiste estado, falha é fail-open.
+            if self._ai_shadow_enabled(step_config):
+                try:
+                    from flask import current_app as _current_app
+                    _app_cfg = _current_app.config
+                    self._ai_dispatch_shadow(
+                        bot_id=bot_id, telegram_user_id=telegram_user_id,
+                        config=config, step=step, step_config=step_config,
+                        history=history, state=state, request_id=request_id,
+                        observed={
+                            'action': result.action, 'intent': result.intent,
+                            'funnel_stage': result.funnel_stage,
+                            'lead_temperature': result.lead_temperature,
+                            'source': 'v1.0_production',
+                        },
+                        build_payload_fn=_build_payload,
+                        secret=_app_cfg.get('GRIMBOTS_AI_SHADOW_SECRET') or _app_cfg.get('SECRET_KEY'),
+                        sample_rate=_app_cfg.get('GRIMBOTS_AI_SHADOW_SAMPLE', 1.0),
+                        include_text=bool(_app_cfg.get('GRIMBOTS_AI_SHADOW_INCLUDE_TEXT')),
+                        max_text_chars=int(_app_cfg.get('GRIMBOTS_AI_SHADOW_MAX_TEXT_CHARS') or 0),
+                        motor_version=_app_cfg.get('GRIMBOTS_AI_MOTOR_VERSION', ''),
+                        motor_commit=_app_cfg.get('GRIMBOTS_AI_MOTOR_COMMIT', ''),
+                    )
+                except Exception as _shadow_exc:  # noqa: BLE001 — nunca quebra o turno
+                    logger.debug(f"⚠️ [IA/shadow] hook falhou (fail-open): {_shadow_exc}")
 
             # D12 — observabilidade do mapa de intent (registra; nunca mascara)
             if result.intent_kind == 'alias':
