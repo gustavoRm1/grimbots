@@ -7,7 +7,8 @@
 >
 > **Status:** o motor implementou D11 em `444d4a2` / `4898325` (docs: v1.6.0).
 > Re-executamos este pacote de forma **independente**: **CONTRATO 9/9 PASS**
-> (`results/OBSERVED.md`, `results/MATRIZ_ESPERADO_OBSERVADO.md`).
+> (`results/OBSERVED.md`, `results/MATRIZ_ESPERADO_OBSERVADO.md`). Re-executado
+> contra **`b81dcad`** (versão corrigida em `daba546`, `version=1.6.0`): **9/9 PASS**.
 
 ---
 
@@ -153,16 +154,17 @@ Ver `SIGNATURE.md`. **Assinatura = compatibilidade validada nos cenários testad
 (`d11_acceptance.py` → **CONTRATO 9/9 PASS**). **Não é aprovação para produção:**
 sem merge/deploy/ativação, e as limitações do §5 permanecem.
 
-**Próximo passo:** quando o motor entregar persistência do store e corrigir a
-versão do `/health` (§7), **re-executar** este pacote contra a nova versão e
-**atualizar** `results/MATRIZ_ESPERADO_OBSERVADO.md` (o harness registra o commit
-novo). Bloqueios residuais → falha reproduzível + correção no lado Grimbots.
+**Próximo passo:** a versão do `/health` foi corrigida (§7, `daba546`). Quando o
+motor entregar a **persistência do store** de dedupe, **re-executar** este pacote
+contra a nova versão e **atualizar** `results/MATRIZ_ESPERADO_OBSERVADO.md` (o
+harness registra o commit novo), validando **concorrência/replay/restart/
+multi-instância** (S6/S8). Bloqueios residuais → falha reproduzível + correção no
+lado Grimbots.
 
 ## 7. Divergências registradas (lado motor — **não** corrigidas aqui)
 
-1. **Versão reportada:** `/health` e OpenAPI retornam `service_version = "1.0.0"`
-   (`api/config.py:27`) enquanto docs/CHANGELOG/badge dizem **v1.6.0**. O contrato
-   versionado (`contract_version`) não é afetado, mas a versão do serviço diverge.
-   **Correção sugerida (motor):** `service_version = "1.6.0"`.
+1. **Versão reportada — RESOLVIDA** (`daba546`/`b81dcad`): `service_version`
+   agora é `"1.6.0"` (`api/config.py:27`); `/health` confere (harness +
+   `test_motor_live.py` cenário F).
 2. **Store in-memory / single-instance** (limitação S8): documentada no ADR 0013;
    exige store compartilhado para >1 worker/instância e para durabilidade a restart.

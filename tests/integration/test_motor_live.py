@@ -197,12 +197,28 @@ def run_scenarios(port):
         check("D extra=forbid 422", err.code == "VALIDATION_ERROR" and err.status == 422,
               f"code={err.code} status={err.status}")
 
-    # E) D11 — mesmo request_id 2x: o motor NÃO deduplica (evidência)
+    # E) D11 — mesmo request_id 2x: o motor DEDUPLICA (2º envio = replay, sem re-execucao)
     p = build_payload(**_base_kwargs("itest-req-dup"))
+    calls_before = len(MOCK_STATE["seen_prompts"])
     r1 = svc.respond(p)
+    calls_after_first = len(MOCK_STATE["seen_prompts"])
     r2 = svc.respond(dict(p))
-    check("E D11 duplicidade reproduzida (motor sem dedupe)",
-          r1.message and r2.message, "2x 200 com mesmo request_id")
+    calls_after = len(MOCK_STATE["seen_prompts"])
+    check("E D11 replay: 2o envio nao re-executa o modelo",
+          bool(r1.message) and r1.message == r2.message
+          and calls_after_first == calls_before + 1 and calls_after == calls_after_first,
+          f"chamadas modelo: 1o=+{calls_after_first - calls_before} "
+          f"2o=+{calls_after - calls_after_first}")
+
+    # F) versao do servico exposta pelo /health (integracao)
+    try:
+        import urllib.request
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=5) as h:
+            health = json.loads(h.read().decode())
+        check("F /health reporta versao do servico",
+              bool(health.get("version")), f"version={health.get('version')}")
+    except Exception as err:  # noqa: BLE001
+        check("F /health reporta versao do servico", False, f"erro={err}")
 
     return results
 

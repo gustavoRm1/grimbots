@@ -26,6 +26,7 @@ Assinatura Grimbots: **✅ compatibilidade validada nos cenários testados**.
 ## Lado Motor (AI Gateway) — implementado pelo dev
 
 - Commit **`444d4a2`** (D11) / crosscheck **`4898325`**; docs: v1.6.0.
+  Re-executado contra **`b81dcad`** (versão corrigida em `daba546`): **9/9 PASS**.
 - [x] Deduplicar por `request_id` (TTL conclusão 1 h; em-andamento `max(120, timeout+30)`).
 - [x] Sucesso repetido → replay (header `X-D11-Replay`), sem nova execução.
 - [x] Em andamento → `409 REQUEST_IN_PROGRESS` + `Retry-After`.
@@ -36,7 +37,8 @@ Assinatura Grimbots: **✅ compatibilidade validada nos cenários testados**.
 
 - [ ] **Persistência do store de dedupe** (hoje in-memory / single-instance) —
   cobre reinício, múltiplas instâncias/workers e falha entre geração e persistência.
-- [ ] **Versão do `/health`**: hoje `version="1.0.0"` (docs dizem v1.6.0) → alinhar.
+  Decisão §12.5 (`b81dcad`): mantém sucesso-only em memória por ora; Redis para produção.
+- [x] **Versão do `/health`** — **RESOLVIDA** (`daba546`/`b81dcad`): `version="1.6.0"`.
 
 Assinado por (Grimbots): **✅ compatibilidade validada nos cenários testados** —
 Data: 2026-10-19

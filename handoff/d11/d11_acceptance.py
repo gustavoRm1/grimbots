@@ -703,9 +703,12 @@ def _write_matrix(meta, results, ts, cpass, ctotal):
           "## 6. Limitações documentadas (permanecem)", ""]
     m += [f"- {lim}" for lim in LIMITATIONS]
     m += ["", "## 7. Pendência do motor (próximo passo)", "",
-          "Quando o motor entregar **(a)** persistência do store de dedupe e "
-          "**(b)** correção da versão do `/health`: **re-executar** §2 contra a nova "
-          "versão e **atualizar esta matriz** (o harness registra o novo commit).",
+          "**(b) versão do `/health`** — resolvida (`daba546`: `version=1.6.0`).",
+          "",
+          "**(a) persistência do store de dedupe** — **pendente**. Quando entregue: "
+          "**re-executar** §2 contra a nova versão e **atualizar esta matriz** (o "
+          "harness registra o novo commit), validando **concorrência/replay/restart/"
+          "multi-instância** (S6/S8).",
           ""]
     (RESULTS / "MATRIZ_ESPERADO_OBSERVADO.md").write_text("\n".join(m) + "\n")
 

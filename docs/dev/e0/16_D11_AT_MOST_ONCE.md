@@ -3,7 +3,7 @@
 > **Status:** implementado (`_ai_turn_claim/_ai_turn_complete/_ai_turn_release`
 > em `bot_manager.py`). **Ativação de produção inalterada.** Complementa o
 > hand-off E1/E2 (doc 15 §6): o motor **já deduplica** por `request_id`
-> (commit `444d4a2`, verificado em `4898325` — doc 19).
+> (commit `444d4a2`, verificado em `4898325` e re-verificado em `b81dcad` — doc 19).
 >
 > **Escopo:** garantir que **um mesmo `message_id` de entrada Telegram** produza
 > **no máximo um turno de IA**, mesmo com redelivery/duplicidade/retry.
@@ -60,7 +60,8 @@ normalmente** (nunca descarta turno por indisponibilidade do dedupe).
 ## Motor (fora deste repo) — implementado e verificado
 
 - **D11 no motor:** deduplica por `request_id` (commit `444d4a2`; verificação
-  independente em `4898325`). **CONTRATO 9/9 PASS** no `handoff/d11/`.
+  independente em `4898325`, re-executada em `b81dcad`). **CONTRATO 9/9 PASS** no
+  `handoff/d11/`.
 - **Pacote de hand-off executável:** `handoff/d11/` (S1–S10 + matriz,
   esperado × observado, contra-assinatura) — ver **doc 19**.
 - **Contrato 409 `REQUEST_IN_PROGRESS`** (entrega concorrente do mesmo

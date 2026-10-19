@@ -2,7 +2,8 @@
 
 > Pacote executável em `handoff/d11/`. **Não altera o repo do motor.**
 > Motor implementou D11 (`444d4a2` / crosscheck `4898325`, docs: v1.6.0).
-> Verificação **independente** Grimbots: **CONTRATO 9/9 PASS**. Sem
+> Re-executado contra **`b81dcad`** (versão corrigida em `daba546`): **CONTRATO
+> 9/9 PASS**. Verificação **independente** Grimbots: **CONTRATO 9/9 PASS**. Sem
 > merge/deploy/ativação.
 >
 > **Assinatura D11 = compatibilidade validada nos cenários testados** — **não**
@@ -50,11 +51,14 @@ Primeira execução (motor stateless, `454d37c`): **3/6**. Re-execução contra
 
 ## Divergências reportadas ao motor (não corrigidas aqui)
 
-1. **Versão reportada:** `/health` e OpenAPI devolvem `version="1.0.0"`
-   (`api/config.py:27`) enquanto docs/badge/CHANGELOG dizem **v1.6.0**.
-   **Sugestão (motor):** `service_version = "1.6.0"`.
-2. **Store in-memory / single-instance** (S8): exige store compartilhado para
-   multi-worker/instância e para durabilidade a restart.
+1. **Versão reportada — RESOLVIDA** em `daba546`/`b81dcad`: `service_version`
+   agora é `1.6.0` (`api/config.py:27`); `/health` confere (verificado pelo
+   harness e por `tests/integration/test_motor_live.py` cenário F).
+2. **Store in-memory / single-instance** (S8) — **em aberto**: exige store
+   compartilhado (ex.: Redis) para multi-worker/instância e para durabilidade a
+   restart. Decisão registrada pelo motor em §12.5 de
+   `docs/CONTRATO-MOTOR-COMERCIAL-ALINHAMENTO.md` (mantém sucesso-only em memória
+   por ora; documenta a janela pós-geração/antes de `complete()`).
 
 ## Preparo/correção do lado Grimbots
 
@@ -80,10 +84,15 @@ validada nos cenários testados**) em `SIGNATURE.md`. **Não** é aprovação pa
 
 ## Próximo passo (quando o motor evoluir)
 
-Quando o motor entregar **(a)** persistência do store de dedupe e **(b)** correção
-da versão do `/health`: **re-executar** o pacote contra a nova versão e
-**atualizar** `handoff/d11/results/MATRIZ_ESPERADO_OBSERVADO.md` (o harness grava
-o commit novo). Bloqueio residual → falha reproduzível + correção no repo Grimbots.
+**(b) versão do `/health`** — **concluído** (`daba546`): re-executado e conferido
+(`version=1.6.0`).
+
+**(a) persistência do store de dedupe** — **pendente**. Quando entregue:
+**re-executar** o pacote contra a nova versão e **atualizar**
+`handoff/d11/results/MATRIZ_ESPERADO_OBSERVADO.md` (o harness grava o commit
+novo). Nessa ocasião, validar explicitamente **concorrência, replay, restart e
+múltiplas instâncias** (S6/S8). Bloqueio residual → falha reproduzível +
+correção no repo Grimbots.
 
 ## Evidências (artefatos)
 
