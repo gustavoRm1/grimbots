@@ -1,29 +1,38 @@
 # D11 — Contra-assinatura (Grimbots ⇄ Motor)
 
 Contrato: idempotência por `request_id` (ver `EXPECTED.md` e `README.md`).
-Aceite: `d11_acceptance.py` → **6/6 PASS**.
+Aceite: `d11_acceptance.py` → **CONTRATO 9/9 PASS** (S1–S7, S9, S10).
 
 ## Lado Grimbots (plataforma) — implementado
 
-- D11 em 2 fases: reserva `SET NX EX` (120s) → conclusão (24h) → release.
-- Guarda de efeito comercial: mensagem / avanço de fluxo / checkout / handoff
-  não duplicam em replay.
-- `REQUEST_IN_PROGRESS` tratado como **retryável** e **sem fallback**.
-- Evidências: `tests/test_d11_dedupe.py` (12/12) e `docs/dev/e0/16_D11_AT_MOST_ONCE.md`.
+- Dedupe por **`message_id`** na entrada (`bot_manager._ai_turn_*`): reserva → conclusão durável.
+- D11 2 fases: reserva (`SET NX EX`, 120s) → conclusão (24h) → **release**.
+- `409 REQUEST_IN_PROGRESS`: **retryável**, **sem fallback**, **libera a reserva**
+  (permite reentrega); **não** envia mensagem, **não** avança fluxo/checkout/handoff.
+- Cliente honra o header **`Retry-After`** (429/503/409).
+- Evidências: `tests/test_d11_dedupe.py` (**14/14**) — inclui
+  `test_client_honors_retry_after_header`,
+  `test_request_in_progress_releases_and_has_no_effects`,
+  `test_request_in_progress_then_redelivery_succeeds`.
 
-Assinatura Grimbots: **✅ implementado e testado** (branch `feat/e4-offline-d11-hardening`).
+Assinatura Grimbots: **✅ implementado e verificado**.
 
-## Lado Motor (AI Gateway) — pendente
+## Lado Motor (AI Gateway) — implementado pelo dev
 
-- [ ] Deduplicar por `request_id` (janela TTL ≥ 10 min).
-- [ ] Sucesso repetido → replay sem nova execução do modelo.
-- [ ] Em andamento → `409 REQUEST_IN_PROGRESS` (retryável).
-- [ ] Falha/timeout → liberar reserva (retry permitido).
-- [ ] `d11_acceptance.py` → **6/6 PASS** no checkout do motor.
+- Commit **`444d4a2`** (D11) / crosscheck **`4898325`**; docs: v1.6.0.
+- [x] Deduplicar por `request_id` (TTL conclusão 1 h; em-andamento `max(120, timeout+30)`).
+- [x] Sucesso repetido → replay (header `X-D11-Replay`), sem nova execução.
+- [x] Em andamento → `409 REQUEST_IN_PROGRESS` + `Retry-After`.
+- [x] Falha/timeout → `release` (retry permitido).
+- [x] Verificação **independente** Grimbots: **CONTRATO 9/9 PASS** (commit `4898325`).
+
+Divergências reportadas (não bloqueiam o aceite):
+- `service_version` ainda reporta `1.0.0` (docs dizem v1.6.0).
+- Store **in-memory** (single-instance) — limitação S8 documentada.
 
 Assinatura Motor: **⏳ pendente** — nome/data:
 
 ```
 Assinado por: ______________________  Data: ____-__-__
-Resultado d11_acceptance.py: __/6 PASS
+Resultado d11_acceptance.py: __/9 CONTRATO PASS
 ```

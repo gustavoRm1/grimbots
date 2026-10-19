@@ -1,18 +1,36 @@
 {
-  "generated_at": "2026-10-19T13:17:51Z",
-  "motor_base_url": "http://127.0.0.1:64258",
-  "passed": 3,
-  "total": 6,
+  "generated_at": "2026-10-19T15:04:57Z",
+  "motor": {
+    "base_url": "http://127.0.0.1:50266",
+    "request_timeout_env": 5,
+    "health": {
+      "status": "ok",
+      "service": "grimbots-ai-gateway",
+      "version": "1.0.0",
+      "ollama": "reachable",
+      "model": "grimbots-sales:latest"
+    },
+    "version_reported": "1.0.0",
+    "model": "grimbots-sales:latest",
+    "git_commit": "48983253a3b42db22dd43866cfb16ae53cbe3a66",
+    "git_commit_short": "4898325",
+    "git_subject": "D11 crosscheck: re-run acceptance 6/6; document 12.4 limits; add matrix/evidence",
+    "git_describe": "4898325"
+  },
+  "contract_passed": 9,
+  "contract_total": 9,
   "results": [
     {
       "id": "S1",
+      "kind": "contract",
       "name": "mensagem duplicada (mesmo request_id, 2 envios)",
       "expected": "1o=200 (1 chamada ao modelo); 2o=200 SEM nova chamada (replay idempotente)",
-      "observed": "1o=200 chamadas=1; 2o=200 chamadas=2",
-      "pass": false
+      "observed": "1o=200 chamadas=1; 2o=200 chamadas=1",
+      "pass": true
     },
     {
       "id": "S2",
+      "kind": "contract",
       "name": "falha apos reservar (backend 5xx -> retry MESMO request_id)",
       "expected": "1o=5xx (AI_BACKEND_ERROR); retry mesmo request_id=200 (reserva liberada)",
       "observed": "1o=502 code=AI_BACKEND_ERROR; 2o=200",
@@ -20,6 +38,7 @@
     },
     {
       "id": "S3",
+      "kind": "contract",
       "name": "timeout do motor (Ollama lento -> 504 AI_TIMEOUT)",
       "expected": "1o=504 AI_TIMEOUT; retry mesmo request_id=200 (nada concluido -> liberado)",
       "observed": "1o=504 code=AI_TIMEOUT; 2o=200",
@@ -27,13 +46,15 @@
     },
     {
       "id": "S4",
+      "kind": "contract",
       "name": "retry com o mesmo request_id apos SUCESSO",
       "expected": "2o=200 com a MESMA resposta (replay); 0 novas chamadas ao modelo",
-      "observed": "2o=200 novas_chamadas_apos_sucesso=1 resposta_identica=True",
-      "pass": false
+      "observed": "2o=200 novas_chamadas_apos_sucesso=0 resposta_identica=True",
+      "pass": true
     },
     {
       "id": "S5",
+      "kind": "contract",
       "name": "falha antes de concluir (modelo invalido -> 502)",
       "expected": "1o=502 AI_INVALID_RESPONSE; retry MESMO request_id=200 (reserva liberada)",
       "observed": "1o=502 code=AI_INVALID_RESPONSE; 2o=200",
@@ -41,10 +62,43 @@
     },
     {
       "id": "S6",
+      "kind": "contract",
       "name": "concorrencia: 2 entregas da MESMA mensagem/request_id",
       "expected": "modelo chamado 1x; 2 respostas 200 (1 real + 1 replay) OU 2o=409 REQUEST_IN_PROGRESS",
-      "observed": "status=[200, 200] chamadas_ao_modelo=2 respostas_200=2",
-      "pass": false
+      "observed": "status=[200, 409] chamadas_ao_modelo=1 respostas_200=1",
+      "pass": true
+    },
+    {
+      "id": "S7",
+      "kind": "contract",
+      "name": "409 REQUEST_IN_PROGRESS (Retry-After) + replay apos conclusao",
+      "expected": "em andamento -> 409 REQUEST_IN_PROGRESS com header Retry-After; 1o=200; apos concluir -> 200 replay (X-D11-Replay=true); modelo 1x",
+      "observed": "em_andamento=409 code=REQUEST_IN_PROGRESS retry_after=1; 1o=200; apos=200 replay=true; chamadas=1",
+      "pass": true
+    },
+    {
+      "id": "S9",
+      "kind": "contract",
+      "name": "D6: payload com TODOS os campos no limite do motor",
+      "expected": "200 (limites do motor respeitados; nenhum 422 por tamanho)",
+      "observed": "200 code=",
+      "pass": true
+    },
+    {
+      "id": "S10",
+      "kind": "contract",
+      "name": "D6: message.content=4001 (1 acima do limite do motor)",
+      "expected": "422 VALIDATION_ERROR (motor rejeita >4000 -> Grimbots deve clamar em 4000)",
+      "observed": "422 code=VALIDATION_ERROR",
+      "pass": true
+    },
+    {
+      "id": "S8",
+      "kind": "limitation",
+      "name": "durabilidade do dedupe apos restart (store in-memory)",
+      "expected": "LIMITE CONHECIDO: store in-memory -> apos restart o mesmo request_id NAO tem replay; o modelo re-executa",
+      "observed": "1o=200; apos_restart=200; chamadas_antes=1 chamadas_depois=2",
+      "pass": true
     }
   ]
 }

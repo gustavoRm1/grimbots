@@ -2,7 +2,8 @@
 
 > **Status:** implementado (`_ai_turn_claim/_ai_turn_complete/_ai_turn_release`
 > em `bot_manager.py`). **Ativação de produção inalterada.** Complementa o
-> hand-off E1/E2 (doc 15 §6): o motor ainda **não** deduplica por `request_id`.
+> hand-off E1/E2 (doc 15 §6): o motor **já deduplica** por `request_id`
+> (commit `444d4a2`, verificado em `4898325` — doc 19).
 >
 > **Escopo:** garantir que **um mesmo `message_id` de entrada Telegram** produza
 > **no máximo um turno de IA**, mesmo com redelivery/duplicidade/retry.
@@ -18,7 +19,11 @@ A chave é `gb:{user_id}:ai_turn_done:{bot_id}:{telegram_user_id}:{inbound_messa
 | **Liberação** | `DEL key` | — | só em falha **antes** de efeito observável; permite retry legítimo |
 
 Ordem no `_handle_ai_turn`:
-`enabled check → D9 guard (human_takeover) → D11 reserve → try: <gateway + efeitos> → finally: complete`.
+`enabled check → D9 guard (human_takeover) → D11 reserve → try: <gateway + efeitos> → finally: release|complete`.
+
+O `finally` **conclui** por padrão, mas **libera** quando a falha é **retryável e
+sem efeito** (`409 REQUEST_IN_PROGRESS`): assim a reentrega do mesmo `message_id`
+pode reprocessar em vez de o turno ser descartado por 24 h.
 
 **Fail-open:** sem `message_id` ou sem Redis (ausente/erro) → **processa
 normalmente** (nunca descarta turno por indisponibilidade do dedupe).
@@ -52,15 +57,21 @@ normalmente** (nunca descarta turno por indisponibilidade do dedupe).
 6. **Não cobre** estados de conversa / idempotência de efeitos colaterais de
    negócio (ex.: criar pedido) — fora do escopo desta camada.
 
-## Pendência do motor (fora deste repo)
+## Motor (fora deste repo) — implementado e verificado
 
-- **D11 no motor:** deduplicar por `request_id` (janela de idempotência) para
-  fechar o limite (1) acima. Aceite descrito no doc 15 §6 (E1/E2 + D11).
-- **Pacote de hand-off executável:** `handoff/d11/` (6 cenários, esperado ×
-  observado, contra-assinatura) — ver **doc 19**. Resultado atual: **3/6 PASS**
-  (S1/S4/S6 = efeito duplo a eliminar).
-- **Contrato do código 409 `REQUEST_IN_PROGRESS`** (entrega concorrente do mesmo
-  `request_id`): já tratado na Grimbots como **retryável** e **sem fallback**.
+- **D11 no motor:** deduplica por `request_id` (commit `444d4a2`; verificação
+  independente em `4898325`). **CONTRATO 9/9 PASS** no `handoff/d11/`.
+- **Pacote de hand-off executável:** `handoff/d11/` (S1–S10 + matriz,
+  esperado × observado, contra-assinatura) — ver **doc 19**.
+- **Contrato 409 `REQUEST_IN_PROGRESS`** (entrega concorrente do mesmo
+  `request_id`): a Grimbots trata como **retryável**, **sem fallback**, **sem
+  efeitos** (msg/fluxo/checkout/handoff) e **libera a reserva** para a reentrega.
+  O cliente respeita o header **`Retry-After`** (`_sleep`). Testes:
+  `test_request_in_progress_releases_and_has_no_effects`,
+  `test_request_in_progress_then_redelivery_succeeds`,
+  `test_client_honors_retry_after_header`.
+- **D6:** limites conferidos contra os schemas do motor (commit atual): campo no
+  limite → 200; 1 acima → 422 (doc 18). Hand-off S9/S10 comprova end-to-end.
 
 ## Evidência de efeito comercial não duplicado (plataforma)
 
