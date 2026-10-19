@@ -150,3 +150,29 @@ com autorização explícita a cada passo.
 - `14_PREPARACAO_EP0_EP1.md` — plano de E-P0/E-P1 e dependências.
 - `12_ANEXO_MOTOR_DIVERGENCIAS.md` — divergências D1–D14 e T15.
 - `11_REVISAO_CONJUNTA_MOTOR_GRIMBOTS.md` — matriz conjunta.
+
+---
+
+## 6. Hand-off ao motor (`grimbots-ai`) — E1/E2
+
+> Escopo do **desenvolvedor do motor** (repositório próprio). O lado Grimbots já
+> **tolerante** aos campos abaixo (reader defensivo): implementar não quebra o
+> cliente atual.
+
+**E1 — Contrato de request v1.1**
+- Aceitar `contract_version`, `agent_profile`, `flow_resources`, `context_policy`
+  e os 6 campos de memória (já no schema) — **aditivo**; ausência = v1.0.
+- Validar `state_update` do modelo contra a **whitelist de 7 chaves** (D5).
+
+**E2 — Campos novos na resposta (aditivo)**
+- Emitir `reason` (string), `offer_id` (string|null, ≤64) e `state_update`
+  (objeto) — todos **opcionais**; ausência mantém v1.0.
+- `state_update` só com as 7 chaves; `conversation_summary`/`last_action` **nunca**.
+
+**D11 — Idempotência do motor**
+- Deduplicar por `request_id` (janela TTL), retornando a resposta anterior em
+  replay. Evidência: hoje o motor **não** deduplica (2× 200 com mesmo id).
+
+**Aceite:** golden de prompts intacto + suíte unit do motor 100% verde + testes de
+regressão v1.0/v1.1 + `state_update` fora da whitelist ignorado (não fatal no
+request, aplicação na plataforma).
