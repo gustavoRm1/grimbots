@@ -1,0 +1,720 @@
+{
+  "generated_at": "2026-10-19T04:18:25Z",
+  "summary": {
+    "v1.0": {
+      "turns": 12,
+      "action_allowed_pct": 100.0,
+      "message_nonempty_pct": 100.0,
+      "ask_question_turns": 7,
+      "question_when_asked_pct": 100.0,
+      "payload_has_context_pct": 0.0,
+      "objection_turns": 2,
+      "objection_handled_pct": 0.0,
+      "intent_alias_normalized": 2,
+      "memory_consistent": true,
+      "simulated_outcomes": {
+        "ask_question": 7,
+        "present_offer": 2,
+        "send_checkout": 1,
+        "handoff_human": 2
+      },
+      "failed_turns": 2
+    },
+    "v1.1": {
+      "turns": 12,
+      "action_allowed_pct": 100.0,
+      "message_nonempty_pct": 100.0,
+      "ask_question_turns": 4,
+      "question_when_asked_pct": 100.0,
+      "payload_has_context_pct": 100.0,
+      "objection_turns": 2,
+      "objection_handled_pct": 100.0,
+      "intent_alias_normalized": 2,
+      "memory_consistent": true,
+      "simulated_outcomes": {
+        "ask_question": 4,
+        "present_offer": 2,
+        "continue": 3,
+        "send_checkout": 1,
+        "handoff_human": 2
+      },
+      "failed_turns": 0
+    }
+  },
+  "logs": {
+    "v1.0": [
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "oi",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.0",
+        "turn": 1,
+        "user": "Ana",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.0",
+        "turn": 2,
+        "user": "quero aprender marketing",
+        "payload_has_context": false,
+        "action": "present_offer",
+        "intent": "interesse",
+        "intent_original": "oferta",
+        "intent_kind": "alias",
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "quero saber do curso",
+        "payload_has_context": false,
+        "action": "present_offer",
+        "intent": "interesse",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.0",
+        "turn": 1,
+        "user": "achei caro",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "objecao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": true,
+        "objection_handled": false,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": false
+        },
+        "passed": false
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.0",
+        "turn": 2,
+        "user": "ok, quero fechar",
+        "payload_has_context": false,
+        "action": "send_checkout",
+        "intent": "compra",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "como funciona o suporte?",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "duvida",
+        "intent_original": "informacao",
+        "intent_kind": "alias",
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "version": "v1.0",
+        "turn": 1,
+        "user": "entendi, e caro?",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "objecao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": true,
+        "objection_handled": false,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": false
+        },
+        "passed": false
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "oi",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "version": "v1.0",
+        "turn": 1,
+        "user": "oi",
+        "payload_has_context": false,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s5-handoff-risco",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "quero falar com um humano agora",
+        "payload_has_context": false,
+        "action": "handoff_human",
+        "intent": "risco",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      },
+      {
+        "scenario": "s5b-handoff-duvida",
+        "version": "v1.0",
+        "turn": 0,
+        "user": "quero falar com uma pessoa",
+        "payload_has_context": false,
+        "action": "handoff_human",
+        "intent": "suporte",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Ola! Sou a Maya.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true
+      }
+    ],
+    "v1.1": [
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "oi",
+        "payload_has_context": true,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.1",
+        "turn": 1,
+        "user": "Ana",
+        "payload_has_context": true,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s1-qualificacao",
+        "version": "v1.1",
+        "turn": 2,
+        "user": "quero aprender marketing",
+        "payload_has_context": true,
+        "action": "present_offer",
+        "intent": "interesse",
+        "intent_original": "oferta",
+        "intent_kind": "alias",
+        "message": "Otimo, sobre marketing: posso te ajudar agora.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "quero saber do curso",
+        "payload_has_context": true,
+        "action": "present_offer",
+        "intent": "interesse",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Otimo, sobre curso: posso te ajudar agora.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.1",
+        "turn": 1,
+        "user": "achei caro",
+        "payload_has_context": true,
+        "action": "continue",
+        "intent": "objecao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Entendo a preocupacao. Vou te mostrar o valor real.",
+        "objection_expected": true,
+        "objection_handled": true,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "version": "v1.1",
+        "turn": 2,
+        "user": "ok, quero fechar",
+        "payload_has_context": true,
+        "action": "send_checkout",
+        "intent": "compra",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Otimo, sobre marketing: posso te ajudar agora.",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "como funciona o suporte?",
+        "payload_has_context": true,
+        "action": "continue",
+        "intent": "duvida",
+        "intent_original": "informacao",
+        "intent_kind": "alias",
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "version": "v1.1",
+        "turn": 1,
+        "user": "entendi, e caro?",
+        "payload_has_context": true,
+        "action": "continue",
+        "intent": "objecao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Entendo a preocupacao. Vou te mostrar o valor real.",
+        "objection_expected": true,
+        "objection_handled": true,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "oi",
+        "payload_has_context": true,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "version": "v1.1",
+        "turn": 1,
+        "user": "oi",
+        "payload_has_context": true,
+        "action": "ask_question",
+        "intent": "saudacao",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s5-handoff-risco",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "quero falar com um humano agora",
+        "payload_has_context": true,
+        "action": "handoff_human",
+        "intent": "risco",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      },
+      {
+        "scenario": "s5b-handoff-duvida",
+        "version": "v1.1",
+        "turn": 0,
+        "user": "quero falar com uma pessoa",
+        "payload_has_context": true,
+        "action": "handoff_human",
+        "intent": "suporte",
+        "intent_original": null,
+        "intent_kind": null,
+        "message": "Certo, seguimos!",
+        "objection_expected": false,
+        "objection_handled": null,
+        "checks": {
+          "action_allowed": true,
+          "message_nonempty": true,
+          "question_when_asked": true,
+          "objection_handled": true
+        },
+        "passed": true,
+        "state_update_errors": [
+          "state_update.conversation_summary ignorado: chave fora da whitelist."
+        ],
+        "state_update_ignored_summary": true
+      }
+    ]
+  },
+  "memory": {
+    "v1.0": [
+      {
+        "scenario": "s1-qualificacao",
+        "turn_count": 3,
+        "expected_turns": 3,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "turn_count": 3,
+        "expected_turns": 3,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "turn_count": 2,
+        "expected_turns": 2,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "turn_count": 2,
+        "expected_turns": 2,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s5-handoff-risco",
+        "turn_count": 1,
+        "expected_turns": 1,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s5b-handoff-duvida",
+        "turn_count": 1,
+        "expected_turns": 1,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      }
+    ],
+    "v1.1": [
+      {
+        "scenario": "s1-qualificacao",
+        "turn_count": 3,
+        "expected_turns": 3,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {
+          "interesse": "marketing"
+        },
+        "consistent": true
+      },
+      {
+        "scenario": "s2-objecao-preco",
+        "turn_count": 3,
+        "expected_turns": 3,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {
+          "interesse": "marketing"
+        },
+        "consistent": true
+      },
+      {
+        "scenario": "s3-duvida-tecnica",
+        "turn_count": 2,
+        "expected_turns": 2,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s4-lead-frio",
+        "turn_count": 2,
+        "expected_turns": 2,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s5-handoff-risco",
+        "turn_count": 1,
+        "expected_turns": 1,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      },
+      {
+        "scenario": "s5b-handoff-duvida",
+        "turn_count": 1,
+        "expected_turns": 1,
+        "questions_deduped": true,
+        "summary_not_injected": true,
+        "collected_information": {},
+        "consistent": true
+      }
+    ]
+  }
+}

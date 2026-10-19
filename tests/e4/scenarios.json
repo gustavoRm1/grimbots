@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "name": "E4 offline corpus",
+    "note": "Conjunto reproduzivel de conversas para avaliacao OFFLINE. As respostas do 'modelo' sao ROTEIRIZADAS (scripted), nao de um LLM real. NAO declarar ganho de conversao.",
+    "versions": ["v1.0", "v1.1"]
+  },
+  "bot_config": {
+    "name": "Maya",
+    "personality": ["confiante", "objetiva"],
+    "tone": "intimo",
+    "boldness": 3,
+    "message_length": "short",
+    "emoji_level": "moderate",
+    "commercial_goal": "qualificar e vender"
+  },
+  "scenarios": [
+    {
+      "id": "s1-qualificacao",
+      "title": "Qualificacao basica ate oferta",
+      "allowed_actions": ["continue", "ask_question", "present_offer", "send_checkout", "handoff_human"],
+      "offers": [
+        {"id": "of1", "name": "Curso Completo", "price": "R$ 97", "checkout_url": "https://exemplo/checkout", "active": true}
+      ],
+      "lead": {"name": "Ana"},
+      "turns": [
+        {"user": "oi", "intent": "saudacao", "objection": false, "interest": null,
+         "v10": {"action": "ask_question", "question": "Qual seu nome?", "addresses_objection": false},
+         "v11": {"action": "ask_question", "question": "Qual seu nome?", "addresses_objection": false}},
+        {"user": "Ana", "intent": "saudacao", "objection": false, "interest": null,
+         "v10": {"action": "ask_question", "question": "O que voce procura?", "addresses_objection": false},
+         "v11": {"action": "ask_question", "question": "O que voce procura?", "addresses_objection": false}},
+        {"user": "quero aprender marketing", "intent": "oferta", "objection": false, "interest": "marketing",
+         "v10": {"action": "present_offer", "question": null, "addresses_objection": false},
+         "v11": {"action": "present_offer", "question": null, "addresses_objection": false}}
+      ]
+    },
+    {
+      "id": "s2-objecao-preco",
+      "title": "Objecao de preco e fechamento",
+      "allowed_actions": ["continue", "ask_question", "present_offer", "send_checkout", "handoff_human"],
+      "offers": [
+        {"id": "of1", "name": "Mentoria", "price": "R$ 297", "checkout_url": "https://exemplo/checkout", "active": true}
+      ],
+      "lead": {"name": "Bruno"},
+      "turns": [
+        {"user": "quero saber do curso", "intent": "interesse", "objection": false, "interest": "curso",
+         "v10": {"action": "present_offer", "question": null, "addresses_objection": false},
+         "v11": {"action": "present_offer", "question": null, "addresses_objection": false}},
+        {"user": "achei caro", "intent": "objecao", "objection": true, "interest": "marketing",
+         "v10": {"action": "ask_question", "question": "Posso te contar mais sobre o curso?", "addresses_objection": false},
+         "v11": {"action": "continue", "question": null, "addresses_objection": true}},
+        {"user": "ok, quero fechar", "intent": "compra", "objection": false, "interest": "marketing",
+         "v10": {"action": "send_checkout", "question": null, "addresses_objection": false},
+         "v11": {"action": "send_checkout", "question": null, "addresses_objection": false}}
+      ]
+    },
+    {
+      "id": "s3-duvida-tecnica",
+      "title": "Duvida tecnica e avanco",
+      "allowed_actions": ["continue", "ask_question", "present_offer", "handoff_human"],
+      "offers": [],
+      "lead": {"name": "Bruno"},
+      "turns": [
+        {"user": "como funciona o suporte?", "intent": "informacao", "objection": false, "interest": null,
+         "v10": {"action": "ask_question", "question": "Voce ja conhece o produto?", "addresses_objection": false},
+         "v11": {"action": "continue", "question": null, "addresses_objection": false}},
+        {"user": "entendi, e caro?", "intent": "objecao", "objection": true, "interest": null,
+         "v10": {"action": "ask_question", "question": "Voce ja conhece o produto?", "addresses_objection": false},
+         "v11": {"action": "continue", "question": null, "addresses_objection": true}}
+      ]
+    },
+    {
+      "id": "s4-lead-frio",
+      "title": "Lead frio e repeticao de pergunta",
+      "allowed_actions": ["continue", "ask_question"],
+      "offers": [],
+      "lead": {"name": ""},
+      "turns": [
+        {"user": "oi", "intent": "saudacao", "objection": false, "interest": null,
+         "v10": {"action": "ask_question", "question": "Qual seu nome?", "addresses_objection": false},
+         "v11": {"action": "ask_question", "question": "Qual seu nome?", "addresses_objection": false}},
+        {"user": "oi", "intent": "saudacao", "objection": false, "interest": null,
+         "v10": {"action": "ask_question", "question": "Qual seu nome?", "addresses_objection": false},
+         "v11": {"action": "ask_question", "question": "Como posso te ajudar hoje?", "addresses_objection": false}}
+      ]
+    },
+    {
+      "id": "s5-handoff-risco",
+      "title": "Risco alto e handoff humano",
+      "allowed_actions": ["continue", "ask_question", "handoff_human"],
+      "offers": [],
+      "lead": {"name": "Ana"},
+      "turns": [
+        {"user": "quero falar com um humano agora", "intent": "risco", "objection": false, "interest": null,
+         "v10": {"action": "handoff_human", "question": null, "addresses_objection": false},
+         "v11": {"action": "handoff_human", "question": null, "addresses_objection": false}}
+      ]
+    },
+    {
+      "id": "s5b-handoff-duvida",
+      "title": "Pedido de humano sem risco",
+      "allowed_actions": ["continue", "ask_question", "handoff_human"],
+      "offers": [],
+      "lead": {"name": ""},
+      "turns": [
+        {"user": "quero falar com uma pessoa", "intent": "suporte", "objection": false, "interest": null,
+         "v10": {"action": "handoff_human", "question": null, "addresses_objection": false},
+         "v11": {"action": "handoff_human", "question": null, "addresses_objection": false}}
+      ]
+    }
+  ]
+}

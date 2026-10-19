@@ -3864,8 +3864,10 @@ class BotManager:
             return {}
 
     _AI_STATE_TTL = 60 * 60 * 24 * 7  # 7 dias
-    # D11 — janela de idempotência do turno da IA (at-most-once por mensagem do lead)
-    _AI_TURN_IDEMPOTENCY_TTL = 60 * 60 * 24  # 24h
+    # D11 — idempotência do turno (at-most-once por mensagem do lead), em 2 fases:
+    #   reserva (lock curto) -> conclusão (marcador durável). Ver 16_E4.
+    _AI_TURN_RESERVE_TTL = 120        # s — lock de processamento (limita perda se travar)
+    _AI_TURN_DONE_TTL = 60 * 60 * 24  # 24h — marcador durável (impede efeito duplicado)
 
     def _ai_state_set(self, bot_id: int, telegram_user_id: str, updates: Dict[str, Any]):
         """Persiste estado do lead com MERGE ATÔMICO (WATCH/MULTI, retry).
@@ -3925,12 +3927,13 @@ class BotManager:
         return f"gb:{self.user_id}:ai_turn_done:{bot_id}:{telegram_user_id}:{inbound_message_id}"
 
     def _ai_turn_claim(self, bot_id: int, telegram_user_id: str, inbound_message_id) -> bool:
-        """D11 — reivindica o turno. True = pode prosseguir; False = já processado.
+        """D11 fase 1 — RESERVA o turno (lock curto). True = pode prosseguir.
 
-        Usa `SET NX EX` (at-most-once) para impedir EFEITO DUPLICADO quando um
-        update é reentregue após o lock de update (120s) expirar, ou quando a
-        chamada ao motor é repetida por retry. Fail-open: sem Redis/sem
-        `inbound_message_id`, retorna True (nunca bloqueia o fluxo).
+        `SET NX EX` (reserva de `_AI_TURN_RESERVE_TTL`) impede que a mesma mensagem
+        do lead gere efeito duplicado em reentrega concorrente/retry. Se o processo
+        travar após a reserva e antes de concluir, o lock **expira sozinho** e a
+        reentrega pode reprocessar (sem perda permanente). Fail-open: sem
+        Redis/sem `inbound_message_id`, retorna True (nunca bloqueia o fluxo).
         """
         if not inbound_message_id:
             return True
@@ -3938,14 +3941,40 @@ class BotManager:
             redis_conn = get_redis_connection()
             if not redis_conn:
                 return True
-            claimed = redis_conn.set(
+            return bool(redis_conn.set(
                 self._ai_turn_key(bot_id, telegram_user_id, inbound_message_id),
-                "1", ex=self._AI_TURN_IDEMPOTENCY_TTL, nx=True
-            )
-            return bool(claimed)
+                "reserved", ex=self._AI_TURN_RESERVE_TTL, nx=True
+            ))
         except Exception as e:
-            logger.debug(f"⚠️ [IA] falha idempotência de turno: {e}")
+            logger.debug(f"⚠️ [IA] falha reserva de turno: {e}")
             return True
+
+    def _ai_turn_complete(self, bot_id: int, telegram_user_id: str, inbound_message_id) -> None:
+        """D11 fase 2 — CONCLUI o turno: marcador durável (impede reentrega tardia)."""
+        if not inbound_message_id:
+            return
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return
+            redis_conn.set(
+                self._ai_turn_key(bot_id, telegram_user_id, inbound_message_id),
+                "done", ex=self._AI_TURN_DONE_TTL
+            )
+        except Exception as e:
+            logger.debug(f"⚠️ [IA] falha conclusão de turno: {e}")
+
+    def _ai_turn_release(self, bot_id: int, telegram_user_id: str, inbound_message_id) -> None:
+        """D11 — libera a reserva quando NÃO houve efeito (permite reprocessar)."""
+        if not inbound_message_id:
+            return
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return
+            redis_conn.delete(self._ai_turn_key(bot_id, telegram_user_id, inbound_message_id))
+        except Exception as e:
+            logger.debug(f"⚠️ [IA] falha liberação de turno: {e}")
 
     # ── Fase 6A / E-P1a — memória persistida (merge RMW, NÃO é enviada) ──────
     # Limites = schema do motor (D6, autoritativos). Persistir aqui não altera o
@@ -4402,196 +4431,201 @@ class BotManager:
             logger.warning(f"⚠️ [IA] turno já processado (msg {inbound_message_id}) — sem efeito duplicado")
             return
 
-        # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
-        contract_v11 = self._ai_contract_v11_enabled(step_config)
-        v11_kwargs = {}
-        if contract_v11:
-            v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config)
-            # E-P1b — envia a memória operacional (o motor já aceita; D6 respeitado)
-            v11_kwargs.update(self._ai_memory_payload(state))
-        request_id = f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}"
-
-        def _build_payload(extra_kwargs):
-            return build_payload(
-                request_id=request_id,
-                seller_id=str(self.user_id or 'seller'),
-                bot_id=str(bot_id),
-                conversation_id=f"c{bot_id}-{telegram_user_id}",
-                bot_user_id=str(telegram_user_id),
-                bot_config=self._ai_bot_config(step_config),
-                conversation_state={
-                    'funnel_stage': (step_config.get('funnel_stage')
-                                     or state.get('funnel_stage') or 'qualification'),
-                    'lead_temperature': state.get('lead_temperature') or 'warm',
-                    'human_takeover': bool(state.get('human_takeover', False)),
-                    'ai_enabled': True
-                },
-                lead={
-                    'name': (bot_user.first_name if bot_user and bot_user.first_name else ''),
-                    'interest': state.get('interest') or '',
-                    'objection': state.get('objection') or ''
-                },
-                recent_messages=history,
-                conversation_summary=str(state.get('summary') or ''),
-                available_offers=self._ai_build_offers(config, step, step_config),
-                allowed_actions=step_config.get('allowed_actions') or None,
-                mode=step_config.get('mode') or 'auto',
-                **extra_kwargs
-            )
-
         try:
-            payload = _build_payload(v11_kwargs)
-            # Fase 6A §10: estourou o orçamento -> reduz recursos (nunca trunca o perfil).
-            if (contract_v11 and payload.get('flow_resources')
-                    and payload_size(payload) > MAX_PAYLOAD_BYTES):
-                payload = _build_payload({**v11_kwargs, 'flow_resources': []})
-        except AIGatewayError as build_err:
-            logger.warning(f"⚠️ [IA] payload invalido: {build_err}")
-            self.send_telegram_message(
-                token=token, chat_id=str(chat_id), message=fallback_message,
-                bot_id=bot_id, save_message=True
-            )
-            return
-
-        # ── Chamada ao Gateway ──
-        try:
-            service = get_ai_service()
-            result = service.respond(payload)
-        except AIGatewayError as err:
-            # D9 — 409 do motor: não responde automaticamente nem spamma fallback.
-            if err.code in ('HUMAN_TAKEOVER_ACTIVE', 'AI_DISABLED_FOR_BOT'):
-                if err.code == 'HUMAN_TAKEOVER_ACTIVE' and contract_v11:
-                    self._ai_state_set(bot_id, telegram_user_id, {'human_takeover': True})
-                logger.info(f"ℹ️ [IA] {err.code}: IA nao responde neste turno")
-                self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
-                return
-            logger.warning(f"⚠️ [IA] Grimbots AI API falhou ({err.code}): {err.message}")
-            self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
-            self.send_telegram_message(
-                token=token, chat_id=str(chat_id), message=fallback_message,
-                bot_id=bot_id, save_message=True
-            )
-            return
-        except Exception as unexpected:
-            logger.error(f"❌ [IA] erro inesperado: {unexpected}", exc_info=True)
-            self._ai_log_generation(bot_id, telegram_user_id, payload, None, 'UNEXPECTED')
-            self.send_telegram_message(
-                token=token, chat_id=str(chat_id), message=fallback_message,
-                bot_id=bot_id, save_message=True
-            )
-            return
-
-        self._ai_log_generation(bot_id, telegram_user_id, payload, result, None)
-        if not result.valid:
-            logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
-
-        # D12 — observabilidade do mapa de intent (registra; nunca mascara)
-        if result.intent_kind == 'alias':
-            logger.info(f"ℹ️ [IA] intent normalizado '{result.intent_original}' -> '{result.intent}'")
-        elif result.intent_kind == 'invalid':
-            logger.warning(f"⚠️ [IA] intent desconhecido '{result.intent_original}' -> 'outro'")
-
-        _turn_question = (result.next_question or '') if result.action == 'ask_question' else ''
-        _payload_objection = (payload.get('lead') or {}).get('objection') or ''
-        _state_update = getattr(result, 'state_update', None) if contract_v11 else None
-
-        def _persist(state_live):
-            # D5/D10 — aplica o delta sugerido pelo motor (whitelist; nunca resumo)
-            if _state_update:
-                apply_state_update(state_live, _state_update)
-            state_live['lead_temperature'] = result.lead_temperature
-            state_live['funnel_stage'] = result.funnel_stage
-            state_live['intent'] = result.intent
-            state_live['last_intent'] = result.intent
-            if _payload_objection:
-                state_live['objection'] = _payload_objection
+            # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
+            contract_v11 = self._ai_contract_v11_enabled(step_config)
+            v11_kwargs = {}
             if contract_v11:
-                # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
-                state_live['human_takeover'] = (
-                    bool(state_live.get('human_takeover'))
-                    or bool(getattr(result, 'handoff_human', False))
-                    or result.action == 'handoff_human'
+                v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config)
+                # E-P1b — envia a memória operacional (o motor já aceita; D6 respeitado)
+                v11_kwargs.update(self._ai_memory_payload(state))
+            request_id = f"gb-{bot_id}-{telegram_user_id}-{_uuid.uuid4().hex[:10]}"
+
+            def _build_payload(extra_kwargs):
+                return build_payload(
+                    request_id=request_id,
+                    seller_id=str(self.user_id or 'seller'),
+                    bot_id=str(bot_id),
+                    conversation_id=f"c{bot_id}-{telegram_user_id}",
+                    bot_user_id=str(telegram_user_id),
+                    bot_config=self._ai_bot_config(step_config),
+                    conversation_state={
+                        'funnel_stage': (step_config.get('funnel_stage')
+                                         or state.get('funnel_stage') or 'qualification'),
+                        'lead_temperature': state.get('lead_temperature') or 'warm',
+                        'human_takeover': bool(state.get('human_takeover', False)),
+                        'ai_enabled': True
+                    },
+                    lead={
+                        'name': (bot_user.first_name if bot_user and bot_user.first_name else ''),
+                        'interest': state.get('interest') or '',
+                        'objection': state.get('objection') or ''
+                    },
+                    recent_messages=history,
+                    conversation_summary=str(state.get('summary') or ''),
+                    available_offers=self._ai_build_offers(config, step, step_config),
+                    allowed_actions=step_config.get('allowed_actions') or None,
+                    mode=step_config.get('mode') or 'auto',
+                    **extra_kwargs
                 )
-            # E-P1a — memória completa persistida (merge ATÔMICO; NÃO entra no payload)
-            state_live.update(self._ai_memory_updates(
-                state_live, result, result.action, result.message or '', _turn_question
-            ))
 
-        self._ai_state_atomic(bot_id, telegram_user_id, _persist)
-
-        action = result.action
-        message_text = self._personalize_text((result.message or '').strip(), bot_id, chat_id)
-        question = (result.next_question or '').strip() if action == 'ask_question' else ''
-
-        logger.info(
-            f"🤖 [IA] action={action} intent={result.intent} temp={result.lead_temperature} "
-            f"risk={result.risk} latency={(result.usage or {}).get('latency_ms')}ms"
-        )
-
-        # ── do_not_respond: silencio, permanece no bloco ──
-        if action == 'do_not_respond':
-            return
-
-        # ── continue / ask_question / present_offer / pause ──
-        if action in ('continue', 'ask_question', 'present_offer', 'pause'):
-            if message_text:
+            try:
+                payload = _build_payload(v11_kwargs)
+                # Fase 6A §10: estourou o orçamento -> reduz recursos (nunca trunca o perfil).
+                if (contract_v11 and payload.get('flow_resources')
+                        and payload_size(payload) > MAX_PAYLOAD_BYTES):
+                    payload = _build_payload({**v11_kwargs, 'flow_resources': []})
+            except AIGatewayError as build_err:
+                logger.warning(f"⚠️ [IA] payload invalido: {build_err}")
                 self.send_telegram_message(
-                    token=token, chat_id=str(chat_id), message=message_text,
+                    token=token, chat_id=str(chat_id), message=fallback_message,
                     bot_id=bot_id, save_message=True
                 )
-            if question and not self._is_redundant_question(message_text, question):
+                return
+
+            # ── Chamada ao Gateway ──
+            try:
+                service = get_ai_service()
+                result = service.respond(payload)
+            except AIGatewayError as err:
+                # D9 — 409 do motor: não responde automaticamente nem spamma fallback.
+                if err.code in ('HUMAN_TAKEOVER_ACTIVE', 'AI_DISABLED_FOR_BOT'):
+                    if err.code == 'HUMAN_TAKEOVER_ACTIVE' and contract_v11:
+                        self._ai_state_set(bot_id, telegram_user_id, {'human_takeover': True})
+                    logger.info(f"ℹ️ [IA] {err.code}: IA nao responde neste turno")
+                    self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
+                    return
+                logger.warning(f"⚠️ [IA] Grimbots AI API falhou ({err.code}): {err.message}")
+                self._ai_log_generation(bot_id, telegram_user_id, payload, None, err.code)
                 self.send_telegram_message(
-                    token=token, chat_id=str(chat_id), message=question,
+                    token=token, chat_id=str(chat_id), message=fallback_message,
                     bot_id=bot_id, save_message=True
                 )
-            return
+                return
+            except Exception as unexpected:
+                logger.error(f"❌ [IA] erro inesperado: {unexpected}", exc_info=True)
+                self._ai_log_generation(bot_id, telegram_user_id, payload, None, 'UNEXPECTED')
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=fallback_message,
+                    bot_id=bot_id, save_message=True
+                )
+                return
 
-        # ── send_checkout: saida CHECKOUT -> bloco Pagamento (gera PIX) ──
-        if action == 'send_checkout':
-            if (step.get('connections') or {}).get('checkout'):
+            self._ai_log_generation(bot_id, telegram_user_id, payload, result, None)
+            if not result.valid:
+                logger.warning(f"⚠️ [IA] resposta marcada como invalida pela API: {result.errors}")
+
+            # D12 — observabilidade do mapa de intent (registra; nunca mascara)
+            if result.intent_kind == 'alias':
+                logger.info(f"ℹ️ [IA] intent normalizado '{result.intent_original}' -> '{result.intent}'")
+            elif result.intent_kind == 'invalid':
+                logger.warning(f"⚠️ [IA] intent desconhecido '{result.intent_original}' -> 'outro'")
+
+            _turn_question = (result.next_question or '') if result.action == 'ask_question' else ''
+            _payload_objection = (payload.get('lead') or {}).get('objection') or ''
+            _state_update = getattr(result, 'state_update', None) if contract_v11 else None
+
+            def _persist(state_live):
+                # D5/D10 — aplica o delta sugerido pelo motor (whitelist; nunca resumo)
+                if _state_update:
+                    apply_state_update(state_live, _state_update)
+                state_live['lead_temperature'] = result.lead_temperature
+                state_live['funnel_stage'] = result.funnel_stage
+                state_live['intent'] = result.intent
+                state_live['last_intent'] = result.intent
+                if _payload_objection:
+                    state_live['objection'] = _payload_objection
+                if contract_v11:
+                    # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
+                    state_live['human_takeover'] = (
+                        bool(state_live.get('human_takeover'))
+                        or bool(getattr(result, 'handoff_human', False))
+                        or result.action == 'handoff_human'
+                    )
+                # E-P1a — memória completa persistida (merge ATÔMICO; NÃO entra no payload)
+                state_live.update(self._ai_memory_updates(
+                    state_live, result, result.action, result.message or '', _turn_question
+                ))
+
+            self._ai_state_atomic(bot_id, telegram_user_id, _persist)
+
+            action = result.action
+            message_text = self._personalize_text((result.message or '').strip(), bot_id, chat_id)
+            question = (result.next_question or '').strip() if action == 'ask_question' else ''
+
+            logger.info(
+                f"🤖 [IA] action={action} intent={result.intent} temp={result.lead_temperature} "
+                f"risk={result.risk} latency={(result.usage or {}).get('latency_ms')}ms"
+            )
+
+            # ── do_not_respond: silencio, permanece no bloco ──
+            if action == 'do_not_respond':
+                return
+
+            # ── continue / ask_question / present_offer / pause ──
+            if action in ('continue', 'ask_question', 'present_offer', 'pause'):
                 if message_text:
                     self.send_telegram_message(
                         token=token, chat_id=str(chat_id), message=message_text,
                         bot_id=bot_id, save_message=True
                     )
-                if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'checkout'):
-                    return
-            else:
-                logger.warning(
-                    f"⚠️ [IA] action=send_checkout mas a saida CHECKOUT do bloco "
-                    f"{step.get('id')} nao esta ligada a nenhum bloco"
-                )
-            self.send_telegram_message(
-                token=token, chat_id=str(chat_id), message=fallback_message,
-                bot_id=bot_id, save_message=True
-            )
-            return
+                if question and not self._is_redundant_question(message_text, question):
+                    self.send_telegram_message(
+                        token=token, chat_id=str(chat_id), message=question,
+                        bot_id=bot_id, save_message=True
+                    )
+                return
 
-        # ── handoff_human: saida HUMANO ──
-        if action == 'handoff_human' or result.handoff_human:
-            if message_text:
+            # ── send_checkout: saida CHECKOUT -> bloco Pagamento (gera PIX) ──
+            if action == 'send_checkout':
+                if (step.get('connections') or {}).get('checkout'):
+                    if message_text:
+                        self.send_telegram_message(
+                            token=token, chat_id=str(chat_id), message=message_text,
+                            bot_id=bot_id, save_message=True
+                        )
+                    if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'checkout'):
+                        return
+                else:
+                    logger.warning(
+                        f"⚠️ [IA] action=send_checkout mas a saida CHECKOUT do bloco "
+                        f"{step.get('id')} nao esta ligada a nenhum bloco"
+                    )
                 self.send_telegram_message(
-                    token=token, chat_id=str(chat_id), message=message_text,
+                    token=token, chat_id=str(chat_id), message=fallback_message,
                     bot_id=bot_id, save_message=True
                 )
-            if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
                 return
-            logger.warning(
-                f"⚠️ [IA] action=handoff_human mas a saida HUMANO do bloco "
-                f"{step.get('id')} nao esta ligada a nenhum bloco"
-            )
+
+            # ── handoff_human: saida HUMANO ──
+            if action == 'handoff_human' or result.handoff_human:
+                if message_text:
+                    self.send_telegram_message(
+                        token=token, chat_id=str(chat_id), message=message_text,
+                        bot_id=bot_id, save_message=True
+                    )
+                if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
+                    return
+                logger.warning(
+                    f"⚠️ [IA] action=handoff_human mas a saida HUMANO do bloco "
+                    f"{step.get('id')} nao esta ligada a nenhum bloco"
+                )
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=fallback_message,
+                    bot_id=bot_id, save_message=True
+                )
+                return
+
+            # ── Acao desconhecida (defensivo): fallback ──
+            logger.warning(f"⚠️ [IA] acao desconhecida '{action}' - usando fallback")
             self.send_telegram_message(
                 token=token, chat_id=str(chat_id), message=fallback_message,
                 bot_id=bot_id, save_message=True
             )
-            return
 
-        # ── Acao desconhecida (defensivo): fallback ──
-        logger.warning(f"⚠️ [IA] acao desconhecida '{action}' - usando fallback")
-        self.send_telegram_message(
-            token=token, chat_id=str(chat_id), message=fallback_message,
-            bot_id=bot_id, save_message=True
-        )
+        finally:
+            # D11 fase 2 — turno concluído: marcador durável (at-most-once)
+            self._ai_turn_complete(bot_id, telegram_user_id, inbound_message_id)
 
     def _execute_flow_recursive(self, bot_id: int, token: str, config: Dict[str, Any],
                                 chat_id: int, telegram_user_id: str, step_id: str,
