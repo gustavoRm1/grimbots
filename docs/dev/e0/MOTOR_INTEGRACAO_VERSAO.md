@@ -8,13 +8,12 @@
 
 | Item | Valor |
 |---|---|
-| Commit validado (consumido) | `b81dcad` (`docs(alinhamento): add 12.5 persistent store decision + limits`) |
-| Commit monitorado mais recente | `cbdfa97` (E3) — analisado, **não exposto** no HTTP (sem impacto) |
-| Commit anterior analisado | `4898325` (crosscheck D11) |
+| Commit validado (consumido) | `c8d8e67` (`E3: integrate commercial decision into /v1/agent/respond ...`) |
+| Commit anterior validado | `b81dcad` (store persistente docs) |
 | Versão do serviço (`/health`) | `1.6.0` (corrigida em `daba546`) |
 | Contrato | `contract_version` 1.0/1.1/1.2 (rastreabilidade; ativação por presença de campos) |
-| Verificação Grimbots | `handoff/d11/d11_acceptance.py` → **CONTRATO 9/9 PASS** |
-| Integração HTTP | `tests/integration/test_motor_live.py` → **6/6 OK** |
+| Verificação Grimbots | `handoff/d11/d11_acceptance.py` → **CONTRATO 9/9 PASS** (b81dcad e c8d8e67) |
+| Integração HTTP | `tests/integration/test_motor_live.py` → **10/10 OK** (c8d8e67); 8/10 em b81dcad (G/H exigem E3) |
 
 ## Histórico de entregas analisadas
 
@@ -28,16 +27,22 @@
 | `4898325` | crosscheck + matriz | nenhum (doc/teste) | re-execução 3/6 → 9/9 |
 | `daba546` | **fix `service_version` → 1.6.0** + testes | `/health` (informacional) | cenário F em `test_motor_live.py` |
 | `b81dcad` | docs §12.5 (store persistente) | nenhum (doc) | — |
-| `cbdfa97` | **E3**: camada de decisão comercial contextual | **nenhum na interface HTTP** — `api/commercial_decision.py` **não está ligado** ao path de resposta (único importador é o próprio teste unitário) | aguardar exposição; ver §E3 |
+| `cbdfa97` | **E3** (módulo, não exposto) | nenhum na interface HTTP — `commercial_decision.py` sem ligação | aguardar exposição |
+| `c8d8e67` | **E3 ligado** ao `/v1/agent/respond` + precedência E2 | **refina `action`/`message`/`reason`/`next_question`/`state_update`** (mesmo schema; sem campo novo) | **validado** — ver §E3 |
 
-## E3 (`cbdfa97`) — análise de impacto
+## E3 (`c8d8e67`) — análise de impacto e validação
 
-- **Arquivos:** `api/commercial_decision.py` (+ `tests/unit/test_commercial_decision.py`). **Sem** mudança de schema, rota ou resposta.
-- **Não exposto:** `decide()` não é chamado por `app.py`/rotas (`git grep commercial_decision` → só o teste). Logo, **não há entrega funcional exercitável via HTTP** nesta versão.
-- **Superfície que E3 já lê do request** (estável, sem novo campo): `conversation_state.human_takeover/ai_enabled/funnel_stage/lead_temperature`, `lead.objection/interest`, `collected_information`, `questions_already_asked`, `offers_already_presented`.
-- **Devolve** `CommercialDecision(action, reason, next_question, state_update, message_override)`.
-- **Ponto de atenção (pré-integração):** E3 usa um conjunto **local fixo** `allowed = (continue, ask_question, present_offer, send_checkout, handoff_human, pause, do_not_respond)` em vez de derivar de `req.allowed_actions` (precedência E2). A resolver **quando E3 for ligado** ao path, para não divergir do contrato.
-- **Validação E2E:** **bloqueada até E3 ser exposto** no endpoint. Rodar `test_motor_live.py` agora não prova E3 (passa idêntico).
+- **Arquivos:** `api/app.py` (usa `apply_decision`), `api/commercial_decision.py` (`decide` + `apply_decision`), docs/tests. **Schema de resposta inalterado** (mesmos campos); a camada **refina** `action`, `message`, `reason`, `next_question`, `state_update`.
+- **Exposto:** `app.py` importa/usa `apply_decision` após validar a saída do modelo.
+- **Precedência E2 (corrigida):** o conjunto efetivo é `allowed_actions ∩ context_policy.allowed_actions` (`validator._effective_allowed_actions`); a decisão é **clamped** ao conjunto permitido (fallback seguro), substituindo o whitelist local da versão anterior (`cbdfa97`). Ponto de atenção anterior **resolvido**.
+- **Efeitos externos:** continuam exclusivos da Grimbots — o motor só devolve dados (documentado em `docs/API.md` §10.5).
+- **Validação E2E na Grimbots** (`tests/integration/test_motor_live.py`, 10/10):
+  - **G** — a decisão **altera a resposta real**: modelo propõe `present_offer` a frio → final `ask_question` (e `message == next_question`).
+  - **H** — **E2 prevalece**: política aberta → decisão troca `continue`→`ask_question`; política só `continue` → decisão **clamped** para `continue`.
+  - **I** — **memória/contexto v1.1** aceito e resposta útil.
+  - **J** — **não responder**: `ai_enabled=false` → 409 `AI_DISABLED_FOR_BOT`, sem gerar resposta e **sem chamar o modelo** (0 chamadas → sem efeito).
+  - Contra `b81dcad` (pré-E3): **8/10** (G/H falham) — confirma que os testes **detectam** E3 (não são vacuosos).
+- **Sem regressão D11:** `d11_acceptance.py` → **CONTRATO 9/9** (b81dcad e c8d8e67).
 
 ## Interface consumida (contrato HTTP)
 

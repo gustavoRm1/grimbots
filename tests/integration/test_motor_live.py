@@ -220,6 +220,70 @@ def run_scenarios(port):
     except Exception as err:  # noqa: BLE001
         check("F /health reporta versao do servico", False, f"erro={err}")
 
+    # --- E3: camada de decisao comercial integrada ao endpoint -------------
+    # G) a decisao altera a resposta REAL: modelo propoe present_offer em lead
+    #    frio/funil novo -> endpoint devolve ask_question (qualifica antes).
+    MOCK_STATE["override"] = {"action": "present_offer"}
+    kw = _base_kwargs("itest-req-e3-cold")
+    kw["conversation_state"] = {"funnel_stage": "new", "lead_temperature": "cold",
+                                "human_takeover": False, "ai_enabled": True}
+    kw["available_offers"] = [{"id": "of1", "name": "Curso", "checkout_url": "https://x/y"}]
+    r = svc.respond(build_payload(**kw))
+    MOCK_STATE["override"] = None
+    check("G E3 altera acao real (oferta a frio -> qualifica)",
+          r.action == "ask_question" and bool(r.next_question)
+          and r.message == r.next_question,
+          f"action={r.action} msg==nq={r.message == r.next_question}")
+
+    # H) E2 prevalece sobre a decisao: com politica aberta a camada E3 troca
+    #    'continue' por 'ask_question' (informacao insuficiente); com politica
+    #    restrita a 'continue' a decisao e recuada (clamped).
+    def _e3_policy_kwargs(rid, allowed):
+        kw = _base_kwargs(rid)
+        kw["conversation_state"] = {"funnel_stage": "new", "lead_temperature": "warm",
+                                    "human_takeover": False, "ai_enabled": True}
+        kw["lead"] = {"name": "Ana", "interest": "", "objection": ""}
+        kw["allowed_actions"] = allowed
+        return kw
+
+    r_open = svc.respond(build_payload(**_e3_policy_kwargs(
+        "itest-req-e3-open", ["continue", "ask_question", "present_offer"])))
+    r_tight = svc.respond(build_payload(**_e3_policy_kwargs(
+        "itest-req-e3-tight", ["continue"])))
+    check("H E2 allowed_actions prevalece (decisao clamped)",
+          r_open.action == "ask_question" and r_tight.action == "continue",
+          f"aberto={r_open.action} restrito={r_tight.action}")
+
+    # I) memoria/contexto v1.1 continua aceito e produz resposta util
+    kw = _base_kwargs("itest-req-e3-mem")
+    kw.update({
+        "contract_version": "1.1",
+        "collected_information": {"cidade": "SP", "need_confirmado": True},
+        "questions_already_asked": ["Qual seu nome?"],
+        "offers_already_presented": ["of1"],
+        "last_assistant_message": "Tudo bem?",
+    })
+    r = svc.respond(build_payload(**kw))
+    check("I memoria/contexto v1.1 aceito",
+          bool(r.message), f"action={r.action}")
+
+    # J) nao responder: IA desabilitada -> 409 AI_DISABLED_FOR_BOT sem gerar
+    #    resposta nem executar o modelo (sem efeito externo).
+    calls_before = len(MOCK_STATE["seen_prompts"])
+    kw = _base_kwargs("itest-req-e3-off")
+    kw["conversation_state"] = {"funnel_stage": "new", "lead_temperature": "warm",
+                                "human_takeover": False, "ai_enabled": False}
+    try:
+        svc.respond(build_payload(**kw))
+        check("J IA desabilitada -> 409 sem resposta", False, "nao levantou erro")
+    except AIGatewayError as err:
+        check("J IA desabilitada -> 409 sem resposta",
+              err.code == "AI_DISABLED_FOR_BOT" and err.status == 409
+              and not getattr(err, "retryable", False)
+              and len(MOCK_STATE["seen_prompts"]) == calls_before,
+              f"code={err.code} status={err.status} chamadas=+"
+              f"{len(MOCK_STATE['seen_prompts']) - calls_before}")
+
     return results
 
 
@@ -248,11 +312,16 @@ def main():
         "LOG_LEVEL": "warning",
     })
 
+    # Saida do motor vai para arquivo (evita deadlock de PIPE e permite ler o
+    # log mesmo se o processo travar).
+    import tempfile
+    log = tempfile.NamedTemporaryFile("w+", suffix="-motor.log", delete=False)
+
     proc = subprocess.Popen(
         [str(VENV_PY), "-m", "uvicorn", "app:app",
          "--host", "127.0.0.1", "--port", str(motor_port), "--log-level", "warning"],
         cwd=str(MOTOR_DIR / "api"), env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        stdout=log, stderr=subprocess.STDOUT,
     )
 
     ok = False
@@ -265,7 +334,9 @@ def main():
     except Exception as exc:  # noqa: BLE001
         print(f"💥 erro no harness: {exc}")
         try:
-            out = proc.stdout.read().decode() if proc.stdout else ""
+            log.flush()
+            with open(log.name, encoding="utf-8", errors="replace") as fh:
+                out = fh.read()
             if out:
                 print("--- motor output ---\n" + out[-3000:])
         except Exception:
@@ -277,6 +348,10 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
         httpd.shutdown()
+        try:
+            log.close()
+        except Exception:
+            pass
 
     return 0 if ok else 1
 
