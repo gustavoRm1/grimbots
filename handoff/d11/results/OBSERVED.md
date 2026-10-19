@@ -1,7 +1,7 @@
 # D11 — resultados OBSERVADOS
 
-> 2026-10-19T15:53:29Z · motor `http://127.0.0.1:51798`
-> versao_reportada `1.6.0` · commit `b81dcad`
+> 2026-10-19T16:41:38Z · motor `http://127.0.0.1:53254`
+> versao_reportada `1.6.0` · commit `c8d8e67`
 > **CONTRATO: 9/9 PASS**
 
 ## S1 — mensagem duplicada (mesmo request_id, 2 envios) — PASS
