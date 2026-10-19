@@ -430,6 +430,14 @@ class FakeRedis:
             self._data[key] = value
             self._ver[key] = self._ver.get(key, 0) + 1
 
+    def set(self, key, value, ex=None, nx=False):
+        with self._lock:
+            if nx and key in self._data:
+                return False
+            self._data[key] = value
+            self._ver[key] = self._ver.get(key, 0) + 1
+            return True
+
     def pipeline(self):
         return FakePipeline(self)
 
@@ -679,6 +687,48 @@ def test_d9_precheck_skips_ai_when_human_takeover():
     mgr._ai_contract_v11_enabled = _boom
     # não deve levantar: retorna cedo antes de tocar no gateway
     mgr._handle_ai_turn(1, "tok", {}, 99, "999", {"id": "s1", "config": {}}, "oi")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 10) D11 — idempotência de turno (at-most-once por mensagem do lead)
+# ══════════════════════════════════════════════════════════════════════════
+def test_turn_claim_at_most_once():
+    import bot_manager as bm
+    fake = FakeRedis()
+    original = bm.get_redis_connection
+    bm.get_redis_connection = lambda: fake
+    try:
+        mgr = BotManager.__new__(BotManager)
+        mgr.user_id = 7
+        assert mgr._ai_turn_claim(1, "999", 555) is True    # primeira vez: prossegue
+        assert mgr._ai_turn_claim(1, "999", 555) is False   # reentrega: bloqueia
+        assert mgr._ai_turn_claim(1, "999", 556) is True    # nova msg: prossegue
+        assert mgr._ai_turn_claim(1, "888", 555) is True    # outro lead: isolado
+    finally:
+        bm.get_redis_connection = original
+
+
+def test_turn_claim_fail_open_without_message_id():
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    assert mgr._ai_turn_claim(1, "999", None) is True
+    assert mgr._ai_turn_claim(1, "999", "") is True
+
+
+def test_d11_replayed_turn_has_no_duplicate_effect():
+    mgr = BotManager.__new__(BotManager)
+    mgr.user_id = 7
+    mgr._ai_build_history = lambda *a, **k: [{"role": "user", "content": "oi"}]
+    mgr._ai_state_get = lambda *a, **k: {}
+    mgr._ai_turn_claim = lambda *a, **k: False   # turno já reivindicado
+    mgr._personalize_text = lambda *a, **k: "fallback"
+
+    def _boom(*a, **k):
+        raise AssertionError("D11 deveria pular o gateway/efeitos em reentrega")
+
+    mgr._ai_contract_v11_enabled = _boom
+    mgr._handle_ai_turn(1, "tok", {}, 99, "999",
+                        {"id": "s1", "config": {}}, "oi", inbound_message_id=555)
 
 
 # ══════════════════════════════════════════════════════════════════════════

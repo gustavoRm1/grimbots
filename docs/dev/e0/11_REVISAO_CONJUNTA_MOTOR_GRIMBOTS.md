@@ -130,7 +130,8 @@ não houver limite acordado, a Grimbots **não deve enviar** os campos (evita 42
 
 ### 4.2 Atualizações sugeridas pelo motor (`state_update`)
 
-**Whitelist divergente [JOINT] (§9 D5):**
+**Whitelist divergente [JOINT] (§9 D5) — RATIFICADO: final = 7 chaves** (as 5
+comuns + `objection` + `interest`; `last_action` e `conversation_summary` fora):
 
 | Chave | Motor (`CONTRATO:§8.3`) | Grimbots (`02:§3.1`) | Confronto |
 |---|---|---|---|
@@ -291,7 +292,7 @@ Responsável: **Grimbots** (apertar clamps). Validação: teste de fronteira por
 | **D2** | Contexto v1.1 **já aceito** pelo motor; Grimm. assume bloqueio | motor `schemas.py:120-129`; Grimbots `config.py:78`/`bot_manager.py:3909` | **D** | Ativação não é mais barrada por 422 | T3–T5 (motor) + golden cliente |
 | **D3** | `reason` ≤300 (motor) × ≤200 (Grimbots) | motor `CONTRATO:§7`; Grimbots `02:§3` | **J** | truncamento/observabilidade | teste de limite |
 | **D4** | `offer_id` ≤64 (motor) × ≤80 (Grimbots) | motor `CONTRATO:§7`; Grimbots `02:§3` | **J** | validação de oferta | teste de limite |
-| **D5** | Whitelist `state_update` (6 chaves motor × 8 Grimbots; `last_action` e `conversation_summary`/`objection`/`interest` divergem) | motor `CONTRATO:§8.3`; Grimbots `02:§3.1` | **J** | delta de memória inconsistente | whitelist única + testes |
+| **D5** | Whitelist `state_update` (6 chaves motor × 8 Grimbots; `last_action` e `conversation_summary`/`objection`/`interest` divergem) | motor `CONTRATO:§8.3`; Grimbots `02:§3.1` | **J** | delta de memória inconsistente | **RATIFICADO: whitelist final = 7 chaves** (5 comuns + `objection` + `interest`) + testes |
 | **D6** | Limites dos campos de memória divergem (ver §4.1) | motor `schemas.py:107-117`; Grimbots `02:§2` | **J** | risco de 422 | testes de fronteira |
 | **D7** | `allowed_actions`: motor fatal 502; Grimbots só Mock | motor `validator.py:104-108`; Grimbots `bot_manager.py:4280-4403` | **D** (+pol. **J**) | ação inválida → retry×3 → fallback | ADR-05 + testes |
 | **D8** | Alias `no_reply` | Grimbots `02:§3.2`; motor `CONTRATO:§4.6`/`§6` | **J** | sem alias → fatal 502 | teste de enum |

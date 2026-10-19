@@ -1818,7 +1818,8 @@ class BotManager:
                                     logger.info(f"🤖 Step IA ativo: {current_step_id} - turno da Grimbots AI API")
                                     self._handle_ai_turn(
                                         bot_id, token, config, chat_id, telegram_user_id,
-                                        current_step, text, bot_user=bot_user
+                                        current_step, text, bot_user=bot_user,
+                                        inbound_message_id=message.get('message_id')
                                     )
                                     bot_user.last_interaction = now
                                     db.session.commit()
@@ -3863,6 +3864,8 @@ class BotManager:
             return {}
 
     _AI_STATE_TTL = 60 * 60 * 24 * 7  # 7 dias
+    # D11 — janela de idempotência do turno da IA (at-most-once por mensagem do lead)
+    _AI_TURN_IDEMPOTENCY_TTL = 60 * 60 * 24  # 24h
 
     def _ai_state_set(self, bot_id: int, telegram_user_id: str, updates: Dict[str, Any]):
         """Persiste estado do lead com MERGE ATÔMICO (WATCH/MULTI, retry).
@@ -3916,6 +3919,33 @@ class BotManager:
         except Exception as e:
             logger.debug(f"⚠️ [IA] falha ao salvar estado: {e}")
             return False
+
+    # ── Fase 6A / D11 — idempotência de turno (at-most-once por msg do lead) ──
+    def _ai_turn_key(self, bot_id: int, telegram_user_id: str, inbound_message_id) -> str:
+        return f"gb:{self.user_id}:ai_turn_done:{bot_id}:{telegram_user_id}:{inbound_message_id}"
+
+    def _ai_turn_claim(self, bot_id: int, telegram_user_id: str, inbound_message_id) -> bool:
+        """D11 — reivindica o turno. True = pode prosseguir; False = já processado.
+
+        Usa `SET NX EX` (at-most-once) para impedir EFEITO DUPLICADO quando um
+        update é reentregue após o lock de update (120s) expirar, ou quando a
+        chamada ao motor é repetida por retry. Fail-open: sem Redis/sem
+        `inbound_message_id`, retorna True (nunca bloqueia o fluxo).
+        """
+        if not inbound_message_id:
+            return True
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return True
+            claimed = redis_conn.set(
+                self._ai_turn_key(bot_id, telegram_user_id, inbound_message_id),
+                "1", ex=self._AI_TURN_IDEMPOTENCY_TTL, nx=True
+            )
+            return bool(claimed)
+        except Exception as e:
+            logger.debug(f"⚠️ [IA] falha idempotência de turno: {e}")
+            return True
 
     # ── Fase 6A / E-P1a — memória persistida (merge RMW, NÃO é enviada) ──────
     # Limites = schema do motor (D6, autoritativos). Persistir aqui não altera o
@@ -4315,7 +4345,7 @@ class BotManager:
 
     def _handle_ai_turn(self, bot_id: int, token: str, config: Dict[str, Any], chat_id: int,
                         telegram_user_id: str, step: Dict[str, Any], user_text: str,
-                        bot_user=None):
+                        bot_user=None, inbound_message_id=None):
         """
         Um turno da Grimbots AI API para o step ativo tipo 'ai'.
 
@@ -4364,6 +4394,12 @@ class BotManager:
         # estado sticky foi marcado (contrato v1.1); em v1.0 é inócuo.
         if state.get('human_takeover'):
             logger.info(f"🤝 [IA] bloco {step.get('id')}: atendimento humano ativo - IA silenciosa")
+            return
+
+        # D11 — idempotência: se a MESMA mensagem do lead já gerou um turno, não
+        # repete o efeito (msg/checkout/estado) em reentrega/retry. Fail-open.
+        if not self._ai_turn_claim(bot_id, telegram_user_id, inbound_message_id):
+            logger.warning(f"⚠️ [IA] turno já processado (msg {inbound_message_id}) — sem efeito duplicado")
             return
 
         # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.

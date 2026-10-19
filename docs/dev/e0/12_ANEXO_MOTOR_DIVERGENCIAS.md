@@ -16,7 +16,7 @@
 | D1 | **Rótulo de versão** | Fase 1 (`v1.1.0`) = memória; contrato "v1.1" = 4 campos de contexto (`ROADMAP:12`, alinhamento §1.1) | chama memória+resposta de "v1.2" (`02:§0`) |
 | D3 | `reason` | ≤ **300** (`CONTRATO:§7`) | ≤ **200** |
 | D4 | `offer_id` | ≤ **64** | ≤ **80** |
-| D5 | **`state_update` whitelist** | 6 chaves: `collected_information`, `questions_already_asked`, `offers_already_presented`, `funnel_stage`, `lead_temperature`, `last_action` (`CONTRATO:§8.3`) | 8 chaves: as mesmas **sem `last_action`** + `conversation_summary`, `objection`, `interest` |
+| D5 | **`state_update` whitelist** | 6 chaves: `collected_information`, `questions_already_asked`, `offers_already_presented`, `funnel_stage`, `lead_temperature`, `last_action` (`CONTRATO:§8.3`) | 8 chaves: as mesmas **sem `last_action`** + `conversation_summary`, `objection`, `interest` — **→ RATIFICADO: whitelist final = 7 chaves** (5 comuns + `objection` + `interest`; sem `last_action`, sem `conversation_summary`) |
 | D6 | **Limites da memória** | `last_assistant_message`≤2000; `collected_information`≤30 campos (chave≤60, val≤300); `questions_already_asked`≤20 (item≤300); `offers_already_presented`≤20 (item≤120); `turn_count` 0–100 (`schemas.py:103-118`) | ≤20 chaves (val≤200); questões ≤40 (item≤200); ofertas ≤20; turn_count ≥0 |
 | D8 | **Alias `no_reply`** | fora do enum; não se expande enum; modelo emitindo isso → **fatal 502** (`schemas.py:22-25`, `CONTRATO:§4.6`) | propõe normalizar `no_reply`→`do_not_respond` |
 | D10 | **`conversation_summary`** | gerado pela **plataforma** (`CONTRATO:§6.5`) | propõe que o **motor** gere via `state_update` |

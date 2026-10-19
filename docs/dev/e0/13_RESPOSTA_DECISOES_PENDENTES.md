@@ -52,7 +52,7 @@ tratar numeração como decisão unilateral** — fica `[JOINT]` até ratificaç
 
 ## D5 — Whitelist de `state_update`
 
-**Veredicto: CONTRAPROPOSTA.**
+**Veredicto: RATIFICADO** (Gate 0) — whitelist final de **7 chaves**.
 
 | Chave | Motor (`CONTRATO:§8.3`) | Grimbots (`02:§3.1`) | Proposta Grimbots |
 |---|---|---|---|
@@ -66,6 +66,11 @@ tratar numeração como decisão unilateral** — fica `[JOINT]` até ratificaç
 | `objection` | ❌ | ✅ | **incluir** (já existe no estado hoje) — não-fatal |
 | `interest` | ❌ | ✅ | **incluir** — não-fatal |
 | `turn_count`, `last_assistant_message` | ❌ | ❌ | **fora** (Grimbots calcula) |
+
+**Whitelist final de `state_update` (7 chaves permitidas):**
+`collected_information`, `questions_already_asked`, `offers_already_presented`,
+`funnel_stage`, `lead_temperature`, `objection`, `interest`.
+(**Fora:** `last_action` — interno da plataforma; `conversation_summary` — D10.)
 
 **Regras que acompanham a proposta:** aplicar por **merge RMW**; chave fora da
 whitelist → **ignora + registra `validation.errors`** (não silencioso); valor
