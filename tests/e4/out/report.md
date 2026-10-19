@@ -1,6 +1,6 @@
 # E4 — Avaliacao OFFLINE (v1.0 x v1.1)
 
-> Gerado em 2026-10-19T04:18:25Z. **Numeros comerciais sao SIMULADOS** (modelo
+> Gerado em 2026-10-19T13:19:41Z. **Numeros comerciais sao SIMULADOS** (modelo
 > roteirizado). **Nao** constituem ganho de conversao — exige E5/E6 com
 > dados reais. Nenhuma ativacao de producao.
 

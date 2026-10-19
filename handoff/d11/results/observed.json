@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-10-19T13:17:51Z",
+  "motor_base_url": "http://127.0.0.1:64258",
+  "passed": 3,
+  "total": 6,
+  "results": [
+    {
+      "id": "S1",
+      "name": "mensagem duplicada (mesmo request_id, 2 envios)",
+      "expected": "1o=200 (1 chamada ao modelo); 2o=200 SEM nova chamada (replay idempotente)",
+      "observed": "1o=200 chamadas=1; 2o=200 chamadas=2",
+      "pass": false
+    },
+    {
+      "id": "S2",
+      "name": "falha apos reservar (backend 5xx -> retry MESMO request_id)",
+      "expected": "1o=5xx (AI_BACKEND_ERROR); retry mesmo request_id=200 (reserva liberada)",
+      "observed": "1o=502 code=AI_BACKEND_ERROR; 2o=200",
+      "pass": true
+    },
+    {
+      "id": "S3",
+      "name": "timeout do motor (Ollama lento -> 504 AI_TIMEOUT)",
+      "expected": "1o=504 AI_TIMEOUT; retry mesmo request_id=200 (nada concluido -> liberado)",
+      "observed": "1o=504 code=AI_TIMEOUT; 2o=200",
+      "pass": true
+    },
+    {
+      "id": "S4",
+      "name": "retry com o mesmo request_id apos SUCESSO",
+      "expected": "2o=200 com a MESMA resposta (replay); 0 novas chamadas ao modelo",
+      "observed": "2o=200 novas_chamadas_apos_sucesso=1 resposta_identica=True",
+      "pass": false
+    },
+    {
+      "id": "S5",
+      "name": "falha antes de concluir (modelo invalido -> 502)",
+      "expected": "1o=502 AI_INVALID_RESPONSE; retry MESMO request_id=200 (reserva liberada)",
+      "observed": "1o=502 code=AI_INVALID_RESPONSE; 2o=200",
+      "pass": true
+    },
+    {
+      "id": "S6",
+      "name": "concorrencia: 2 entregas da MESMA mensagem/request_id",
+      "expected": "modelo chamado 1x; 2 respostas 200 (1 real + 1 replay) OU 2o=409 REQUEST_IN_PROGRESS",
+      "observed": "status=[200, 200] chamadas_ao_modelo=2 respostas_200=2",
+      "pass": false
+    }
+  ]
+}

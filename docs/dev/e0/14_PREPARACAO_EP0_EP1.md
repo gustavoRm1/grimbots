@@ -16,11 +16,12 @@
 
 | Suíte | Comando | Resultado |
 |---|---|---|
-| Unit contrato v1.1 | `python3 tests/test_phase6a_contract_v11.py` | **50/50 offline OK** |
+| Unit contrato v1.1 | `python3 tests/test_phase6a_contract_v11.py` | **54/54 offline OK** |
 | Golden cliente v1.0 | `python3 tests/test_agent_respond_contract.py` | **10/10** (byte-a-byte) |
 | Dedup next_question | `python3 tests/test_ai_next_question_dedup.py` | **11/11** |
-| D11 dedupe (2 fases) | `python3 tests/test_d11_dedupe.py` | **8/8** (ver doc 16) |
-| E4 offline | `python3 -m pytest tests/e4/test_e4_offline.py -q` | **8/8** (ver doc 17) |
+| D11 dedupe + efeito comercial | `python3 tests/test_d11_dedupe.py` | **12/12** (docs 16/19) |
+| E4 offline | `python3 -m pytest tests/e4/test_e4_offline.py -q` | **8/8** (doc 17) |
+| Hand-off D11 (motor) | `python3 handoff/d11/d11_acceptance.py` | **3/6** atual (doc 19) |
 | Integração motor real | `python3 tests/integration/test_motor_live.py` | **5/5** (v1.0, v1.1, 409, 422 extra=forbid, D11) |
 
 Concorrência do estado: `test_state_atomic_no_lost_update_under_concurrency`
