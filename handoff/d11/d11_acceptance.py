@@ -39,6 +39,43 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
+GRIMBOTS_ROOT = HERE.parents[1]   # handoff/d11 -> handoff -> <repo Grimbots>
+
+# Evidência objetiva de cada cenário (base do veredito PASS/FAIL).
+EVIDENCE = {
+    "S1": "contador POST /api/generate: 1ª=1 e 2ª=1 (sem 2ª execução)",
+    "S2": "status 502 AI_BACKEND_ERROR → 200 com o MESMO request_id",
+    "S3": "status 504 AI_TIMEOUT → 200 com o MESMO request_id",
+    "S4": "resposta idêntica (message/action) e 0 chamadas novas ao modelo",
+    "S5": "status 502 AI_INVALID_RESPONSE → 200 com o MESMO request_id",
+    "S6": "chamadas ao modelo == 1; status [200, 409]",
+    "S7": "2ª entrega=409 REQUEST_IN_PROGRESS + header Retry-After; após concluir 200 X-D11-Replay=true; chamadas==1",
+    "S8": "chamadas 1 → 2 após restart (LIMITAÇÃO: store in-memory)",
+    "S9": "200 (nenhum 422 por tamanho)",
+    "S10": "422 VALIDATION_ERROR (motor rejeita > 4000)",
+}
+
+LIMITATIONS = [
+    "**Reinício do motor:** o store de dedupe é in-memory. Após restart, o mesmo "
+    "`request_id` NÃO tem replay e o modelo re-executa (evidência: S8, chamadas 1→2).",
+    "**Store em memória:** a conclusão vive só no processo; sem persistência "
+    "durável não há exactly-once.",
+    "**Múltiplas instâncias / workers:** a dedupe é por processo. Com >1 worker ou "
+    "instância, o mesmo `request_id` pode cair em processos diferentes e executar 2×.",
+    "**Falha entre geração e persistência:** se o processo morrer DEPOIS de gerar a "
+    "resposta e ANTES de gravar a conclusão, a reserva expira e o retry re-executa "
+    "(at-most-once, não exactly-once).",
+    "**Correção concreta sugerida (motor):** gravar a resposta *write-ahead* logo "
+    "após o modelo (antes de serializar a saída) e usar store compartilhado com "
+    "`complete()` atômico.",
+]
+
+SIGNATURE_NOTE = (
+    "**Assinatura D11: compatibilidade validada nos cenários testados.** "
+    "Os cenários de contrato S1–S7, S9 e S10 passaram (9/9) contra o commit do "
+    "motor registrado abaixo. **Isto NÃO equivale a aprovação para produção** — "
+    "as limitações abaixo permanecem e a ativação exige decisão explícita."
+)
 
 DEFAULT_MOTOR_DIR = os.environ.get(
     "MOTOR_DIR",
@@ -299,6 +336,28 @@ def _motor_meta(motor):
                 meta[label] = out.stdout.strip()
             except Exception:  # noqa: BLE001
                 meta[label] = None
+    try:
+        for label, args in (
+            ("grimbots_commit", ["rev-parse", "HEAD"]),
+            ("grimbots_commit_short", ["rev-parse", "--short", "HEAD"]),
+        ):
+            out = subprocess.run(
+                ["git", "-C", str(GRIMBOTS_ROOT), *args],
+                capture_output=True, text=True, timeout=5,
+            )
+            meta[label] = out.stdout.strip()
+    except Exception:  # noqa: BLE001
+        meta["grimbots_commit"] = None
+    meta["repro_motor"] = (
+        f"git -C <motor> checkout {meta.get('git_commit_short') or '<commit>'} && "
+        "cd api && GRIMBOTS_API_KEY=... OLLAMA_BASE_URL=... uvicorn app:app"
+    )
+    meta["repro_acceptance"] = (
+        "MOTOR_DIR=<motor> MOTOR_VENV_PY=<venv>/bin/python python3 handoff/d11/d11_acceptance.py"
+    )
+    meta["repro_grimbots_tests"] = (
+        "python3 tests/test_d11_dedupe.py  # e tests/test_phase6a_contract_v11.py"
+    )
     return meta
 
 
@@ -589,23 +648,66 @@ def main():
     (RESULTS / "OBSERVED.md").write_text("\n".join(lines) + "\n")
 
     # Matriz esperado x observado (para o motor validar)
-    def _tag(r):
-        return "SKIP" if r.get("skipped") else ("PASS" if r["pass"] else "FAIL")
-    mlines = ["# D11 — matriz esperado × observado", "",
-              f"> {ts} · motor commit `{meta.get('git_commit_short')}` · "
-              f"versao_reportada `{meta.get('version_reported')}`", "",
-              "| ID | tipo | cenário | esperado | observado | resultado |",
-              "|---|---|---|---|---|---|"]
-    for r in results:
-        mlines.append(
-            f"| {r['id']} | {r['kind']} | {r['name']} | {r['expected']} | "
-            f"{r['observed']} | {_tag(r)} |"
-        )
-    mlines += ["", f"**CONTRATO: {cpass}/{len(contract)} PASS.** "
-               "Cenários de `limitation` documentam limites arquiteturais conhecidos.", ""]
-    (RESULTS / "MATRIZ_ESPERADO_OBSERVADO.md").write_text("\n".join(mlines) + "\n")
+    _write_matrix(meta, results, ts, cpass, len(contract))
 
     return 0 if cpass == len(contract) else 1
+
+
+def _write_matrix(meta, results, ts, cpass, ctotal):
+    def _tag(r):
+        return "SKIP" if r.get("skipped") else ("PASS" if r["pass"] else "FAIL")
+
+    m = ["# D11 — matriz esperado × observado", "",
+         f"> Gerado em **{ts}** pelo harness `handoff/d11/d11_acceptance.py`.",
+         "> Reproduzível: ver §2. **Não** substitui os testes internos do motor.", "",
+         "## 1. Identificação (commits exatos)", "",
+         "| Item | Valor |", "|---|---|",
+         f"| Motor — commit | `{meta.get('git_commit')}` (`{meta.get('git_commit_short')}`) |",
+         f"| Motor — assunto | {meta.get('git_subject')} |",
+         f"| Motor — versão reportada (`/health`) | `{meta.get('version_reported')}` |",
+         f"| Motor — modelo | `{meta.get('model')}` |",
+         f"| Motor — describe | `{meta.get('git_describe')}` |",
+         f"| Grimbots — commit | `{meta.get('grimbots_commit')}` (`{meta.get('grimbots_commit_short')}`) |",
+         f"| `REQUEST_TIMEOUT` (execução) | {meta.get('request_timeout_env')} |",
+         "", "## 2. Comandos de reprodução", "",
+         "```bash",
+         "# 1) checkout do motor no commit acima (NÃO alterar o repo do motor)",
+         meta.get("repro_motor", ""),
+         "# 2) aceite D11 (independente)",
+         meta.get("repro_acceptance", ""),
+         "# 3) testes Grimbots (409 sem efeitos, D6, E4)",
+         meta.get("repro_grimbots_tests", ""),
+         "```", "",
+         f"**Resultado: CONTRATO {cpass}/{ctotal} PASS.** "
+         "Cenários `limitation` documentam limites arquiteturais conhecidos.", "",
+         "## 3. Cenários de CONTRATO (S1–S7, S9, S10)", "",
+         "| ID | cenário | esperado | observado | evidência | resultado |",
+         "|---|---|---|---|---|---|"]
+    for r in results:
+        if r.get("kind") != "contract":
+            continue
+        m.append(
+            f"| {r['id']} | {r['name']} | {r['expected']} | {r['observed']} | "
+            f"{EVIDENCE.get(r['id'], '')} | {_tag(r)} |"
+        )
+    m += ["", "## 4. Cenário de LIMITAÇÃO (S8)", "",
+          "| ID | cenário | esperado | observado | resultado |",
+          "|---|---|---|---|---|"]
+    for r in results:
+        if r.get("kind") == "limitation":
+            m.append(
+                f"| {r['id']} | {r['name']} | {r['expected']} | {r['observed']} | "
+                f"{_tag(r)} |"
+            )
+    m += ["", "## 5. Assinatura D11", "", SIGNATURE_NOTE, "",
+          "## 6. Limitações documentadas (permanecem)", ""]
+    m += [f"- {lim}" for lim in LIMITATIONS]
+    m += ["", "## 7. Pendência do motor (próximo passo)", "",
+          "Quando o motor entregar **(a)** persistência do store de dedupe e "
+          "**(b)** correção da versão do `/health`: **re-executar** §2 contra a nova "
+          "versão e **atualizar esta matriz** (o harness registra o novo commit).",
+          ""]
+    (RESULTS / "MATRIZ_ESPERADO_OBSERVADO.md").write_text("\n".join(m) + "\n")
 
 
 if __name__ == "__main__":

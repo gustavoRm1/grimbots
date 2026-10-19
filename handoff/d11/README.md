@@ -149,9 +149,14 @@ O runner sobe um mock do Ollama (conta chamadas) + o motor via uvicorn, registra
 
 ## 6. Contra-assinatura
 
-Ver `SIGNATURE.md`. **O D11 só é considerado fechado com os dois lados assinados**
-e **CONTRATO 9/9 PASS** no `d11_acceptance.py` (execução independente), com a
-limitação S8 documentada e aceita.
+Ver `SIGNATURE.md`. **Assinatura = compatibilidade validada nos cenários testados**
+(`d11_acceptance.py` → **CONTRATO 9/9 PASS**). **Não é aprovação para produção:**
+sem merge/deploy/ativação, e as limitações do §5 permanecem.
+
+**Próximo passo:** quando o motor entregar persistência do store e corrigir a
+versão do `/health` (§7), **re-executar** este pacote contra a nova versão e
+**atualizar** `results/MATRIZ_ESPERADO_OBSERVADO.md` (o harness registra o commit
+novo). Bloqueios residuais → falha reproduzível + correção no lado Grimbots.
 
 ## 7. Divergências registradas (lado motor — **não** corrigidas aqui)
 

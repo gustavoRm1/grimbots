@@ -4,6 +4,9 @@
 > Motor implementou D11 (`444d4a2` / crosscheck `4898325`, docs: v1.6.0).
 > Verificação **independente** Grimbots: **CONTRATO 9/9 PASS**. Sem
 > merge/deploy/ativação.
+>
+> **Assinatura D11 = compatibilidade validada nos cenários testados** — **não**
+> é aprovação para produção (limitações permanecem; ver §Limitações).
 
 ## Conteúdo do pacote
 
@@ -72,4 +75,19 @@ Primeira execução (motor stateless, `454d37c`): **3/6**. Re-execução contra
 
 ## Critério de aceite
 
-`d11_acceptance.py` → **CONTRATO 9/9 PASS** + assinatura do motor em `SIGNATURE.md`.
+`d11_acceptance.py` → **CONTRATO 9/9 PASS** + assinatura (**compatibilidade
+validada nos cenários testados**) em `SIGNATURE.md`. **Não** é aprovação para produção.
+
+## Próximo passo (quando o motor evoluir)
+
+Quando o motor entregar **(a)** persistência do store de dedupe e **(b)** correção
+da versão do `/health`: **re-executar** o pacote contra a nova versão e
+**atualizar** `handoff/d11/results/MATRIZ_ESPERADO_OBSERVADO.md` (o harness grava
+o commit novo). Bloqueio residual → falha reproduzível + correção no repo Grimbots.
+
+## Evidências (artefatos)
+
+`handoff/d11/results/MATRIZ_ESPERADO_OBSERVADO.md` (matriz completa: commits do
+motor e da Grimbots, comandos de reprodução, evidência por cenário, assinatura,
+limitações, pendência), `results/observed.json` (bruto + metadados) e
+`results/OBSERVED.md`.

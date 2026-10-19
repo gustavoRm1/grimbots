@@ -260,9 +260,10 @@ def test_request_in_progress_releases_and_has_no_effects():
     mgr._ai_turn_claim = lambda *a, **k: True
     mgr._ai_turn_complete = lambda *a, **k: captured.__setitem__("completed", captured["completed"] + 1)
     mgr._ai_turn_release = lambda *a, **k: captured.__setitem__("released", captured["released"] + 1)
+    # step com saidas CHECKOUT e HUMANO ligadas: prova que o 409 nao roteia nada
+    step = {"id": "s1", "config": {}, "connections": {"checkout": "pay1", "handoff": "human1"}}
     try:
-        mgr._handle_ai_turn(1, "tok", {}, 99, "999",
-                            {"id": "s1", "config": {}}, "oi", inbound_message_id=99)
+        mgr._handle_ai_turn(1, "tok", {}, 99, "999", step, "oi", inbound_message_id=99)
     finally:
         svc.get_ai_service = orig_get
 
