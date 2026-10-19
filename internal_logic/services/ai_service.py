@@ -692,6 +692,33 @@ class GrimbotsAIService:
     def configured(self):
         return bool(self.api_url and self.api_key)
 
+    def health(self, timeout=None):
+        """GET /health — fonte VERIFICÁVEL da versão do motor (E5/D)."""
+        if not self.configured:
+            raise AIGatewayError(
+                "API_KEY_NOT_CONFIGURED",
+                "GRIMBOTS_AI_API_URL/GRIMBOTS_AI_API_KEY ausentes no .env",
+                status=503,
+            )
+        headers = {
+            "X-API-Key": self.api_key,
+            "ngrok-skip-browser-warning": "true",
+            "Accept": "application/json",
+        }
+        try:
+            response = requests.get(
+                f"{self.api_url}/health", headers=headers,
+                timeout=timeout if timeout is not None else self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise AIGatewayError("AI_BACKEND_UNAVAILABLE", str(exc), status=502)
+        if response.status_code != 200:
+            raise AIGatewayError(f"HTTP_{response.status_code}", "", status=response.status_code)
+        try:
+            return response.json() or {}
+        except ValueError:
+            raise AIGatewayError("AI_INVALID_RESPONSE", "health nao e JSON", status=502)
+
     def respond(self, payload):
         if not self.configured:
             raise AIGatewayError(
@@ -793,6 +820,10 @@ class MockAIService:
     @property
     def configured(self):
         return True
+
+    def health(self, timeout=None):
+        return {"status": "ok", "service": "mock", "version": "mock-1.6.0",
+                "ollama": "reachable", "model": "grimbots-sales:latest-mock"}
 
     def respond(self, payload):
         history = payload.get("recent_messages") or []

@@ -65,8 +65,32 @@ correção: a linha registra ambas com `observed_source` (`v1.0_production`).
 | Teste | Cobre |
 |---|---|
 | `tests/test_e5_shadow.py` (12/12 offline) | gate default-off; sem PII crua; HMAC; truncamento/sanitização; comparação; falha isolada; recorder isolado; idempotência; **zero efeito** na integração |
-| `tests/integration/test_e5_shadow_live.py` (3/3) | v1.1 aceito pelo motor real (sem 422); comparação gravada; falha do motor fail-open |
+| `tests/integration/test_e5_shadow_live.py` (4/4) | v1.1 aceito pelo motor real (sem 422); comparação gravada; falha do motor fail-open; **versão via `/health`** (fonte `health`) |
+| `tests/test_e5_shadow_hardening.py` (21/21 offline) | 2A retenção/expurgo (política, injeção, fail-open, preserva recentes); 2B limites (in-flight, taxa/min, teto/dia); 2C relatório (sem PII, neutro, comparáveis); 2D versão (health/env/unknown, cache) |
 | Regressão | `test_phase6a_contract_v11` 66/66, `test_d11_dedupe` 14/14, `test_motor_live` 10/10, `test_e3_multiturn_live` 9/9 |
+
+## 7b. Hardening (Fase 2) — controle operacional
+
+**2A — Retenção/expurgo.** `purge_expired(retention_days, now, batch_size, fetch, delete)`
+é idempotente, em lotes, **fail-open** (nunca propaga). `retention_days<=0`
+desliga o expurgo. Fonte injetável (`fetch`/`delete`) para teste sem DB.
+
+**2B — Limites operacionais.** `ShadowLimiter` (in-flight + taxa/min + teto/dia)
+com relógio injetável. Ao atingir qualquer limite, a admissão é **negada** e o
+turno shadow é **ignorado** — nunca bloqueia o fluxo real. Config:
+`GRIMBOTS_AI_SHADOW_MAX_INFLIGHT` (8), `_MAX_PER_MINUTE` (120), `_MAX_PER_DAY`
+(5000); `configure_limiter()` no boot/testes.
+
+**2C — Relatório.** `internal_logic/services/ai_shadow_report.py` — `build_report(rows)`
+puro/determinístico: total, comparáveis/não comparáveis, taxa de correspondência,
+divergências por ação, diferenças de estágio, falhas/timeouts, versões do motor.
+Sem PII (só contagens); divergências são **neutras** (a ação real não é a verdade).
+CLI: `python -m internal_logic.services.ai_shadow_report --days 30 [--json]`.
+
+**2D — Rastreabilidade da versão.** `resolve_motor_version()` consulta `/health`
+(fonte **verificável**, cache TTL 300s) e cai para `GRIMBOTS_AI_MOTOR_VERSION`
+(fonte `env`) ou `unknown` — **nunca inventa** versão. Cada linha grava
+`motor_version` + `motor_version_source` (`health|env|unknown`).
 
 ## 8. Critérios de desligamento (kill-switch)
 
@@ -75,7 +99,8 @@ correção: a linha registra ambas com `observed_source` (`v1.0_production`).
 | Dúvida/incidente | `GRIMBOTS_AI_SHADOW=off` → no-op imediato (sem deploy) |
 | Bot específico | remover `shadow` do bloco |
 | Taxa de `SHADOW_ERROR` acima do limiar | desligar global |
-| Latência/fila/custo acima do orçamento | desligar global ou baixar `_SAMPLE`/`_WORKERS` |
+| Latência/fila/custo acima do orçamento | desligar global ou baixar `_SAMPLE`/`_WORKERS`/limites (2B) |
+| Acúmulo de dados além da política | ajustar `retention_days` e rodar `purge_expired` (2A) |
 
 ## 9. Riscos remanescentes
 

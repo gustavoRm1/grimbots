@@ -27,9 +27,19 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
+
+# Política de retenção default (dias). <= 0 desliga o expurgo.
+DEFAULT_RETENTION_DAYS = 90
+# Limites operacionais default (podem ser reconfigurados por env/limiter).
+DEFAULT_MAX_INFLIGHT = 8
+DEFAULT_MAX_PER_MINUTE = 120
+DEFAULT_MAX_PER_DAY = 5000
+# TTL do cache de versão do motor (s).
+DEFAULT_VERSION_TTL = 300.0
 
 # Valores da flag global que LIGAM o suporte (nunca ativam em produção sozinhos).
 _ENABLED_VALUES = {"on", "true", "1", "yes", "enabled", "v1.1"}
@@ -234,7 +244,8 @@ def record_shadow_decision(record):
 
 _RECORD_FIELDS = (
     "bot_id", "lead_ref", "request_id", "observed_source", "mode",
-    "contract_version", "motor_version", "motor_commit", "motor_model",
+    "contract_version", "motor_version", "motor_version_source",
+    "motor_commit", "motor_model",
     "context_digest", "context_json",
     "proposed_action", "proposed_intent", "proposed_funnel_stage",
     "proposed_lead_temperature", "proposed_risk", "proposed_offer_id",
@@ -260,6 +271,7 @@ def build_record(*, bot_id, lead_ref, request_id, observed, proposed=None,
         "mode": str(meta.get("mode") or "shadow"),
         "contract_version": str(meta.get("contract_version") or "1.1"),
         "motor_version": str(meta.get("motor_version") or ""),
+        "motor_version_source": str(meta.get("motor_version_source") or "unknown"),
         "motor_commit": str(meta.get("motor_commit") or ""),
         "motor_model": str(proposed.get("model") or ""),
         "context_digest": (context or {}).get("digest"),
@@ -280,6 +292,223 @@ def build_record(*, bot_id, lead_ref, request_id, observed, proposed=None,
         "latency_ms": int(latency_ms or 0),
         "error_code": error_code,
     }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 2A — Retenção e expurgo seguro
+# ────────────────────────────────────────────────────────────────────────────
+def retention_cutoff(retention_days, now=None):
+    """Data-limite (UTC) para expurgo; None quando a retenção está desligada."""
+    if retention_days is None:
+        retention_days = DEFAULT_RETENTION_DAYS
+    try:
+        days = int(retention_days)
+    except (TypeError, ValueError):
+        days = DEFAULT_RETENTION_DAYS
+    if days <= 0:
+        return None
+    base = now or datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    return base - timedelta(days=days)
+
+
+def filter_expired(rows, cutoff):
+    """Ids de `rows` (id, created_at) anteriores ao cutoff (UTC). Puro/testável."""
+    if cutoff is None:
+        return []
+    expired = []
+    for row in rows or []:
+        rid, created = (row if isinstance(row, (tuple, list)) else (row.get("id"), row.get("created_at")))
+        if created is None:
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if created < cutoff:
+            expired.append(rid)
+    return expired
+
+
+def _db_fetch_expired(cutoff, limit):
+    from internal_logic.core.models import AIShadowDecision
+    q = AIShadowDecision.query.filter(AIShadowDecision.created_at < cutoff)
+    q = q.order_by(AIShadowDecision.created_at.asc())
+    if limit:
+        q = q.limit(limit)
+    return [(r.id, r.created_at) for r in q.all()]
+
+
+def _db_delete_ids(ids):
+    from internal_logic.core.extensions import db
+    from internal_logic.core.models import AIShadowDecision
+    AIShadowDecision.query.filter(AIShadowDecision.id.in_(list(ids))).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+
+
+def purge_expired(*, retention_days=None, now=None, batch_size=None,
+                  fetch=None, delete=None):
+    """Expurgo idempotente por lote. Fail-open: nunca propaga; retorna contagem.
+
+    `fetch(cutoff, limit)` -> [(id, created_at), ...]  (injável em testes)
+    `delete(ids)`         -> None                      (injável em testes)
+    """
+    cutoff = retention_cutoff(retention_days, now)
+    if cutoff is None:
+        return {"enabled": False, "deleted": 0, "cutoff": None}
+    fetch = fetch or _db_fetch_expired
+    delete = delete or _db_delete_ids
+    total = 0
+    try:
+        while True:
+            rows = fetch(cutoff, batch_size)
+            if not rows:
+                break
+            ids = [rid for rid, _ in rows]
+            delete(ids)
+            total += len(ids)
+            if not batch_size or len(rows) < batch_size:
+                break
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug(f"⚠️ [IA/shadow] expurgo interrompido (fail-open): {exc}")
+    return {"enabled": True, "deleted": total, "cutoff": cutoff.isoformat()}
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 2B — Limites operacionais (in-flight + taxa + orçamento diário)
+# ────────────────────────────────────────────────────────────────────────────
+class ShadowLimiter:
+    """Admissão concorrente-segura. Ao atingir limite, a admissão é NEGADA
+    (shadow ignorado) — nunca bloqueia o turno real."""
+
+    def __init__(self, max_inflight=DEFAULT_MAX_INFLIGHT, max_per_minute=DEFAULT_MAX_PER_MINUTE,
+                 max_per_day=DEFAULT_MAX_PER_DAY, now_fn=None):
+        self.max_inflight = max(1, int(max_inflight))
+        self.max_per_minute = int(max_per_minute)
+        self.max_per_day = int(max_per_day)
+        self._now = now_fn or (lambda: time.monotonic())
+        self._wall = now_fn or (lambda: time.time())
+        self._lock = threading.Lock()
+        self._inflight = 0
+        self._minute_events = []
+        self._day_key = None
+        self._day_count = 0
+
+    def admit(self):
+        """True se admitido (reserva in-flight). Chamar `release()` ao terminar."""
+        with self._lock:
+            # Orçamento diário
+            day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            if day != self._day_key:
+                self._day_key, self._day_count = day, 0
+            if self.max_per_day and self._day_count >= self.max_per_day:
+                return False
+            # Taxa por minuto (janela deslizante)
+            if self.max_per_minute:
+                now = self._now()
+                self._minute_events = [t for t in self._minute_events if now - t < 60.0]
+                if len(self._minute_events) >= self.max_per_minute:
+                    return False
+            # In-flight
+            if self._inflight >= self.max_inflight:
+                return False
+            self._inflight += 1
+            self._day_count += 1
+            if self.max_per_minute:
+                self._minute_events.append(self._now())
+            return True
+
+    def release(self):
+        with self._lock:
+            if self._inflight > 0:
+                self._inflight -= 1
+
+    def snapshot(self):
+        with self._lock:
+            return {
+                "inflight": self._inflight,
+                "day_count": self._day_count,
+                "day_key": self._day_key,
+                "minute_events": len(self._minute_events),
+                "max_inflight": self.max_inflight,
+                "max_per_minute": self.max_per_minute,
+                "max_per_day": self.max_per_day,
+            }
+
+
+_LIMITER = None
+_LIMITER_LOCK = threading.Lock()
+
+
+def configure_limiter(max_inflight=None, max_per_minute=None, max_per_day=None,
+                      now_fn=None):
+    """(Re)configura o limiter global. Usado no boot e em testes."""
+    global _LIMITER
+    mi = max_inflight if max_inflight is not None else \
+        os.environ.get("GRIMBOTS_AI_SHADOW_MAX_INFLIGHT", DEFAULT_MAX_INFLIGHT)
+    mp = max_per_minute if max_per_minute is not None else \
+        os.environ.get("GRIMBOTS_AI_SHADOW_MAX_PER_MINUTE", DEFAULT_MAX_PER_MINUTE)
+    md = max_per_day if max_per_day is not None else \
+        os.environ.get("GRIMBOTS_AI_SHADOW_MAX_PER_DAY", DEFAULT_MAX_PER_DAY)
+    lim = ShadowLimiter(mi, mp, md, now_fn=now_fn)
+    with _LIMITER_LOCK:
+        _LIMITER = lim
+    return lim
+
+
+def get_limiter():
+    if _LIMITER is not None:
+        return _LIMITER
+    return configure_limiter()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 2D — Rastreabilidade da versão do motor (/health, com fallback explícito)
+# ────────────────────────────────────────────────────────────────────────────
+_VERSION_CACHE = {"value": None, "source": "unknown", "at": 0.0}
+_VERSION_LOCK = threading.Lock()
+
+
+def reset_version_cache():
+    with _VERSION_LOCK:
+        _VERSION_CACHE.update({"value": None, "source": "unknown", "at": 0.0})
+
+
+def resolve_motor_version(health_fetcher=None, fallback="", ttl=DEFAULT_VERSION_TTL,
+                          now_fn=None):
+    """Retorna (version, source). `source` ∈ health|env|unknown.
+
+    Consulta `/health` (fonte verificável) com cache; se indisponível usa o
+    fallback informado (env) — **nunca inventa** uma versão. Dentro do TTL não
+    faz nova chamada (inclusive para cache negativo).
+    """
+    now = (now_fn or time.time)()
+    with _VERSION_LOCK:
+        cached = dict(_VERSION_CACHE)
+    if cached["at"] and (now - cached["at"]) < ttl:
+        return _from_cache(cached, fallback)
+
+    version, source = None, "unknown"
+    if health_fetcher is not None:
+        try:
+            body = health_fetcher() or {}
+            v = str(body.get("version") or "").strip()
+            if v:
+                version, source = v, "health"
+        except Exception as exc:  # noqa: BLE001 — cacheia a indisponibilidade
+            logger.debug(f"ℹ️ [IA/shadow] /health indisponível: {exc}")
+    if version is None and fallback:
+        version, source = str(fallback).strip(), "env"
+    with _VERSION_LOCK:
+        _VERSION_CACHE.update({"value": version, "source": source, "at": now})
+    return _from_cache({"value": version, "source": source}, fallback)
+
+
+def _from_cache(cached, fallback):
+    if cached.get("value"):
+        return cached["value"], (cached.get("source") or "unknown")
+    return (str(fallback).strip() if fallback else ""), ("env" if fallback else "unknown")
 
 
 # ────────────────────────────────────────────────────────────────────────────

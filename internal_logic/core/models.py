@@ -1410,6 +1410,7 @@ class AIShadowDecision(db.Model):
     mode = db.Column(db.String(20))
     contract_version = db.Column(db.String(10))
     motor_version = db.Column(db.String(40))                 # /health ou env (opcional)
+    motor_version_source = db.Column(db.String(20))          # health | env | unknown
     motor_commit = db.Column(db.String(64))                  # commit do motor (opcional)
     motor_model = db.Column(db.String(80))                   # model devolvido pelo motor
 
@@ -1450,6 +1451,7 @@ class AIShadowDecision(db.Model):
             "mode": self.mode,
             "contract_version": self.contract_version,
             "motor_version": self.motor_version,
+            "motor_version_source": self.motor_version_source,
             "motor_commit": self.motor_commit,
             "motor_model": self.motor_model,
             "context_digest": self.context_digest,

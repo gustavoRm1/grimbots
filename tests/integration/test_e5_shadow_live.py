@@ -125,6 +125,22 @@ def run_scenarios(port):
           ok and len(rows2) == 1 and rows2[0].get("error_code") == "SHADOW_ERROR",
           f"linhas={len(rows2)} erro={rows2[0].get('error_code') if rows2 else None}")
 
+    # ── 4) 2D — versão do motor de fonte VERIFICÁVEL (/health) ─────────────
+    shadow.reset_version_cache()
+    version, source = shadow.resolve_motor_version(
+        health_fetcher=svc.health, fallback="UNKNOWN-ENV"
+    )
+    rec = shadow.build_record(
+        bot_id=140, lead_ref="ref", request_id="shadow-e5-4",
+        observed={"action": "continue"},
+        meta={"motor_version": version, "motor_version_source": source},
+    )
+    check("4 versão do motor via /health (fonte 'health', não env)",
+          bool(version) and source == "health"
+          and rec.get("motor_version_source") == "health",
+          f"version={version} source={source}")
+    shadow.reset_version_cache()
+
     return results
 
 

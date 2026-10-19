@@ -4403,40 +4403,60 @@ class BotManager:
         from flask import current_app
         from internal_logic.services.ai_shadow import (
             lead_reference, make_shadow_request_id, run_shadow, sample_hit,
-            get_dispatcher,
+            get_dispatcher, get_limiter, resolve_motor_version,
         )
         lead_ref = lead_reference(telegram_user_id, secret)
         if not sample_hit(bot_id, lead_ref, sample_rate):
             return
-        shadow_request_id = make_shadow_request_id(request_id)
-        v11 = self._ai_v11_payload_kwargs(config, step, step_config)
-        v11.update(self._ai_memory_payload(state))
-        shadow_payload = dict(build_payload_fn(v11))
-        shadow_payload['mode'] = 'shadow'
-        shadow_payload['request_id'] = shadow_request_id
+        # 2B — limites operacionais: se excedidos, shadow é IGNORADO (nunca bloqueia).
+        limiter = get_limiter()
+        if not limiter.admit():
+            logger.debug("ℹ️ [IA/shadow] limite operacional atingido — shadow ignorado")
+            return
+
+        try:
+            shadow_request_id = make_shadow_request_id(request_id)
+            v11 = self._ai_v11_payload_kwargs(config, step, step_config)
+            v11.update(self._ai_memory_payload(state))
+            shadow_payload = dict(build_payload_fn(v11))
+            shadow_payload['mode'] = 'shadow'
+            shadow_payload['request_id'] = shadow_request_id
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            limiter.release()
+            logger.debug(f"⚠️ [IA/shadow] payload do shadow falhou (fail-open): {exc}")
+            return
 
         app = current_app._get_current_object()
-        meta = {
-            'mode': 'shadow',
-            'contract_version': '1.1',
-            'motor_version': motor_version,
-            'motor_commit': motor_commit,
-        }
+        _fallback_version = motor_version
+        _motor_commit = motor_commit
 
         def _work():
             with app.app_context():
                 try:
                     from internal_logic.services.ai_service import get_ai_service
+                    service = get_ai_service()
+                    # 2D — versão do motor de fonte verificável (/health), com
+                    # fallback explícito; nunca inventa versão.
+                    version, source = resolve_motor_version(
+                        health_fetcher=getattr(service, 'health', None),
+                        fallback=_fallback_version,
+                    )
                     run_shadow(
-                        respond=get_ai_service().respond,
+                        respond=service.respond,
                         payload=shadow_payload, observed=observed,
                         bot_id=bot_id, lead_ref=lead_ref, request_id=shadow_request_id,
-                        meta=meta, secret=secret, include_text=include_text,
+                        meta={
+                            'mode': 'shadow', 'contract_version': '1.1',
+                            'motor_version': version, 'motor_version_source': source,
+                            'motor_commit': _motor_commit,
+                        },
+                        secret=secret, include_text=include_text,
                         max_text_chars=max_text_chars,
                     )
                 except Exception as exc:  # noqa: BLE001 — fail-open
                     logger.debug(f"⚠️ [IA/shadow] worker falhou (fail-open): {exc}")
                 finally:
+                    limiter.release()
                     try:
                         from internal_logic.core.extensions import db
                         db.session.remove()
@@ -4446,6 +4466,7 @@ class BotManager:
         try:
             get_dispatcher().submit(_work)
         except Exception as exc:  # noqa: BLE001
+            limiter.release()
             logger.debug(f"⚠️ [IA/shadow] dispatch falhou (fail-open): {exc}")
 
     def _handle_ai_turn(self, bot_id: int, token: str, config: Dict[str, Any], chat_id: int,
