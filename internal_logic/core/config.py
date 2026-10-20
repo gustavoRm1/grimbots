@@ -109,6 +109,22 @@ class Config:
     except (TypeError, ValueError):
         _ai_rollout_raw = 100.0
     GRIMBOTS_AI_ROLLOUT_PERCENT = max(0.0, min(100.0, _ai_rollout_raw))
+    # Allowlist EXPLÍCITA de bots autorizados a usar a IA (piloto isolado).
+    # Lista de IDs separados por vírgula (ex.: "140" ou "140,141"). Quando NÃO
+    # vazia, SOMENTE esses bots podem acionar a IA; qualquer outro bot com bloco
+    # 'ai' é desviado para HUMANO (mesmo caminho de 'enabled=False'). Vazia/ausente
+    # => sem restrição por allowlist (os demais gates continuam valendo).
+    # NUNCA amplia exposição por si só; é uma trava ADICIONAL.
+    _ai_allowlist_raw = os.environ.get('GRIMBOTS_AI_BOT_ALLOWLIST', '') or ''
+    _ai_allowlist = set()
+    for _tok in _ai_allowlist_raw.split(','):
+        _tok = _tok.strip()
+        if _tok:
+            try:
+                _ai_allowlist.add(int(_tok))
+            except (TypeError, ValueError):
+                continue
+    GRIMBOTS_AI_BOT_ALLOWLIST = frozenset(_ai_allowlist)
 
     @classmethod
     def init_app(cls, app, rq_pool=False):
@@ -179,3 +195,4 @@ class Config:
         app.config['GRIMBOTS_AI_MOTOR_COMMIT'] = cls.GRIMBOTS_AI_MOTOR_COMMIT
         app.config['GRIMBOTS_AI_KILL_SWITCH'] = cls.GRIMBOTS_AI_KILL_SWITCH
         app.config['GRIMBOTS_AI_ROLLOUT_PERCENT'] = cls.GRIMBOTS_AI_ROLLOUT_PERCENT
+        app.config['GRIMBOTS_AI_BOT_ALLOWLIST'] = cls.GRIMBOTS_AI_BOT_ALLOWLIST

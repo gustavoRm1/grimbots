@@ -292,6 +292,121 @@ def test_rollout_100_nao_contorna_human_takeover():
         assert ("checkout", "ai1") not in rec.route_calls
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 5) ALLOWLIST EXPLÍCITA por bot (piloto isolado — ex.: só o bot 140)
+# ══════════════════════════════════════════════════════════════════════════
+def test_allowlist_vazia_sem_restricao():
+    import bot_manager as bm
+    for empty in (None, frozenset(), set(), "", []):
+        app = _make_app({"GRIMBOTS_AI_BOT_ALLOWLIST": empty})
+        with app.app_context():
+            for bid in (140, 141, 1):
+                assert bm.BotManager._ai_bot_allowlisted(bid) is True, (empty, bid)
+
+
+def test_allowlist_permite_apenas_listados():
+    import bot_manager as bm
+    app = _make_app({"GRIMBOTS_AI_BOT_ALLOWLIST": frozenset({140})})
+    with app.app_context():
+        assert bm.BotManager._ai_bot_allowlisted(140) is True
+        assert bm.BotManager._ai_bot_allowlisted("140") is True
+        for other in (141, 1, 0, 999):
+            assert bm.BotManager._ai_bot_allowlisted(other) is False, other
+
+
+def test_allowlist_multiplos_ids_e_str():
+    import bot_manager as bm
+    app = _make_app({"GRIMBOTS_AI_BOT_ALLOWLIST": frozenset({140, 141})})
+    with app.app_context():
+        assert bm.BotManager._ai_bot_allowlisted(140) is True
+        assert bm.BotManager._ai_bot_allowlisted(141) is True
+        assert bm.BotManager._ai_bot_allowlisted(142) is False
+
+
+def test_allowlist_bot_fora_desvia_para_handoff():
+    import bot_manager as bm
+    # Só o bot 140 é permitido; bot 141 (mesmo com bloco enabled) vai p/ HUMANO.
+    app = _make_app({"GRIMBOTS_AI_BOT_ALLOWLIST": frozenset({140}),
+                     "GRIMBOTS_AI_KILL_SWITCH": False,
+                     "GRIMBOTS_AI_ROLLOUT_PERCENT": 100})
+    with app.app_context():
+        fake = FakeRedis()
+        bm.get_redis_connection = lambda: fake
+        rec = Recorder()
+        mgr = _build(bm, fake, rec)
+        _run_turn(mgr, rec, _step(enabled=True), bot_id=141, tuid="leadOther", mid=1)
+        assert ("handoff", "ai1") in rec.route_calls
+        assert ("checkout", "ai1") not in rec.route_calls
+        assert rec.sent == []
+        assert fake.get(mgr._ai_state_key(141, "leadOther")) is None
+
+
+def test_allowlist_bot_permitido_nao_desvia_no_gate():
+    import bot_manager as bm
+    # Bot 140 permitido: o gate NÃO desvia. Paramos no motor (ausente) para provar
+    # que não houve handoff precoce do gate.
+    app = _make_app({"GRIMBOTS_AI_BOT_ALLOWLIST": frozenset({140}),
+                     "GRIMBOTS_AI_KILL_SWITCH": False,
+                     "GRIMBOTS_AI_ROLLOUT_PERCENT": 100})
+    with app.app_context():
+        fake = FakeRedis()
+        bm.get_redis_connection = lambda: fake
+        rec = Recorder()
+        mgr = _build(bm, fake, rec)
+        import internal_logic.services.ai_service as ais
+        orig = ais.get_ai_service
+
+        def boom():
+            raise RuntimeError("motor indisponivel (esperado no teste)")
+
+        ais.get_ai_service = boom
+        bm.get_ai_service = boom  # type: ignore
+        try:
+            _run_turn(mgr, rec, _step(enabled=True), bot_id=140, tuid="leadOk", mid=2)
+        finally:
+            ais.get_ai_service = orig
+        assert ("handoff", "ai1") not in rec.route_calls, "gate nao deve desviar"
+
+
+def test_allowlist_config_parsing_do_env():
+    import importlib
+    import os as _os
+    import internal_logic.core.config as cfgmod
+    old = _os.environ.get("GRIMBOTS_AI_BOT_ALLOWLIST")
+    _os.environ["GRIMBOTS_AI_BOT_ALLOWLIST"] = "140, 141 ,,x,142"
+    try:
+        importlib.reload(cfgmod)
+        allow = cfgmod.Config.GRIMBOTS_AI_BOT_ALLOWLIST
+        assert allow == frozenset({140, 141, 142}), allow
+    finally:
+        if old is None:
+            _os.environ.pop("GRIMBOTS_AI_BOT_ALLOWLIST", None)
+        else:
+            _os.environ["GRIMBOTS_AI_BOT_ALLOWLIST"] = old
+        importlib.reload(cfgmod)
+
+
+def test_allowlist_error_fail_safe_false():
+    import bot_manager as bm
+    # Se a leitura da config explodir, NÃO amplia exposição: retorna False.
+    class BoomApp:
+        @property
+        def config(self):
+            raise RuntimeError("config boom")
+    app = _make_app({})
+    with app.app_context():
+        orig = bm.BotManager._ai_config_get
+
+        def boom(key, default=None):
+            raise RuntimeError("boom")
+
+        bm.BotManager._ai_config_get = classmethod(lambda cls, k, d=None: (_ for _ in ()).throw(RuntimeError("boom")))  # type: ignore
+        try:
+            assert bm.BotManager._ai_bot_allowlisted(140) is False
+        finally:
+            bm.BotManager._ai_config_get = orig
+
+
 if __name__ == "__main__":
     import traceback
 

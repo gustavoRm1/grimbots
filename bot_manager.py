@@ -4301,6 +4301,28 @@ class BotManager:
             return False
         return cls._ai_rollout_bucket(bot_id, telegram_user_id) < pct
 
+    @classmethod
+    def _ai_bot_allowlisted(cls, bot_id) -> bool:
+        """True se o bot pode usar a IA segundo a allowlist EXPLÍCITA.
+
+        Allowlist vazia/ausente => True (sem trava por bot; os demais gates
+        continuam valendo). Allowlist não vazia => SOMENTE os IDs listados.
+        Compara por int (IDs do banco) e por string (defensivo). Fail-safe:
+        em qualquer erro de leitura, retorna False (NÃO amplia exposição).
+        """
+        try:
+            allow = cls._ai_config_get('GRIMBOTS_AI_BOT_ALLOWLIST', None)
+        except Exception:
+            return False
+        if not allow:
+            return True
+        try:
+            if int(bot_id) in allow:
+                return True
+        except (TypeError, ValueError):
+            pass
+        return str(bot_id) in {str(x) for x in allow}
+
     # ── E5 — execução SHADOW (ADITIVA, desligada por padrão) ────────────────
     # Dupla flag: global GRIMBOTS_AI_SHADOW + step_config['shadow']. Desligada =>
     # nenhuma chamada extra, nenhuma linha, comportamento idêntico ao atual.
@@ -4690,6 +4712,11 @@ class BotManager:
         _rollout_excluded = False
         if self._ai_kill_switch_enabled():
             logger.info("⛔ [IA] kill-switch global ligado - desviando para HUMANO")
+            _rollout_excluded = True
+        elif not self._ai_bot_allowlisted(bot_id):
+            logger.info(
+                f"🎯 [IA] bot {bot_id} fora da allowlist de IA - seguindo para HUMANO"
+            )
             _rollout_excluded = True
         elif not self._ai_rollout_eligible(bot_id, telegram_user_id):
             logger.info(
