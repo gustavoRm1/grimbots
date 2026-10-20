@@ -20,7 +20,7 @@ Estrutura: **(A) Pré-condições bloqueantes** → **(B) Configuração de ativ
   - [ ] Q2: falso positivo de objeção por palavra `"carro"` (bloqueia checkout + grava objeção falsa).
   - [ ] Q3: risco de match por substring em `_SUBTLE_BUY_SIGNALS` (`interessado` ⊂ `desinteressado`).
   - (Correções no **lado do motor**; a plataforma **não** deve manter 2ª cópia concorrente das listas — hoje ela espelha `_AI_PRICE_OBJECTION_TRIGGERS`. Alinhar em uma única fonte quando o motor for ajustado.)
-- [ ] **A3. Kill-switch operacional existe.** Hoje **não** há flag global de rollout nem de porcentagem. O único gate é `step_config.get('enabled', True) is False` por bloco (`bot_manager.py:4576`). Ver §(C) para a opção sem código vs. implementação proposta.
+- [ ] **A3. Kill-switch operacional existe.** ✅ **Implementado** (`GRIMBOTS_AI_KILL_SWITCH` + `GRIMBOTS_AI_ROLLOUT_PERCENT`, ver §C). Pendente apenas a validação operacional em ambiente real.
 - [ ] **A4. Credenciais/segredos no ambiente de produção** (não em código): `GRIMBOTS_AI_API_URL`, `GRIMBOTS_AI_API_KEY`, `GRIMBOTS_AI_SHADOW_SECRET` (se shadow ligado).
 - [ ] **A5. `GRIMBOTS_AI_MOCK=false`** em produção (confirmar; mock nunca em prod).
 - [ ] **A6. `GRIMBOTS_AI_MOTOR_VERSION` e `GRIMBOTS_AI_MOTOR_COMMIT` preenchidos** com a versão real do motor em produção (hoje default vazio → auditoria fica sem rastro de versão).
@@ -42,6 +42,10 @@ GRIMBOTS_AI_TIMEOUT=90
 GRIMBOTS_AI_MOTOR_VERSION=<tag>
 GRIMBOTS_AI_MOTOR_COMMIT=a54b9ddd383ae210fcae7d9e295425fc4fb88966
 
+# Rollout controlado (piloto) — ver §C
+GRIMBOTS_AI_KILL_SWITCH=false
+GRIMBOTS_AI_ROLLOUT_PERCENT=5        # onda 1; 100 numa onda 0 (canário)
+
 # Shadow: manter OFF no piloto inicial (evita dupla flag de decisão)
 GRIMBOTS_AI_SHADOW=off
 ```
@@ -53,21 +57,25 @@ GRIMBOTS_AI_SHADOW=off
 
 ## (C) Rollout Limitado + Kill-Switch
 
-### Estado atual (limitação)
-- **Não existe** flag de porcentagem de rollout nem kill-switch global. Alternativas sem código:
-  - **C-sem-código:** ativar a IA em pouquíssimos **blocos** e/ou poucos **bots** manualmente, contando leads atingidos; desligar = `step_config.enabled=false` por bloco.
-  - **C-com-código (proposta, requer autorização):** flag `GRIMBOTS_AI_ROLLOUT_PERCENT` (0–100) + `GRIMBOTS_AI_KILL_SWITCH` (bool) avaliados no início de `_handle_ai_turn`, com hash estável de `bot_id/telegram_user_id` para amostragem. **Não implementar sem autorização.**
+### Mecanismo implementado (branch `q2-objection-contextual-detection`)
+- **`GRIMBOTS_AI_KILL_SWITCH`** (bool, default `false`): quando ligado, **todo** bloco `ai` é desviado para HUMANO pelo mesmo caminho de `enabled=False` (`_handle_ai_turn`, logo após o gate do bloco, antes de ler estado/reservar turno/efeito). Sem resposta, sem coleta de decisão, sem efeito.
+- **`GRIMBOTS_AI_ROLLOUT_PERCENT`** (0–100, default `100`): leads **fora** do bucket determinístico `sha256("rollout:{bot}:{lead}")` mod 100 vão para HUMANO (mesmo caminho seguro). Dentro do bucket, o fluxo normal continua (e todas as proteções a jusante permanecem).
+- **Config ausente/inválida => fail-safe:** kill-switch off; percentual inválido/fora da faixa clampa para 0–100 e valor ilegível cai em `100` (não reduz exposição silenciosamente). Nunca >100 nem negativo.
+- **NUNCA amplia** exposição: o gate só REMOVE leads da IA. Não reativa bloco `enabled=False`, não contorna `human_takeover` sticky, permissões efetivas, oferta ativa nem guardas de conteúdo (todos verificados a jusante).
+- **Testes:** `tests/test_ai_rollout_kill_switch.py` (13/13) — desligamento imediato, elegibilidade determinística, limites 0/100/50%, config ausente/inválida, e não-contorno de `enabled=False`/`human_takeover`.
 
-### Proposta de plano de exposição
-1. **Onda 0 (canário fechado):** 1 bot interno / 1 interlocutor de teste por N dias. Coletar decisões e efeitos.
-2. **Onda 1:** ≤5% dos leads do(s) bloco(s) habilitado(s) (via C-com-código) ou poucos bots (C-sem-código). Janela curta e vigiada.
-3. **Onda 2:** ≤25% se métricas de §D sem alerta.
+### Plano de exposição (ondas)
+1. **Onda 0 (canário fechado):** 1 bot interno / 1 interlocutor de teste por N dias. `GRIMBOTS_AI_ROLLOUT_PERCENT=100` num único bloco/bot. Coletar decisões e efeitos.
+2. **Onda 1:** `GRIMBOTS_AI_ROLLOUT_PERCENT=5` no(s) bloco(s) habilitado(s). Janela curta e vigiada.
+3. **Onda 2:** `GRIMBOTS_AI_ROLLOUT_PERCENT=25` se métricas de §D sem alerta.
 4. **Sem onda 3 (100%) antes de:** A2 resolvido, A8 documentado, ≥1 ciclo completo de monitoramento estável.
 
+> O rollout é **por processo**: o percentual é lido do ambiente na inicialização. Trocar o valor exige restart do serviço (não é hot-reload). Planejar janelas.
+
 ### Kill-switch imediato (rollback operacional)
-- **Imediato (segundos):** `GRIMBOTS_AI_KILL_SWITCH=true` (se C-com-código) → IA vira `handoff`/`do_not_respond`, sem coleta de decisões.
-- **Sem código:** `step_config.enabled=false` nos blocos (deploy de config) + restart do serviço. Latência de configuração, não instantânea.
-- **Contingência dura:** `GRIMBOTS_AI_API_URL` inválido → motor indisponível → erro tipado + fallback controlado (comportamento validado no cenário 8 — sem crash), mas **sem** IA. Preferir kill-switch explícito.
+- **Imediato:** `GRIMBOTS_AI_KILL_SWITCH=true` + restart do serviço → IA vira `handoff`, sem coleta de decisão (ver §Procedimento Operacional).
+- **Por bloco:** `step_config.enabled=false` (deploy de config) + restart.
+- **Contingência dura:** `GRIMBOTS_AI_API_URL` inválido → motor indisponível → erro tipado + fallback controlado (cenário 8, sem crash), mas **sem** IA. Preferir kill-switch explícito.
 
 ---
 
@@ -99,8 +107,53 @@ GRIMBOTS_AI_SHADOW=off
 | **Proibição de alegações não comprovadas** | `guard_final_message` substitui/bloqueia | ✅ aprovado (cenário 7) |
 | **Sem desconto inventado** | ausência de desconto na saída | ⚠️ aprovado *sem guard dedicado* — observar |
 | **Objeção persistida corretamente** | `state.objection`/`ci.objection` coerentes; resolvida limpa estado | ✅ aprovado (cenários 3/4/8) |
+| **Q2 — falso positivo "carro novo"** | detecção contextual (limite de palavra) | ✅ corrigido na plataforma (`test_q2_objection_contextual.py` 13/13) |
+| **Rollout não contorna proteções** | `enabled=False` e `human_takeover` vencem o gate | ✅ `test_ai_rollout_kill_switch.py` 13/13 |
+
+---
+
+## (G) Procedimento Operacional — Ativação Controlada
+
+> Executar **somente após autorização**. Nenhum passo abaixo foi executado.
+
+### G1. Pré-ativação (checklist)
+1. Fechar itens A1–A10 (§A).
+2. Garantir `GRIMBOTS_AI_CONTRACT=v1.0`, `GRIMBOTS_AI_SHADOW=off`, `GRIMBOTS_AI_MOCK=false`.
+3. Definir `GRIMBOTS_AI_KILL_SWITCH=false` e `GRIMBOTS_AI_ROLLOUT_PERCENT=<onda>`.
+4. Registrar baseline de métricas (pré-IA) para comparação.
+
+### G2. Onda 0 (canário fechado)
+1. `.env`: `GRIMBOTS_AI_ROLLOUT_PERCENT=100` + habilitar **um** bloco/bot de teste.
+2. `pm2 restart <api>` (rollout é lido na inicialização).
+3. Validar: lead de teste recebe decisão da IA; demais blocos seguem `handoff`.
+4. Observar §D por N dias; confirmar ausência de alertas e de falso handoff.
+
+### G3. Onda 1 (≤5%)
+1. `.env`: `GRIMBOTS_AI_ROLLOUT_PERCENT=5`.
+2. `pm2 restart <api>`.
+3. Confirmar em logs `🎯 [IA] lead fora do rollout (5%) - seguindo para HUMANO` para ~95% dos leads.
+4. Observar métricas/alerta; janela curta.
+
+### G4. Onda 2 (≤25%)
+- Mesmo procedimento, `GRIMBOTS_AI_ROLLOUT_PERCENT=25`, somente se Onda 1 sem alerta e A2/A8 resolvidos/aceitos.
+
+### G5. Kill-switch / rollback (qualquer momento)
+1. `.env`: `GRIMBOTS_AI_KILL_SWITCH=true`.
+2. `pm2 restart <api>`.
+3. Verificar log `⛔ [IA] kill-switch global ligado - desviando para HUMANO`.
+4. Confirmar: nenhuma mensagem da IA, nenhum checkout, blocos afetados em `handoff`.
+5. Não reverter dados de memória/objeção (dados do lead são da plataforma).
+6. Registrar incidente + payload de reprodução; encaminhar ao dono do motor.
+
+### G6. Verificação pós-mudança
+- [ ] Log de gate correto (kill-switch/fora-do-rollout).
+- [ ] Zero `send_checkout` sem oferta ativa.
+- [ ] `human_takeover` ainda respeitado (IA silenciosa).
+- [ ] Recusas → `do_not_respond` (nenhum insistência).
+- [ ] Sem duplicidade de efeito por `request_id` (D11).
+- [ ] Percentual efetivo ≈ configurado (contagem de elegíveis vs total).
 
 ---
 
 ## Resumo do gate de ativação
-**Ligar o piloto SOMENTE quando A1–A10 estiverem marcados.** Onda 0/1 com kill-switch disponível; sem onda 100% enquanto A2/Q1–Q3, A8 e a correlação de funil (§D) não estiverem resolvidos ou formalmente aceitos como risco.
+**Ligar o piloto SOMENTE quando A1–A10 estiverem marcados e a autorização for dada.** Onda 0/1 com kill-switch disponível; sem onda 100% enquanto A2/Q1–Q3 (motor), A8 e a correlação de funil (§D) não estiverem resolvidos ou formalmente aceitos como risco.

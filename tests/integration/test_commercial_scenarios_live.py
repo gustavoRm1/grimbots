@@ -491,7 +491,7 @@ def run_scenarios(port, emit=print):
     # ══════════════════════════════════════════════════════════════════════
     rec = ScenarioRecorder("9-sondas-qualidade")
     recs.append(rec)
-    # 9a "carro" esta em _PRICE_WORDS: "vou comprar um carro" e lido como objecao
+    # 9a Q2 (corrigido no lado PLATAFORMA): "carro" (veiculo) nao deve virar objecao
     st = {"funnel_stage": "offer", "offers_already_presented": ["of1"]}
     infra.MOCK["outputs"] = [{"action": "send_checkout", "message": "Vamos fechar!",
                               "funnel_stage": "offer"}]
@@ -503,7 +503,7 @@ def run_scenarios(port, emit=print):
     check(9, "sonda: texto com 'carro' NAO e tratado como objecao de preco",
           not false_obj,
           f"objection_falsamente_detectada={false_obj!r} action={r9a.action} "
-          f"(falso positivo de _PRICE_WORDS)", quality=True)
+          f"(deteccao contextual da plataforma; Q2)", quality=True)
     # 9b substring: "interessado" dentro de "desinteressado" casaria sinal de compra
     st = {"funnel_stage": "offer", "offers_already_presented": ["of1"]}
     infra.MOCK["outputs"] = [{"action": "continue", "message": "Sem problemas!",
