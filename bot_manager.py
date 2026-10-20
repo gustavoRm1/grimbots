@@ -4000,8 +4000,11 @@ class BotManager:
     # plataforma detecta os gatilhos abaixo no texto do lead e persiste em
     # `lead.objection`/`collected_information.objection`, para que os turnos
     # seguintes levem a objeção ao motor (que então bloqueia o checkout).
+    # Q2: casamento por PALAVRA/FRASE (limite de token), nunca por substring —
+    # evita falsos positivos como "caroteno" ⊃ "caro". A entrada "carro"
+    # (veículo) foi removida: não é objeção de preço.
     _AI_PRICE_OBJECTION_TRIGGERS = (
-        'caro', 'carro', 'muito valor', 'muito caro', 'sem dinheiro',
+        'caro', 'muito valor', 'muito caro', 'sem dinheiro',
         'nao tenho dinheiro', 'ta caro', 'esta caro', 'muito acima',
         'nao tenho como pagar', 'nao posso pagar', 'ta puxado', 'salgado',
         'custo alto', 'valor alto', 'preco alto', 'muito alto',
@@ -4040,15 +4043,45 @@ class BotManager:
 
     @classmethod
     def _ai_objection_detected(cls, text: str) -> bool:
-        """True se o texto do lead expressa OBJEÇÃO DE PREÇO (gatilhos da plataforma)."""
+        """True se o texto do lead expressa OBJEÇÃO DE PREÇO (gatilhos da plataforma).
+
+        Casamento por palavra/frase com limite de token (Q2): "caro" casa com a
+        palavra "caro", mas NÃO com "caroteno"; frases multi-palavra casam como
+        sequência de tokens.
+        """
         folded = cls._ai_fold_text(text)
-        return bool(folded) and any(t in folded for t in cls._AI_PRICE_OBJECTION_TRIGGERS)
+        return bool(folded) and cls._ai_phrase_boundary_match(
+            folded, cls._AI_PRICE_OBJECTION_TRIGGERS)
 
     @classmethod
     def _ai_objection_resolved_signal(cls, text: str) -> bool:
         """True se o lead sinaliza explicitamente que a objeção foi superada."""
         folded = cls._ai_fold_text(text)
-        return bool(folded) and any(t in folded for t in cls._AI_OBJECTION_RESOLVED_TRIGGERS)
+        return bool(folded) and cls._ai_phrase_boundary_match(
+            folded, cls._AI_OBJECTION_RESOLVED_TRIGGERS)
+
+    @staticmethod
+    def _ai_phrase_boundary_match(folded: str, phrases) -> bool:
+        """Casa `phrases` em `folded` respeitando limites de PALAVRA (token).
+
+        Evita falsos positivos por substring (ex.: "caro" ⊄ "caroteno"). Frases
+        com espaço casam como sequência de tokens; gatilhos de 1 palavra exigem
+        igualdade de token.
+        """
+        if not folded:
+            return False
+        tokens = folded.split()
+        token_set = set(tokens)
+        for phrase in phrases:
+            p = (phrase or '').strip().casefold()
+            if not p:
+                continue
+            if ' ' in p:
+                if p in folded:
+                    return True
+            elif p in token_set:
+                return True
+        return False
 
     @classmethod
     def _ai_apply_objection_state(cls, state: dict, text: str) -> bool:
@@ -4200,6 +4233,73 @@ class BotManager:
         except Exception:
             return False
         return bool((step_config or {}).get('contract_v11', False))
+
+    # ── Rollout controlado + kill-switch (piloto com leads reais) ───────────
+    # Regras INVIOLÁVEIS:
+    #  * NUNCA ampliam a exposição à IA — apenas REMOVEM leads (não elegíveis vão
+    #    para HUMANO, mesmo caminho de `step_config.enabled=False`).
+    #  * Não contornam ai_enabled, human_takeover, permissões efetivas, oferta
+    #    ativa nem os guardas de conteúdo: esses checks continuam a jusante.
+    #  * Config ausente => sem restrição (kill-switch off, rollout 100%).
+    #  * Config inválida => fail-safe CONSERVADOR: kill-switch off e rollout 100%
+    #    são o default; valor inválido de percentual cai para 100 (não reduz
+    #    silenciosamente), NUNCA para >100 nem negativo (clamp no Config).
+    @staticmethod
+    def _ai_config_get(key, default=None):
+        """Lê config do Flask app; fora de contexto, cai para a classe Config."""
+        try:
+            from flask import current_app
+            if current_app:
+                return current_app.config.get(key, default)
+        except Exception:
+            pass
+        try:
+            from internal_logic.core.config import Config
+            return getattr(Config, key, default)
+        except Exception:
+            return default
+
+    @classmethod
+    def _ai_kill_switch_enabled(cls) -> bool:
+        """True se o kill-switch global está ligado (desvia toda a IA p/ HUMANO)."""
+        return bool(cls._ai_config_get('GRIMBOTS_AI_KILL_SWITCH', False))
+
+    @classmethod
+    def _ai_rollout_percent(cls) -> float:
+        """Percentual de leads elegíveis (0-100). Inválido/ausente => 100."""
+        try:
+            raw = float(cls._ai_config_get('GRIMBOTS_AI_ROLLOUT_PERCENT', 100.0))
+        except (TypeError, ValueError):
+            return 100.0
+        if raw != raw:  # NaN
+            return 100.0
+        return max(0.0, min(100.0, raw))
+
+    @staticmethod
+    def _ai_rollout_bucket(bot_id, telegram_user_id) -> float:
+        """Bucket determinístico e estável em [0,100) para (bot, lead).
+
+        Independe de ordem/estado: o mesmo lead cai sempre no mesmo bucket, o que
+        garante consistência em retomadas e entre processos.
+        """
+        import hashlib
+        key = f"rollout:{bot_id}:{telegram_user_id}".encode('utf-8')
+        digest = hashlib.sha256(key).hexdigest()
+        # 4 bytes => inteiro em [0, 2^32-1] => escala linear para [0, 100).
+        return (int(digest[:8], 16) / 0x100000000) * 100.0
+
+    @classmethod
+    def _ai_rollout_eligible(cls, bot_id, telegram_user_id) -> bool:
+        """True se o lead é elegível à IA segundo o percentual de rollout.
+
+        100% => sempre elegível; 0% => nunca. Nunca contorna outras proteções.
+        """
+        pct = cls._ai_rollout_percent()
+        if pct >= 100.0:
+            return True
+        if pct <= 0.0:
+            return False
+        return cls._ai_rollout_bucket(bot_id, telegram_user_id) < pct
 
     # ── E5 — execução SHADOW (ADITIVA, desligada por padrão) ────────────────
     # Dupla flag: global GRIMBOTS_AI_SHADOW + step_config['shadow']. Desligada =>
@@ -4575,6 +4675,29 @@ class BotManager:
         # ── IA desligada neste bloco: encaminha para HUMANO (ou fallback) ──
         if step_config.get('enabled', True) is False:
             logger.info(f"⏸️ [IA] bloco {step.get('id')} desligado - seguindo para HUMANO")
+            if not self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
+                self.send_telegram_message(
+                    token=token, chat_id=str(chat_id), message=fallback_message,
+                    bot_id=bot_id, save_message=True
+                )
+            return
+
+        # ── Rollout controlado + kill-switch (piloto) ────────────────────────
+        # Kill-switch GLOBAL: desvia TODA a IA para HUMANO, sem responder, sem
+        # coletar decisão e sem efeito. Rollout: leads fora do bucket percentual
+        # também vão para HUMANO. Ambos usam o MESMO caminho seguro do bloco
+        # desligado — NUNCA contornam ai_enabled/takeover/permissões/oferta/guardas.
+        _rollout_excluded = False
+        if self._ai_kill_switch_enabled():
+            logger.info("⛔ [IA] kill-switch global ligado - desviando para HUMANO")
+            _rollout_excluded = True
+        elif not self._ai_rollout_eligible(bot_id, telegram_user_id):
+            logger.info(
+                f"🎯 [IA] lead fora do rollout "
+                f"({self._ai_rollout_percent():g}%) - seguindo para HUMANO"
+            )
+            _rollout_excluded = True
+        if _rollout_excluded:
             if not self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
                 self.send_telegram_message(
                     token=token, chat_id=str(chat_id), message=fallback_message,

@@ -93,7 +93,23 @@ class Config:
     # Metadados opcionais do motor (complementam o /health no relatório E5).
     GRIMBOTS_AI_MOTOR_VERSION = os.environ.get('GRIMBOTS_AI_MOTOR_VERSION', '')
     GRIMBOTS_AI_MOTOR_COMMIT = os.environ.get('GRIMBOTS_AI_MOTOR_COMMIT', '')
-    
+    # Rollout controlado (piloto com leads reais). Kill-switch global: quando ligado,
+    # TODO bloco 'ai' é desviado para HUMANO (mesmo caminho de 'enabled=False'),
+    # sem responder, sem coletar decisão e sem efeito. Ausente/inválido => desligado.
+    GRIMBOTS_AI_KILL_SWITCH = os.environ.get(
+        'GRIMBOTS_AI_KILL_SWITCH', 'false').lower() in {'1', 'true', 'yes'}
+    # Percentual de leads elegíveis à IA (0-100). Default 100 = sem restrição (o
+    # gate por bloco e demais proteções continuam valendo). Fora da faixa/inválido
+    # => 100 (fail-safe: NÃO reduz exposição silenciosamente por config ruim).
+    # NUNCA amplia: só REMOVE leads da IA (os não elegíveis vão para HUMANO).
+    try:
+        _ai_rollout_raw = float(os.environ.get('GRIMBOTS_AI_ROLLOUT_PERCENT', '100') or '100')
+        if _ai_rollout_raw != _ai_rollout_raw:  # NaN
+            _ai_rollout_raw = 100.0
+    except (TypeError, ValueError):
+        _ai_rollout_raw = 100.0
+    GRIMBOTS_AI_ROLLOUT_PERCENT = max(0.0, min(100.0, _ai_rollout_raw))
+
     @classmethod
     def init_app(cls, app, rq_pool=False):
         """Aplica todas as configurações ao app Flask"""
@@ -161,3 +177,5 @@ class Config:
         app.config['GRIMBOTS_AI_SHADOW_SECRET'] = cls.GRIMBOTS_AI_SHADOW_SECRET
         app.config['GRIMBOTS_AI_MOTOR_VERSION'] = cls.GRIMBOTS_AI_MOTOR_VERSION
         app.config['GRIMBOTS_AI_MOTOR_COMMIT'] = cls.GRIMBOTS_AI_MOTOR_COMMIT
+        app.config['GRIMBOTS_AI_KILL_SWITCH'] = cls.GRIMBOTS_AI_KILL_SWITCH
+        app.config['GRIMBOTS_AI_ROLLOUT_PERCENT'] = cls.GRIMBOTS_AI_ROLLOUT_PERCENT
