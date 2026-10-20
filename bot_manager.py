@@ -6,6 +6,7 @@ Responsável por validar tokens, iniciar/parar bots e processar webhooks
 import eventlet
 import requests
 from requests.adapters import HTTPAdapter
+import sys
 import threading
 import time
 import logging
@@ -4610,6 +4611,11 @@ class BotManager:
         # reserva para permitir a reentrega legítima (o cliente já respeita o
         # Retry-After). Qualquer outro desfecho conclui o marcador durável.
         turn_release = False
+        # Rastreia se algum EFEITO (envio/roteamento) já foi entregue neste turno.
+        # Se uma exceção escapar ANTES de qualquer efeito, o `finally` LIBERA a
+        # reserva (retry legítimo) em vez de marcar `done` — evita "perder" a
+        # mensagem do lead silenciosamente (decisão consumida, nada enviado).
+        effect_done = False
 
         try:
             # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
@@ -4802,11 +4808,13 @@ class BotManager:
                         token=token, chat_id=str(chat_id), message=message_text,
                         bot_id=bot_id, save_message=True
                     )
+                    effect_done = True
                 if question and not self._is_redundant_question(message_text, question):
                     self.send_telegram_message(
                         token=token, chat_id=str(chat_id), message=question,
                         bot_id=bot_id, save_message=True
                     )
+                    effect_done = True
                 return
 
             # ── send_checkout: saida CHECKOUT -> bloco Pagamento (gera PIX) ──
@@ -4817,7 +4825,9 @@ class BotManager:
                             token=token, chat_id=str(chat_id), message=message_text,
                             bot_id=bot_id, save_message=True
                         )
+                        effect_done = True
                     if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'checkout'):
+                        effect_done = True
                         return
                 else:
                     logger.warning(
@@ -4828,6 +4838,7 @@ class BotManager:
                     token=token, chat_id=str(chat_id), message=fallback_message,
                     bot_id=bot_id, save_message=True
                 )
+                effect_done = True
                 return
 
             # ── handoff_human: saida HUMANO ──
@@ -4837,7 +4848,9 @@ class BotManager:
                         token=token, chat_id=str(chat_id), message=message_text,
                         bot_id=bot_id, save_message=True
                     )
+                    effect_done = True
                 if self._ai_route(bot_id, token, config, chat_id, telegram_user_id, step, 'handoff'):
+                    effect_done = True
                     return
                 logger.warning(
                     f"⚠️ [IA] action=handoff_human mas a saida HUMANO do bloco "
@@ -4847,6 +4860,7 @@ class BotManager:
                     token=token, chat_id=str(chat_id), message=fallback_message,
                     bot_id=bot_id, save_message=True
                 )
+                effect_done = True
                 return
 
             # ── Acao desconhecida (defensivo): fallback ──
@@ -4855,11 +4869,16 @@ class BotManager:
                 token=token, chat_id=str(chat_id), message=fallback_message,
                 bot_id=bot_id, save_message=True
             )
+            effect_done = True
 
         finally:
             # D11 fase 2 — turno concluído: marcador durável (at-most-once).
             # Exceção: falha retryável sem efeito -> libera (retry legítimo).
-            if turn_release:
+            # Se uma exceção escapou ANTES de qualquer efeito (nada enviado),
+            # também LIBERA: a entrega ainda não aconteceu, então a reentrega
+            # legítima deve poder reprocessar (não "perder" a mensagem).
+            _exc_escaping = sys.exc_info()[0] is not None
+            if turn_release or (_exc_escaping and not effect_done):
                 self._ai_turn_release(bot_id, telegram_user_id, inbound_message_id)
             else:
                 self._ai_turn_complete(bot_id, telegram_user_id, inbound_message_id)
