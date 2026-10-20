@@ -3993,6 +3993,24 @@ class BotManager:
         'continue', 'ask_question', 'present_offer',
         'send_checkout', 'handoff_human', 'pause', 'do_not_respond',
     )
+    # ── E3 multi-turno — OBJEÇÃO DE PREÇO (dono: PLATAFORMA) ────────────────
+    # O contrato (motor a54b9dd L668-669) atribui à PLATAFORMA persistir a
+    # objeção; o motor só a classifica quando recebe `lead.objection`. A
+    # plataforma detecta os gatilhos abaixo no texto do lead e persiste em
+    # `lead.objection`/`collected_information.objection`, para que os turnos
+    # seguintes levem a objeção ao motor (que então bloqueia o checkout).
+    _AI_PRICE_OBJECTION_TRIGGERS = (
+        'caro', 'carro', 'muito valor', 'muito caro', 'sem dinheiro',
+        'nao tenho dinheiro', 'ta caro', 'esta caro', 'muito acima',
+        'nao tenho como pagar', 'nao posso pagar', 'ta puxado', 'salgado',
+        'custo alto', 'valor alto', 'preco alto', 'muito alto',
+        'talvez mais pra frente', 'mais barato', 'desconto',
+    )
+    _AI_OBJECTION_RESOLVED_TRIGGERS = (
+        'vale a pena', 'entendi o valor', 'faz sentido', 'achei justo',
+        'agora entendi', 'entendi melhor', 'realmente compensa',
+        'e um bom investimento', 'concordo',
+    )
 
     @staticmethod
     def _ai_clamp_text(value, limit: int) -> str:
@@ -4018,6 +4036,66 @@ class BotManager:
             if len(clean) >= cls._AI_MAX_COLLECTED_KEYS:
                 break
         return clean
+
+    @classmethod
+    def _ai_objection_detected(cls, text: str) -> bool:
+        """True se o texto do lead expressa OBJEÇÃO DE PREÇO (gatilhos da plataforma)."""
+        folded = cls._ai_fold_text(text)
+        return bool(folded) and any(t in folded for t in cls._AI_PRICE_OBJECTION_TRIGGERS)
+
+    @classmethod
+    def _ai_objection_resolved_signal(cls, text: str) -> bool:
+        """True se o lead sinaliza explicitamente que a objeção foi superada."""
+        folded = cls._ai_fold_text(text)
+        return bool(folded) and any(t in folded for t in cls._AI_OBJECTION_RESOLVED_TRIGGERS)
+
+    @classmethod
+    def _ai_apply_objection_state(cls, state: dict, text: str) -> bool:
+        """Detecta/persiste objeção de preço e resolução no estado (in-memory).
+
+        Idempotente: aplica o sinal do lead do turno ao `state` (objeção ativa
+        em `state['objection']` + `collected_information.objection`; resolução em
+        `collected_information.objection_resolved`). Retorna True se alterou.
+        Usado (1) ANTES de montar o payload — para o motor já ver o sinal neste
+        turno — e (2) no `_persist` durável. Não reimplementa a regra comercial:
+        apenas registra o gatilho lido do texto do lead (dono: plataforma).
+        """
+        if not text or not isinstance(state, dict):
+            return False
+        ci = dict(state.get('collected_information') or {})
+        changed = False
+        # Só marca resolução se houver (ou tiver havido) objeção ativa: evita
+        # gravar `objection_resolved` sem sentido quando não há objeção nenhuma.
+        has_active = bool(cls._ai_clamp_text(state.get('objection') or '', 120)) \
+            or bool(ci.get('objection'))
+        if has_active and cls._ai_objection_resolved_signal(text):
+            if ci.get('objection_resolved') is not True:
+                ci['objection_resolved'] = True
+                # Limpa a objeção ativa do turno: o motor trata `lead.objection`
+                # (turno atual) com PRECEDÊNCIA sobre `objection_resolved`, então
+                # parar de enviá-la é o que libera a retomada do checkout.
+                state.pop('objection', None)
+                changed = True
+        elif (not cls._ai_clamp_text(state.get('objection') or '', 120)
+              and cls._ai_objection_detected(text)):
+            state['objection'] = cls._ai_clamp_text(text, 120)
+            changed = True
+        # Garante espelhamento em `collected_information.objection` (v1.1): a
+        # objeção ativa deve viajar também na memória, não só em `lead.objection`.
+        active_obj = cls._ai_clamp_text(state.get('objection') or '', 120)
+        if active_obj and ci.get('objection') != active_obj:
+            ci['objection'] = active_obj
+            changed = True
+        if changed:
+            state['collected_information'] = cls._ai_clamp_collected_information(ci)
+        return changed
+
+    @staticmethod
+    def _ai_fold_text(text: str) -> str:
+        import unicodedata
+        decomposed = unicodedata.normalize('NFKD', text or '')
+        ascii_only = ''.join(c for c in decomposed if not unicodedata.combining(c))
+        return ' '.join(ascii_only.split()).casefold()
 
     @classmethod
     def _ai_memory_updates(cls, state, result, action, message_text, question) -> dict:
@@ -4536,6 +4614,10 @@ class BotManager:
         try:
             # Fase 6A: só com o flag ligado (global v1.1 + bloco). Default = {} => v1.0 byte-a-byte.
             contract_v11 = self._ai_contract_v11_enabled(step_config)
+            # E3 multi-turno — aplica o sinal do lead do turno ao estado em memória
+            # ANTES de montar o payload, para o MOTOR já enxergar objeção/resolução
+            # neste turno (e não só no seguinte). Persistência durável em _persist.
+            self._ai_apply_objection_state(state, current_text)
             v11_kwargs = {}
             if contract_v11:
                 v11_kwargs = self._ai_v11_payload_kwargs(config, step, step_config)
@@ -4683,6 +4765,9 @@ class BotManager:
                 state_live['last_intent'] = result.intent
                 if _payload_objection:
                     state_live['objection'] = _payload_objection
+                # E3 multi-turno — detecção/persistência da objeção de preço
+                # (dono: PLATAFORMA; contrato motor a54b9dd L668-669).
+                self._ai_apply_objection_state(state_live, current_text)
                 if contract_v11:
                     # human_takeover é STICKY: uma vez true, nunca volta a false sozinho.
                     state_live['human_takeover'] = (
